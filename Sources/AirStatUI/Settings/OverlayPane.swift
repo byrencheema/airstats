@@ -27,16 +27,44 @@ struct OverlayPane: View {
                 }
             }
 
+            // The preview and the settings that change it, side by side. Stacked, the
+            // thumbnail was a band across the pane and the sliders were somewhere
+            // below it; beside them, moving one is watching the other.
+            //
             // Below the switch rather than above it, so a pane opened with the overlay
-            // off says it is off before it shows what it would look like. Never
-            // disabled: what the overlay would be is exactly what someone deciding
-            // whether to switch it on wants to see.
-            if let engine {
-                Section {
-                    OverlayPreview(engine: engine, settings: settings)
-                } header: {
-                    Text("Preview")
+            // off says it is off before it shows what it would look like. The preview
+            // itself is never disabled: what the overlay would be is exactly what
+            // someone deciding whether to switch it on wants to see.
+            Section {
+                HStack(alignment: .top, spacing: Design.Space.xl) {
+                    if let engine {
+                        OverlayPreview(engine: engine, settings: settings)
+                    }
+                    VStack(spacing: Design.Space.l) {
+                        CompactSlider(title: "Width",
+                                      value: settings.quantized(\.overlay.width, step: 4),
+                                      range: 160...480,
+                                      format: SettingsLabels.points)
+                        CompactToggle(title: "Use compact layout",
+                                      isOn: settings.binding(\.overlay.isCompact))
+                        CompactSlider(title: "Opacity",
+                                      value: settings.quantized(\.overlay.opacity, step: 0.05),
+                                      range: 0.2...1,
+                                      format: SettingsLabels.percent)
+                        CompactToggle(title: "Fade when idle",
+                                      isOn: settings.binding(\.overlay.dimsWhenInactive))
+                        if overlay.dimsWhenInactive {
+                            CompactSlider(title: "Faded opacity",
+                                          value: settings.quantized(\.overlay.inactiveOpacity,
+                                                                   step: 0.05),
+                                          range: 0.15...1,
+                                          format: SettingsLabels.percent)
+                        }
+                    }
+                    .disabled(!overlay.isEnabled)
                 }
+            } header: {
+                Text("Size & Transparency")
             }
 
             Section {
@@ -64,30 +92,8 @@ struct OverlayPane: View {
                     }
                     .disabled(overlay.originX == nil && overlay.originY == nil)
                 }
-                SettingsSlider(title: "Width",
-                               value: settings.quantized(\.overlay.width, step: 4),
-                               range: 160...480,
-                               format: SettingsLabels.points)
-                Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
             } header: {
-                Text("Position & Size")
-            }
-            .disabled(!overlay.isEnabled)
-
-            Section {
-                SettingsSlider(title: "Opacity",
-                               value: settings.quantized(\.overlay.opacity, step: 0.05),
-                               range: 0.2...1,
-                               format: SettingsLabels.percent)
-                Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
-                if overlay.dimsWhenInactive {
-                    SettingsSlider(title: "Faded opacity",
-                                   value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
-                                   range: 0.15...1,
-                                   format: SettingsLabels.percent)
-                }
-            } header: {
-                Text("Transparency")
+                Text("Position")
             }
             .disabled(!overlay.isEnabled)
 
