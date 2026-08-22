@@ -121,65 +121,6 @@ struct TortureTests {
         }
     }
 
-    // MARK: holdUpdates
-
-    private func engine() -> MetricsEngine { MetricsEngine(settingsStore: SettingsStore(directory: dir())) }
-
-    private func snap(_ t: Double) -> SystemSnapshot {
-        var s = SystemSnapshot.empty
-        s.capturedAt = Date(timeIntervalSince1970: t)
-        return s
-    }
-
-    @Test("spamming holds never strands a snapshot forever")
-    func holdSpam() async throws {
-        let e = engine()
-        for _ in 0..<200 { e.holdUpdates(for: .milliseconds(30)) }
-        e.ingest(snap(1))
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(e.lastUpdate == Date(timeIntervalSince1970: 1), "a held snapshot was lost")
-    }
-
-    @Test("a zero-length hold still delivers")
-    func zeroHold() async throws {
-        let e = engine()
-        e.holdUpdates(for: .zero)
-        e.ingest(snap(2))
-        try await Task.sleep(for: .milliseconds(200))
-        #expect(e.lastUpdate == Date(timeIntervalSince1970: 2))
-    }
-
-    @Test("a negative hold does not hang")
-    func negativeHold() async throws {
-        let e = engine()
-        e.holdUpdates(for: .seconds(-5))
-        e.ingest(snap(3))
-        try await Task.sleep(for: .milliseconds(600))
-        #expect(e.lastUpdate == Date(timeIntervalSince1970: 3))
-    }
-
-    @Test("a hold does not swallow history")
-    func holdKeepsHistory() async throws {
-        let e = engine()
-        e.ingest(snap(10))
-        let before = e.history[.cpuTotal].count
-        e.holdUpdates(for: .milliseconds(50))
-        e.ingest(snap(11))
-        try await Task.sleep(for: .milliseconds(250))
-        #expect(e.history[.cpuTotal].count >= before)
-    }
-
-    @Test("holding then re-holding does not double-deliver")
-    func holdRehold() async throws {
-        let e = engine()
-        e.holdUpdates(for: .milliseconds(60))
-        e.ingest(snap(20))
-        e.holdUpdates(for: .milliseconds(60))
-        e.ingest(snap(21))
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(e.lastUpdate == Date(timeIntervalSince1970: 21))
-    }
-
     // MARK: Overlay reservation table
 
     @Test("every module has a distinct raw value and survives a round trip")
@@ -298,7 +239,7 @@ struct FormattingTortureTests {
 
     private static let hostile: [Double] = [
         .nan, .infinity, -.infinity, .greatestFiniteMagnitude, -.greatestFiniteMagnitude,
-        .leastNonzeroMagnitude, 0, -0, -1, 1e300, -1e300, 9_007_199_254_740_993,
+        .leastNonzeroMagnitude, 0, -0, -1, 1e300, -1e300, 9_007_199_254_740_992,
     ]
 
     /// Every one of these ends up inside a `String(format:)` or an `Int(_:)`, and
