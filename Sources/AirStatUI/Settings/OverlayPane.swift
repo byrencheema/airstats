@@ -34,7 +34,6 @@ struct OverlayPane: View {
             if let engine {
                 Section {
                     OverlayPreview(engine: engine, settings: settings)
-                        .listRowInsets(EdgeInsets())
                 } header: {
                     Text("Preview")
                 }

@@ -19,25 +19,35 @@ struct OverlayPreview: View {
 
     /// Starts at the cap rather than at zero: measured on the first layout pass, and a
     /// zero-height frame for that one frame is a visible flinch every time the pane
-    /// opens.
-    @State private var contentHeight: CGFloat = OverlayPreview.maxHeight
+    /// opens. Held unscaled, so the scale can change without invalidating it.
+    @State private var contentHeight: CGFloat = OverlayPreview.maxHeight / OverlayPreview.scale
 
-    private static let maxHeight: CGFloat = 210
+    /// Drawn as a thumbnail rather than at size. At 1:1 a three-module overlay is
+    /// taller than the switch, the module list and the size controls put together,
+    /// which made the pane about the preview instead of about the settings. Scaled, it
+    /// still answers what the settings do — order, layout, how wide, how faint — which
+    /// is what a preview is for. The values in it are legible but not the point; the
+    /// real overlay is where you read them.
+    private static let scale: CGFloat = 0.65
+    private static let maxHeight: CGFloat = 140
 
     private var overlay: OverlaySettings { settings.settings.overlay }
 
-    private var isScrollable: Bool { contentHeight > Self.maxHeight }
+    private var scaledHeight: CGFloat { contentHeight * Self.scale }
+
+    private var isScrollable: Bool { scaledHeight > Self.maxHeight }
 
     var body: some View {
-        VStack(spacing: Design.Space.s) {
+        // The well hugs the thumbnail instead of spanning the row. Full width, it was a
+        // band of empty grey with a small overlay adrift in the middle of it, which is
+        // most of what made the preview feel like the pane's subject.
+        HStack(alignment: .center, spacing: Design.Space.l) {
             ScrollView(.vertical) {
                 OverlayRootView(engine: engine, settings: settings)
                     // What the user set, so the preview is as faint as the real thing
                     // will be. The inactive opacity is deliberately not applied: you
                     // are looking at it, which is the state this shows.
                     .opacity(overlay.opacity)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, Design.Space.l)
                     .background {
                         GeometryReader { proxy in
                             Color.clear
@@ -46,22 +56,33 @@ struct OverlayPreview: View {
                                 }
                         }
                     }
+                    // Measured before this, so the height above is the overlay's own.
+                    // `scaleEffect` does not change the space a view takes, so the
+                    // frame has to be told what the drawing now occupies. Scaled about
+                    // the centre and framed to the scaled size, which leaves the
+                    // drawing's centre where the frame's is; a top anchor shifts it out
+                    // of the frame by half the difference.
+                    .scaleEffect(Self.scale)
+                    .frame(width: CGFloat(overlay.width) * Self.scale, height: scaledHeight)
+                    .padding(Design.Space.m)
             }
-            .frame(height: min(contentHeight, Self.maxHeight))
+            .frame(width: CGFloat(overlay.width) * Self.scale + Design.Space.m * 2,
+                   height: min(scaledHeight, Self.maxHeight) + Design.Space.m * 2)
             .scrollDisabled(!isScrollable)
+            // The same well the menu bar preview sits in, so the two previews read as
+            // the same kind of thing. It is also what the overlay's own translucency
+            // has to show against: at 40% opacity the glass has to be over something.
+            .background {
+                RoundedRectangle(cornerRadius: Design.Radius.card, style: .continuous)
+                    .fill(.quaternary.opacity(0.5))
+            }
 
             if isScrollable {
                 SettingsFootnote("Taller than the space here. Scroll the preview, "
                                  + "or use the compact layout to shorten it.")
             }
-        }
-        .frame(maxWidth: .infinity)
-        // The same well the menu bar preview sits in, so the two previews read as the
-        // same kind of thing. It is also what the overlay's own translucency has to
-        // show against: at 40% opacity the glass has to be over something.
-        .background {
-            RoundedRectangle(cornerRadius: Design.Radius.card, style: .continuous)
-                .fill(.quaternary.opacity(0.5))
+
+            Spacer(minLength: 0)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Overlay preview")
