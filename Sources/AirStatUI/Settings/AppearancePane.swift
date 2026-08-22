@@ -44,8 +44,6 @@ struct AppearancePane: View {
                          set: { color in
                              settings.update { $0.theme.setAllColors(color) }
                          })
-            } header: {
-                Text("Theme")
             }
 
             Section {
@@ -77,14 +75,6 @@ struct AppearancePane: View {
                 Text("Charts")
             }
 
-            Section {
-                HStack {
-                    Spacer()
-                    RestoreDefaultsButton(settings: settings,
-                                          sections: SettingsTab.appearance.sections,
-                                          title: "Appearance")
-                }
-            }
         }
         .settingsFormStyle()
     }

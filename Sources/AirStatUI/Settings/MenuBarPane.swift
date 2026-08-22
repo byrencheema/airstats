@@ -15,11 +15,6 @@ struct MenuBarPane: View {
         MetricAvailability(snapshot: SettingsPreview.snapshot(engine))
     }
 
-    private var selectedIndex: Int? {
-        guard let selection else { return nil }
-        return items.firstIndex { $0.id == selection }
-    }
-
     private var selectedItem: MenuBarItemConfig? {
         guard let selection else { return nil }
         return items.first { $0.id == selection }
@@ -58,14 +53,6 @@ struct MenuBarPane: View {
                 .foregroundStyle(Design.Palette.secondaryText)
             }
 
-            Section {
-                HStack {
-                    Spacer()
-                    RestoreDefaultsButton(settings: settings,
-                                          sections: SettingsTab.menuBar.sections,
-                                          title: "Menu Bar")
-                }
-            }
         }
         .settingsFormStyle()
         // Opening on a selected readout means the configuration controls are visible
@@ -125,6 +112,24 @@ struct MenuBarPane: View {
                             itemLabel: item.metric.label) { offset in
                 move(item, by: offset)
             }
+
+            // Deleting belongs on the row it deletes. As a button under the list it
+            // acted on "the selected readout", and the only thing naming that readout
+            // was a tint on one row — a destructive control whose target you had to
+            // infer. It also matches the overlay's module list, which is the same
+            // list of the same metrics doing the same job.
+            Button {
+                remove(item)
+            } label: {
+                Image(systemName: "minus.circle")
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Design.Palette.tertiaryText)
+            .disabled(items.count <= 1)
+            .help(items.count <= 1
+                  ? "The last readout cannot be removed."
+                  : "Remove \(item.metric.label) from the menu bar")
+            .accessibilityLabel("Remove \(item.metric.label)")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(item.metric.label)
@@ -151,15 +156,6 @@ struct MenuBarPane: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .accessibilityLabel("Add a readout")
-
-            Button {
-                if let index = selectedIndex { remove(at: index) }
-            } label: {
-                Label("Remove", systemImage: "minus")
-            }
-            .disabled(selectedIndex == nil || items.count <= 1)
-            .help(items.count <= 1 ? "The last readout cannot be removed." : "Remove the selected readout")
-            .accessibilityLabel("Remove the selected readout")
 
             Spacer()
         }
@@ -302,13 +298,17 @@ struct MenuBarPane: View {
         selection = config.id
     }
 
-    private func remove(at index: Int) {
-        guard items.indices.contains(index) else { return }
+    /// Removed by identity rather than by position, for the same reason the editing
+    /// bindings are: the row a user pressed is the row that goes, whatever the array
+    /// has done since.
+    private func remove(_ item: MenuBarItemConfig) {
         settings.update { s in
-            guard s.menuBar.items.indices.contains(index) else { return }
-            s.menuBar.items.remove(at: index)
+            guard s.menuBar.items.count > 1 else { return }
+            s.menuBar.items.removeAll { $0.id == item.id }
         }
-        selection = nil
+        // Leave something selected, so the editor below does not vanish out from
+        // under a user who was only trimming the list.
+        if selection == item.id { selection = settings.settings.menuBar.items.first?.id }
     }
 
     // MARK: Preview

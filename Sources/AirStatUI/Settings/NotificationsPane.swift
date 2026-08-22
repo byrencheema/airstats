@@ -1,9 +1,12 @@
 import SwiftUI
+import AppKit
 import AirStatKit
 
 struct NotificationsPane: View {
     let settings: SettingsStore
     let engine: MetricsEngine?
+    /// Absent in the offscreen renderer, which cannot touch `UNUserNotificationCenter`.
+    var authority: NotificationAuthority?
 
     private var availability: MetricAvailability {
         MetricAvailability(snapshot: SettingsPreview.snapshot(engine))
@@ -21,9 +24,15 @@ struct NotificationsPane: View {
         Form {
             Section {
                 Toggle("Notify me about these conditions",
-                       isOn: settings.binding(\.notifications.isEnabled))
-            } header: {
-                Text("Notifications")
+                       isOn: settings.binding(\.notifications.isEnabled, onChange: askIfNeeded))
+                permissionNotice
+            } footer: {
+                // The rules below are inert until this is on, and a disabled control
+                // is a weak way to say so — in light appearance macOS barely dims one.
+                // Saying it once, here, is what makes the grey mean something.
+                if !isEnabled {
+                    SettingsFootnote("Turn this on to use the rules below.")
+                }
             }
 
             Section {
@@ -33,17 +42,51 @@ struct NotificationsPane: View {
             } header: {
                 Text("Rules")
             }
+            .disabled(!isEnabled)
 
-            Section {
-                HStack {
-                    Spacer()
-                    RestoreDefaultsButton(settings: settings,
-                                          sections: SettingsTab.notifications.sections,
-                                          title: "Notifications")
-                }
-            }
         }
         .settingsFormStyle()
+    }
+
+    // MARK: Permission
+
+    /// What macOS has actually granted, which is the difference between a rule that
+    /// will fire and one that is switched on and silent.
+    ///
+    /// Nothing is said until the user has asked for notifications: a permission
+    /// warning on a feature nobody turned on is noise, and the grant is not requested
+    /// until then either.
+    @ViewBuilder
+    private var permissionNotice: some View {
+        if isEnabled, let authority {
+            switch authority.state {
+            case .granted, .undetermined:
+                EmptyView()
+            case .requesting:
+                SettingsFootnote("Waiting for your answer to the macOS permission prompt.")
+            case .unavailable:
+                VStack(alignment: .leading, spacing: Design.Space.s) {
+                    SettingsCaution("macOS is not allowing AirStats to send notifications, "
+                                    + "so these rules cannot alert you.")
+                    Button("Open Notification Settings…") { openSystemNotificationSettings() }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// Asked here rather than at the first threshold crossing, which could be days
+    /// later and out of any context the user could judge it in. Switching this on is
+    /// the moment they said they want notifications.
+    private func askIfNeeded(_ enabled: Bool) {
+        guard enabled else { return }
+        authority?.request("AirStats alerts you when a metric crosses a threshold you set.")
+    }
+
+    private func openSystemNotificationSettings() {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+        else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Timing controls appear only for a rule that is on, so seven rules do not
@@ -52,20 +95,31 @@ struct NotificationsPane: View {
     private func ruleRows(_ rule: ThresholdRule) -> some View {
         let unavailable = availability.note(for: rule.metric)
 
+        // The switch is what the row is for, and a Form puts it at the trailing edge.
+        // With the threshold at the leading edge beside the label, the number and the
+        // switch that governs it sat half a window apart; they belong to each other,
+        // so they travel together and the label reads across to them the way every
+        // other row in this window does.
         Toggle(isOn: enabledBinding(rule)) {
             HStack(spacing: Design.Space.m) {
                 Text(rule.metric.label)
+                // The threshold rides at the trailing edge beside the switch that
+                // governs it. Left where it was — pressed up against the label — the
+                // number and its switch sat half a window apart, and the row read as
+                // two unrelated controls that happened to share a line.
+                Spacer(minLength: Design.Space.m)
                 if unavailable == nil {
                     thresholdControl(rule)
                 } else {
                     UnavailableBadge(reason: unavailable ?? "")
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .accessibilityValue(unavailable ?? accessibilityValue(rule))
         // A rule whose metric this Mac cannot measure could never fire, so the
         // control says so rather than accepting a setting that does nothing.
         .disabled(!isEnabled || unavailable != nil)
-        .accessibilityValue(unavailable ?? accessibilityValue(rule))
 
         if rule.isEnabled, unavailable == nil {
             VStack(alignment: .leading, spacing: Design.Space.m) {

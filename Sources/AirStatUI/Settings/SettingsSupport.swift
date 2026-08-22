@@ -4,15 +4,23 @@ import AirStatKit
 
 // MARK: - Panes
 
-/// The settings window's sections, in sidebar order.
+/// The settings window's panes, in sidebar order and in groups.
 ///
-/// Six, where there were eight. Charts was two settings and a wall of prose about
-/// four more that no longer exist; it is a section of Appearance now, next to the
-/// colours it shares a subject with. Shortcuts was three recorder rows, and sits in
-/// General. Nothing was lost in either move — an eight-item source list for an app
-/// with one window and one menu bar item was the thing that read as unfinished.
+/// Charts was its own pane of two settings and a wall of prose about four more that no
+/// longer exist; it is a section of Appearance now, next to the colours it shares a
+/// subject with. Shortcuts went the other way: folded into General, it ended up below
+/// Sampling and Units in a scroll nobody reached, which is a poor place for the one
+/// setting a user arrives already looking for. Three rows is a thin pane, but a pane
+/// is findable and the bottom of another pane's scroll is not.
 public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
-    case general, menuBar, appearance, overlay, notifications, about
+    // Order is the source list's order, and it is grouped: what the app is, then the
+    // three things it does, then how it looks and how you reach it, then about. A flat
+    // list of six left "Appearance" sitting between "Menu Bar" and "Overlay", which
+    // are the two surfaces it applies to.
+    case general
+    case menuBar, overlay, notifications
+    case appearance, shortcuts
+    case about
 
     public var id: String { rawValue }
 
@@ -23,7 +31,19 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .appearance: return "Appearance"
         case .overlay: return "Overlay"
         case .notifications: return "Notifications"
+        case .shortcuts: return "Shortcuts"
         case .about: return "About"
+        }
+    }
+
+    /// Whether a rule is drawn above this row in the source list. The groups are the
+    /// hierarchy: without them the panes read as one undifferentiated list, and
+    /// nothing says that Menu Bar, Overlay and Notifications are the same kind of
+    /// thing while General and About are not.
+    var startsGroup: Bool {
+        switch self {
+        case .menuBar, .appearance, .about: return true
+        default: return false
         }
     }
 
@@ -34,6 +54,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .appearance: return "paintpalette"
         case .overlay: return "macwindow.on.rectangle"
         case .notifications: return "bell.badge"
+        case .shortcuts: return "keyboard"
         case .about: return "info.circle"
         }
     }
@@ -42,11 +63,12 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     /// restore-defaults without hardcoding the mapping. About edits nothing of its own.
     public var sections: [SettingsStore.SettingsSection] {
         switch self {
-        case .general: return [.general, .shortcuts]
+        case .general: return [.general]
         case .menuBar: return [.menuBar]
         case .appearance: return [.theme, .charts]
         case .overlay: return [.overlay]
         case .notifications: return [.notifications]
+        case .shortcuts: return [.shortcuts]
         case .about: return []
         }
     }

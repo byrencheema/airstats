@@ -37,7 +37,8 @@ final class AppCoordinator {
         self.statusItem = StatusItemController(engine: engine, settings: store)
         self.panel = PanelController(engine: engine, settings: store, updates: updater)
         self.overlay = OverlayController(engine: engine, settings: store)
-        self.settingsWindow = SettingsWindowController(engine: engine, settings: store, updater: updater)
+        self.settingsWindow = SettingsWindowController(engine: engine, settings: store,
+                                                      updater: updater, authority: authority)
         self.thresholdMonitor = ThresholdMonitor(engine: engine, settings: store, authority: authority)
         self.updateAnnouncer = UpdateAnnouncer(updates: updater, authority: authority)
         self.hotKeys = GlobalHotKeyCenter(settings: store)

@@ -15,10 +15,16 @@ struct OverlayPane: View {
 
     var body: some View {
         Form {
+            // No header: it would repeat the pane's own name in the source list
+            // beside it, and this row is the pane's subject rather than a section of
+            // it — everything below configures the thing this switch puts on screen.
             Section {
                 Toggle("Show the overlay", isOn: settings.binding(\.overlay.isEnabled))
-            } header: {
-                Text("Overlay")
+            } footer: {
+                if !overlay.isEnabled {
+                    SettingsFootnote("Turn this on to put the overlay on screen. "
+                                     + "The settings below shape it once it is there.")
+                }
             }
 
             Section {
@@ -27,6 +33,7 @@ struct OverlayPane: View {
             } header: {
                 Text("Modules")
             }
+            .disabled(!overlay.isEnabled)
 
             Section {
                 Picker("Position", selection: settings.binding(\.overlay.corner)) {
@@ -57,8 +64,9 @@ struct OverlayPane: View {
                 }
                 Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
             } header: {
-                Text("Placement")
+                Text("Position & Size")
             }
+            .disabled(!overlay.isEnabled)
 
             Section {
                 LabeledContent("Opacity") {
@@ -88,6 +96,7 @@ struct OverlayPane: View {
             } header: {
                 Text("Transparency")
             }
+            .disabled(!overlay.isEnabled)
 
             Section {
                 Picker("Layer", selection: settings.binding(\.overlay.depth)) {
@@ -104,15 +113,10 @@ struct OverlayPane: View {
                     .font(.callout)
                     .foregroundStyle(Design.Palette.secondaryText)
             }
+            // Restore Defaults below stays live: a pane the user has switched off is
+            // still a pane they may want to put back the way it shipped.
+            .disabled(!overlay.isEnabled)
 
-            Section {
-                HStack {
-                    Spacer()
-                    RestoreDefaultsButton(settings: settings,
-                                          sections: SettingsTab.overlay.sections,
-                                          title: "Overlay")
-                }
-            }
         }
         .settingsFormStyle()
     }
