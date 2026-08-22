@@ -6,18 +6,12 @@ struct MenuBarPane: View {
     let settings: SettingsStore
     let engine: MetricsEngine?
 
-    @State private var selection: MenuBarItemConfig.ID?
     @State private var dropTarget: MenuBarItemConfig.ID?
 
     private var items: [MenuBarItemConfig] { settings.settings.menuBar.items }
 
     private var availability: MetricAvailability {
         MetricAvailability(snapshot: SettingsPreview.snapshot(engine))
-    }
-
-    private var selectedItem: MenuBarItemConfig? {
-        guard let selection else { return nil }
-        return items.first { $0.id == selection }
     }
 
     var body: some View {
@@ -36,10 +30,6 @@ struct MenuBarPane: View {
                 Text("Readouts")
             }
 
-            if let item = selectedItem {
-                itemDetail(item)
-            }
-
             Section {
                 Toggle("Combine into one menu bar item",
                        isOn: settings.binding(\.menuBar.usesCombinedItem))
@@ -55,9 +45,6 @@ struct MenuBarPane: View {
 
         }
         .settingsFormStyle()
-        // Opening on a selected readout means the configuration controls are visible
-        // rather than hidden behind a click nothing hints at.
-        .onAppear { if selection == nil { selection = items.first?.id } }
     }
 
     // MARK: Readout list
@@ -66,11 +53,9 @@ struct MenuBarPane: View {
         SettingsListBox {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 SettingsListRow(isFirst: index == 0,
-                                isSelected: item.id == selection,
                                 isDropTarget: item.id == dropTarget) {
                     readoutRow(item, index: index)
                 }
-                .onTapGesture { selection = item.id }
                 .draggable(item.id.uuidString) {
                     Text(item.metric.label).padding(Design.Space.xs)
                 }
@@ -86,26 +71,49 @@ struct MenuBarPane: View {
         .accessibilityLabel("Menu bar readouts")
     }
 
+    /// Everything a readout has, on the readout's own row.
+    ///
+    /// The metric and style used to live in an "Editing …" section below the list,
+    /// reached by selecting a row. That put the control you wanted somewhere other
+    /// than the thing you wanted to change — and once the list ran past four readouts
+    /// the section fell below the fold, so clicking a row appeared to do nothing at
+    /// all. The style also sat in the row already, right-aligned exactly where a popup
+    /// menu's value sits, as text that did not respond to a click.
     private func readoutRow(_ item: MenuBarItemConfig, index: Int) -> some View {
         HStack(spacing: Design.Space.m) {
-            Toggle(isOn: enabledBinding(for: item)) {
+            Toggle("", isOn: enabledBinding(for: item))
+                .toggleStyle(.checkbox)
+                .labelsHidden()
+                .disabled(isLastEnabled(item))
+                .help(isLastEnabled(item)
+                      ? "At least one readout must stay visible so the menu bar item remains clickable."
+                      : "Show \(item.metric.label) in the menu bar")
+                .accessibilityLabel("Show \(item.metric.label)")
+
+            // A Menu rather than a Picker, to match the style control beside it. A
+            // Picker draws a pop-up button's paired chevrons and a Menu draws one, and
+            // two controls that do the same thing should not advertise themselves
+            // differently in the same row.
+            Menu {
+                Picker("Metric", selection: metricBinding(for: item)) {
+                    ForEach(MenuBarMetric.allCases, id: \.self) { metric in
+                        Text(metric.label).tag(metric)
+                    }
+                }
+                .pickerStyle(.inline)
+            } label: {
                 Text(item.metric.label)
             }
-            .toggleStyle(.checkbox)
-            .disabled(isLastEnabled(item))
-            .help(isLastEnabled(item)
-                  ? "At least one readout must stay visible so the menu bar item remains clickable."
-                  : "Show \(item.metric.label) in the menu bar")
+            .fixedSize()
+            .accessibilityLabel("\(item.metric.label) metric")
 
-            Spacer(minLength: Design.Space.m)
+            Spacer(minLength: Design.Space.s)
 
             if let reason = availability.note(for: item.metric) {
                 UnavailableBadge(reason: reason)
-            } else {
-                Text(item.style.label)
-                    .font(.callout)
-                    .foregroundStyle(Design.Palette.secondaryText)
             }
+
+            styleMenu(item)
 
             ReorderControls(canMoveUp: index > 0,
                             canMoveDown: index < items.count - 1,
@@ -118,22 +126,44 @@ struct MenuBarPane: View {
             // was a tint on one row — a destructive control whose target you had to
             // infer. It also matches the overlay's module list, which is the same
             // list of the same metrics doing the same job.
-            Button {
+            RowIconButton(systemName: "minus.circle",
+                          help: items.count <= 1
+                              ? "The last readout cannot be removed."
+                              : "Remove \(item.metric.label) from the menu bar",
+                          label: "Remove \(item.metric.label)") {
                 remove(item)
-            } label: {
-                Image(systemName: "minus.circle")
             }
-            .buttonStyle(.borderless)
-            .foregroundStyle(Design.Palette.tertiaryText)
             .disabled(items.count <= 1)
-            .help(items.count <= 1
-                  ? "The last readout cannot be removed."
-                  : "Remove \(item.metric.label) from the menu bar")
-            .accessibilityLabel("Remove \(item.metric.label)")
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(item.metric.label)
         .accessibilityValue("\(item.isEnabled ? "Shown" : "Hidden"), \(item.style.label) style")
+    }
+
+    /// The style popup, carrying the caption toggle with it.
+    ///
+    /// The caption is a property of the style — only three of the five can show one —
+    /// so it belongs behind the same control rather than as a second checkbox
+    /// competing with the one that means "shown".
+    private func styleMenu(_ item: MenuBarItemConfig) -> some View {
+        Menu {
+            Picker("Display as", selection: styleBinding(for: item)) {
+                ForEach(item.metric.supportedStyles, id: \.self) { style in
+                    Text(style.label).tag(style)
+                }
+            }
+            .pickerStyle(.inline)
+
+            if item.style.supportsCaption {
+                Divider()
+                Toggle("Show \"\(caption(for: item.metric))\" above the value",
+                       isOn: captionBinding(for: item))
+            }
+        } label: {
+            Text(item.style.label)
+        }
+        .fixedSize()
+        .accessibilityLabel("\(item.metric.label) display style")
     }
 
     private var readoutListControls: some View {
@@ -158,46 +188,6 @@ struct MenuBarPane: View {
             .accessibilityLabel("Add a readout")
 
             Spacer()
-        }
-    }
-
-    // MARK: Selected readout
-
-    /// The controls for the selected row.
-    ///
-    /// The header names the readout being edited rather than repeating the pane's own
-    /// title. With nothing but "Metric" and "Display as" under a heading that said
-    /// "CPU Usage", it read as a section of the pane, and changing the picker while
-    /// looking at a list of four readouts was a guess about which one was moving.
-    @ViewBuilder
-    private func itemDetail(_ item: MenuBarItemConfig) -> some View {
-        Section {
-            Picker("Metric", selection: metricBinding(for: item)) {
-                ForEach(MenuBarMetric.allCases, id: \.self) { metric in
-                    Text(metric.label).tag(metric)
-                }
-            }
-
-            Picker("Display as", selection: styleBinding(for: item)) {
-                ForEach(item.metric.supportedStyles, id: \.self) { style in
-                    Text(style.label).tag(style)
-                }
-            }
-            .pickerStyle(.menu)
-
-            // The icon and battery styles name the metric with their glyph, so there is
-            // nothing for a caption to add and the toggle would do nothing if shown.
-            if item.style.supportsCaption {
-                Toggle("Show \"\(caption(for: item.metric))\" above the value",
-                       isOn: captionBinding(for: item))
-            }
-        } header: {
-            Label("Editing \(item.metric.label)", systemImage: "slider.horizontal.3")
-                .foregroundStyle(Design.Palette.accent)
-        } footer: {
-            if let reason = availability.note(for: item.metric) {
-                SettingsCaution(reason)
-            }
         }
     }
 
@@ -295,10 +285,9 @@ struct MenuBarPane: View {
         let config = MenuBarItemConfig(metric: metric,
                                        style: metric.supportedStyles.first ?? .text)
         settings.update { $0.menuBar.items.append(config) }
-        selection = config.id
     }
 
-    /// Removed by identity rather than by position, for the same reason the editing
+    /// Removed by identity rather than by position, for the same reason the row's
     /// bindings are: the row a user pressed is the row that goes, whatever the array
     /// has done since.
     private func remove(_ item: MenuBarItemConfig) {
@@ -306,9 +295,6 @@ struct MenuBarPane: View {
             guard s.menuBar.items.count > 1 else { return }
             s.menuBar.items.removeAll { $0.id == item.id }
         }
-        // Leave something selected, so the editor below does not vanish out from
-        // under a user who was only trimming the list.
-        if selection == item.id { selection = settings.settings.menuBar.items.first?.id }
     }
 
     // MARK: Preview

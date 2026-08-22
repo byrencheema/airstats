@@ -377,7 +377,6 @@ struct SettingsListBox<Content: View>: View {
 /// insertion line shown while something is dragged over it.
 struct SettingsListRow<Content: View>: View {
     var isFirst: Bool = false
-    var isSelected: Bool = false
     var isDropTarget: Bool = false
     @ViewBuilder var content: Content
 
@@ -394,17 +393,6 @@ struct SettingsListRow<Content: View>: View {
                 .padding(.horizontal, Design.Space.m)
                 .padding(.vertical, Design.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    if isSelected {
-                        // The tint alone was not enough to say "this row is the one the
-                        // controls below are editing" — at 18% it reads as a hover
-                        // state. The bar is what makes the selection an assertion.
-                        ZStack(alignment: .leading) {
-                            Design.Palette.accent.opacity(0.18)
-                            Design.Palette.accent.frame(width: 3)
-                        }
-                    }
-                }
                 .contentShape(Rectangle())
         }
     }
@@ -442,18 +430,61 @@ struct ReorderControls: View {
 
     var body: some View {
         HStack(spacing: Design.Space.xxs) {
-            Button { move(-1) } label: { Image(systemName: "chevron.up") }
+            RowIconButton(systemName: "chevron.up",
+                          help: "Move \(itemLabel) up",
+                          label: "Move \(itemLabel) up") { move(-1) }
                 .disabled(!canMoveUp)
-                .help("Move \(itemLabel) up")
-                .accessibilityLabel("Move \(itemLabel) up")
-            Button { move(1) } label: { Image(systemName: "chevron.down") }
+            RowIconButton(systemName: "chevron.down",
+                          help: "Move \(itemLabel) down",
+                          label: "Move \(itemLabel) down") { move(1) }
                 .disabled(!canMoveDown)
-                .help("Move \(itemLabel) down")
-                .accessibilityLabel("Move \(itemLabel) down")
         }
-        .buttonStyle(.borderless)
-        .font(.caption)
-        .foregroundStyle(Design.Palette.secondaryText)
+    }
+}
+
+/// A glyph button in a list row, sized for the pointer rather than for the glyph.
+///
+/// A bare `Image` in a borderless `Button` is only as clickable as the strokes it
+/// draws — a chevron at caption size is about 10pt across, well under the 24pt the
+/// HIG asks for, and it gave no sign it was a button until it had already been hit.
+/// The frame is the hit target, the fill is the sign, and neither is visible until
+/// the pointer is over the row.
+struct RowIconButton: View {
+    let systemName: String
+    let help: String
+    let label: String
+    let action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    private static let side: CGFloat = 22
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: Self.side, height: Self.side)
+                .background {
+                    RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
+                        .fill(isHovering && isEnabled
+                              ? Design.Palette.primaryText.opacity(0.10)
+                              : Color.clear)
+                }
+                // The frame alone is not a hit target: a Button's shape is its label's
+                // drawn content, and an empty background draws nothing.
+                .contentShape(RoundedRectangle(cornerRadius: Design.Radius.control,
+                                               style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isEnabled
+                         ? (isHovering ? Design.Palette.primaryText : Design.Palette.secondaryText)
+                         : Design.Palette.quaternaryText)
+        .onHover { hovering in
+            withAnimation(Design.Motion.hover) { isHovering = hovering }
+        }
+        .help(help)
+        .accessibilityLabel(label)
     }
 }
 

@@ -138,18 +138,14 @@ struct OverlayPane: View {
                                         itemLabel: module.label) { offset in
                             move(module, by: offset)
                         }
-                        Button {
+                        RowIconButton(systemName: "minus.circle",
+                                      help: overlay.modules.count <= 1
+                                          ? "The overlay needs at least one module."
+                                          : "Remove \(module.label) from the overlay",
+                                      label: "Remove \(module.label)") {
                             settings.update { $0.overlay.modules.removeAll { $0 == module } }
-                        } label: {
-                            Image(systemName: "minus.circle")
                         }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(Design.Palette.tertiaryText)
                         .disabled(overlay.modules.count <= 1)
-                        .help(overlay.modules.count <= 1
-                              ? "The overlay needs at least one module."
-                              : "Remove \(module.label) from the overlay")
-                        .accessibilityLabel("Remove \(module.label)")
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(module.label)
