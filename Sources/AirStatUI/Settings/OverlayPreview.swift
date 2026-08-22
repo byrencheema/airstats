@@ -1,7 +1,7 @@
 import SwiftUI
 import AirStatKit
 
-/// The overlay, drawn beside the controls that shape it.
+/// The overlay, drawn beside the list of modules that fills it.
 ///
 /// Not a mock-up: this is `OverlayRootView` on the same engine and the same settings
 /// store the real window uses, so every module, its order, the compact layout, the
@@ -82,60 +82,5 @@ struct OverlayPreview: View {
         let layout = overlay.isCompact ? "compact" : "expanded"
         return "\(names). \(layout), \(Int(overlay.width.rounded())) points wide, "
             + "\(Int((overlay.opacity * 100).rounded())) percent opaque"
-    }
-}
-
-/// A slider narrow enough for the column beside the preview.
-///
-/// `SettingsSlider` writes its bounds at the ends of the track, which is right for a
-/// row that has the pane's full width. Here the preview takes half of it, and the
-/// bounds are the first thing worth giving up: the thumbnail already shows what wider
-/// and fainter look like, which is more than a pair of numbers would say.
-struct CompactSlider: View {
-    let title: String
-    let value: Binding<Double>
-    let range: ClosedRange<Double>
-    let format: (Double) -> String
-
-    var body: some View {
-        HStack(spacing: Design.Space.m) {
-            Text(title)
-                .lineLimit(1)
-                // The label takes the slack, not the slider. A Slider handed a
-                // flexible or fixed width draws its track at an ideal size inside it
-                // and leaves the rest in front, so the gap between the label and the
-                // track came out wider than the track; a minimum is the one constraint
-                // it grows to meet.
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Slider(value: value, in: range)
-                .frame(minWidth: 150)
-            Text(format(value.wrappedValue))
-                .font(.body.monospacedDigit())
-                .foregroundStyle(Design.Palette.secondaryText)
-                .frame(width: 48, alignment: .trailing)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
-        .accessibilityValue(format(value.wrappedValue))
-    }
-}
-
-/// A toggle with its switch at the row's trailing edge, for the same column.
-///
-/// A bare `Toggle` in a stack puts its switch directly after the label, so five of them
-/// make a ragged right edge where a `Form` would have given a straight one.
-struct CompactToggle: View {
-    let title: String
-    let isOn: Binding<Bool>
-
-    var body: some View {
-        HStack(spacing: Design.Space.m) {
-            Text(title)
-            Spacer(minLength: Design.Space.m)
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
     }
 }

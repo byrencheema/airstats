@@ -27,9 +27,9 @@ struct OverlayPane: View {
                 }
             }
 
-            // The preview and the settings that change it, side by side. Stacked, the
-            // thumbnail was a band across the pane and the sliders were somewhere
-            // below it; beside them, moving one is watching the other.
+            // The preview and the list that fills it, side by side. Stacked, the
+            // thumbnail was a band across the pane and the modules were somewhere
+            // below it; beside them, reordering one is watching the other.
             //
             // Below the switch rather than above it, so a pane opened with the overlay
             // off says it is off before it shows what it would look like. The preview
@@ -40,38 +40,35 @@ struct OverlayPane: View {
                     if let engine {
                         OverlayPreview(engine: engine, settings: settings)
                     }
-                    VStack(spacing: Design.Space.l) {
-                        CompactSlider(title: "Width",
-                                      value: settings.quantized(\.overlay.width, step: 4),
-                                      range: 160...480,
-                                      format: SettingsLabels.points)
-                        CompactToggle(title: "Use compact layout",
-                                      isOn: settings.binding(\.overlay.isCompact))
-                        CompactSlider(title: "Opacity",
-                                      value: settings.quantized(\.overlay.opacity, step: 0.05),
-                                      range: 0.2...1,
-                                      format: SettingsLabels.percent)
-                        CompactToggle(title: "Fade when idle",
-                                      isOn: settings.binding(\.overlay.dimsWhenInactive))
-                        if overlay.dimsWhenInactive {
-                            CompactSlider(title: "Faded opacity",
-                                          value: settings.quantized(\.overlay.inactiveOpacity,
-                                                                   step: 0.05),
-                                          range: 0.15...1,
-                                          format: SettingsLabels.percent)
-                        }
+                    VStack(alignment: .leading, spacing: Design.Space.m) {
+                        moduleList
+                        moduleControls
                     }
                     .disabled(!overlay.isEnabled)
                 }
             } header: {
-                Text("Size & Transparency")
+                Text("Modules")
             }
 
             Section {
-                moduleList
-                moduleControls
+                SettingsSlider(title: "Width",
+                               value: settings.quantized(\.overlay.width, step: 4),
+                               range: 160...480,
+                               format: SettingsLabels.points)
+                Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
+                SettingsSlider(title: "Opacity",
+                               value: settings.quantized(\.overlay.opacity, step: 0.05),
+                               range: 0.2...1,
+                               format: SettingsLabels.percent)
+                Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
+                if overlay.dimsWhenInactive {
+                    SettingsSlider(title: "Faded opacity",
+                                   value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
+                                   range: 0.15...1,
+                                   format: SettingsLabels.percent)
+                }
             } header: {
-                Text("Modules")
+                Text("Size & Transparency")
             }
             .disabled(!overlay.isEnabled)
 
