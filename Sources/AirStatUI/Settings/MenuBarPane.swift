@@ -90,30 +90,27 @@ struct MenuBarPane: View {
                       : "Show \(item.metric.label) in the menu bar")
                 .accessibilityLabel("Show \(item.metric.label)")
 
-            // A Menu rather than a Picker, to match the style control beside it. A
-            // Picker draws a pop-up button's paired chevrons and a Menu draws one, and
-            // two controls that do the same thing should not advertise themselves
-            // differently in the same row.
-            Menu {
+            RowMenu(title: item.metric.label,
+                    width: Self.metricColumn,
+                    label: "\(item.metric.label) metric") {
                 Picker("Metric", selection: metricBinding(for: item)) {
                     ForEach(MenuBarMetric.allCases, id: \.self) { metric in
                         Text(metric.label).tag(metric)
                     }
                 }
                 .pickerStyle(.inline)
-            } label: {
-                Text(item.metric.label)
             }
-            .fixedSize()
-            .accessibilityLabel("\(item.metric.label) metric")
 
             Spacer(minLength: Design.Space.s)
 
+            // The badge stands in for the style control rather than joining it: a
+            // readout this Mac cannot serve has no style worth choosing, and the two
+            // together do not fit the row.
             if let reason = availability.note(for: item.metric) {
                 UnavailableBadge(reason: reason)
+            } else {
+                styleMenu(item)
             }
-
-            styleMenu(item)
 
             ReorderControls(canMoveUp: index > 0,
                             canMoveDown: index < items.count - 1,
@@ -126,7 +123,7 @@ struct MenuBarPane: View {
             // was a tint on one row — a destructive control whose target you had to
             // infer. It also matches the overlay's module list, which is the same
             // list of the same metrics doing the same job.
-            RowIconButton(systemName: "minus.circle",
+            RowIconButton(systemName: "trash",
                           help: items.count <= 1
                               ? "The last readout cannot be removed."
                               : "Remove \(item.metric.label) from the menu bar",
@@ -146,7 +143,9 @@ struct MenuBarPane: View {
     /// so it belongs behind the same control rather than as a second checkbox
     /// competing with the one that means "shown".
     private func styleMenu(_ item: MenuBarItemConfig) -> some View {
-        Menu {
+        RowMenu(title: item.style.label,
+                width: Self.styleColumn,
+                label: "\(item.metric.label) display style") {
             Picker("Display as", selection: styleBinding(for: item)) {
                 ForEach(item.metric.supportedStyles, id: \.self) { style in
                     Text(style.label).tag(style)
@@ -159,12 +158,13 @@ struct MenuBarPane: View {
                 Toggle("Show \"\(caption(for: item.metric))\" above the value",
                        isOn: captionBinding(for: item))
             }
-        } label: {
-            Text(item.style.label)
         }
-        .fixedSize()
-        .accessibilityLabel("\(item.metric.label) display style")
     }
+
+    /// Wide enough for "Battery Time Remaining" and "Battery Indicator", the longest
+    /// values either column can take.
+    private static let metricColumn: CGFloat = 175
+    private static let styleColumn: CGFloat = 145
 
     private var readoutListControls: some View {
         HStack(spacing: Design.Space.m) {

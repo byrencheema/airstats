@@ -442,6 +442,64 @@ struct ReorderControls: View {
     }
 }
 
+/// A pull-down in a list row.
+///
+/// The highlight is drawn around the value the menu changes, not around its chevron.
+/// AppKit's own menu button rings the indicator, which in a row that also carries
+/// reorder and delete buttons made the one control that opens a menu look like the
+/// two that do something immediately.
+///
+/// The width is fixed by the caller rather than by the title, so a column of these
+/// puts every chevron at the same x. Sized to the longest label they can hold, since
+/// a box that resized as the value changed would move the control out from under the
+/// pointer that just used it.
+struct RowMenu<Content: View>: View {
+    let title: String
+    let width: CGFloat
+    let label: String
+    @ViewBuilder var content: Content
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    var body: some View {
+        Menu { content } label: {
+            HStack(spacing: Design.Space.xs) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: Design.Space.xs)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(isEnabled ? Design.Palette.tertiaryText
+                                               : Design.Palette.quaternaryText)
+            }
+            .padding(.horizontal, Design.Space.xs)
+            .padding(.vertical, 3)
+            .frame(width: width, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
+                    .fill(isHovering && isEnabled
+                          ? Design.Palette.primaryText.opacity(0.08)
+                          : Color.clear)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: Design.Radius.control,
+                                           style: .continuous))
+        }
+        // `.button` with a plain button style is the one combination that draws the
+        // label exactly as written. `.borderlessButton` substitutes AppKit's own
+        // pop-up chrome, which puts its indicator on the leading edge and ignores the
+        // width, and `.fixedSize()` on top of that collapses the frame to the title.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .onHover { hovering in
+            withAnimation(Design.Motion.hover) { isHovering = hovering }
+        }
+        .accessibilityLabel(label)
+    }
+}
+
 /// A glyph button in a list row, sized for the pointer rather than for the glyph.
 ///
 /// A bare `Image` in a borderless `Button` is only as clickable as the strokes it

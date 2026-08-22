@@ -138,7 +138,7 @@ struct OverlayPane: View {
                                         itemLabel: module.label) { offset in
                             move(module, by: offset)
                         }
-                        RowIconButton(systemName: "minus.circle",
+                        RowIconButton(systemName: "trash",
                                       help: overlay.modules.count <= 1
                                           ? "The overlay needs at least one module."
                                           : "Remove \(module.label) from the overlay",
