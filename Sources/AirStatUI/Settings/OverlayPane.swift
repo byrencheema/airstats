@@ -27,6 +27,19 @@ struct OverlayPane: View {
                 }
             }
 
+            // Below the switch rather than above it, so a pane opened with the overlay
+            // off says it is off before it shows what it would look like. Never
+            // disabled: what the overlay would be is exactly what someone deciding
+            // whether to switch it on wants to see.
+            if let engine {
+                Section {
+                    OverlayPreview(engine: engine, settings: settings)
+                        .listRowInsets(EdgeInsets())
+                } header: {
+                    Text("Preview")
+                }
+            }
+
             Section {
                 moduleList
                 moduleControls
@@ -52,16 +65,10 @@ struct OverlayPane: View {
                     }
                     .disabled(overlay.originX == nil && overlay.originY == nil)
                 }
-                LabeledContent("Width") {
-                    HStack(spacing: Design.Space.l) {
-                        Slider(value: settings.quantized(\.overlay.width, step: 4), in: 160...480)
-                            .frame(minWidth: 140)
-                        Text(SettingsLabels.points(overlay.width))
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(Design.Palette.secondaryText)
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                }
+                SettingsSlider(title: "Width",
+                               value: settings.quantized(\.overlay.width, step: 4),
+                               range: 160...480,
+                               format: SettingsLabels.points)
                 Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
             } header: {
                 Text("Position & Size")
@@ -69,29 +76,16 @@ struct OverlayPane: View {
             .disabled(!overlay.isEnabled)
 
             Section {
-                LabeledContent("Opacity") {
-                    HStack(spacing: Design.Space.l) {
-                        Slider(value: settings.quantized(\.overlay.opacity, step: 0.05), in: 0.2...1)
-                            .frame(minWidth: 140)
-                        Text(SettingsLabels.percent(overlay.opacity))
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(Design.Palette.secondaryText)
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                }
+                SettingsSlider(title: "Opacity",
+                               value: settings.quantized(\.overlay.opacity, step: 0.05),
+                               range: 0.2...1,
+                               format: SettingsLabels.percent)
                 Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
                 if overlay.dimsWhenInactive {
-                    LabeledContent("Faded opacity") {
-                        HStack(spacing: Design.Space.l) {
-                            Slider(value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
-                                   in: 0.15...1)
-                                .frame(minWidth: 140)
-                            Text(SettingsLabels.percent(overlay.inactiveOpacity))
-                                .font(.body.monospacedDigit())
-                                .foregroundStyle(Design.Palette.secondaryText)
-                                .frame(width: 52, alignment: .trailing)
-                        }
-                    }
+                    SettingsSlider(title: "Faded opacity",
+                                   value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
+                                   range: 0.15...1,
+                                   format: SettingsLabels.percent)
                 }
             } header: {
                 Text("Transparency")

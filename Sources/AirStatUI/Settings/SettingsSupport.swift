@@ -249,6 +249,50 @@ enum SettingsPreview {
     }
 }
 
+/// A slider with its bounds written at the ends of the track and its value at the row's
+/// trailing edge.
+///
+/// The value alone answers "what is it set to" and nothing else. "220 pt" at the end of
+/// an unlabelled track does not say whether that is near the bottom of the range or the
+/// top, so the only way to learn what the control can do was to drag it to both ends
+/// and put it back.
+struct SettingsSlider: View {
+    let title: String
+    let value: Binding<Double>
+    let range: ClosedRange<Double>
+    let format: (Double) -> String
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: Design.Space.l) {
+                Slider(value: value, in: range) {
+                    EmptyView()
+                } minimumValueLabel: {
+                    bound(range.lowerBound)
+                } maximumValueLabel: {
+                    bound(range.upperBound)
+                }
+                .frame(minWidth: 150)
+
+                Text(format(value.wrappedValue))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .frame(width: 52, alignment: .trailing)
+            }
+        }
+        .accessibilityValue(format(value.wrappedValue))
+    }
+
+    private func bound(_ value: Double) -> some View {
+        Text(format(value))
+            .font(.caption)
+            .foregroundStyle(Design.Palette.tertiaryText)
+            // The ends are a scale, not a readout; announcing them would put two more
+            // numbers between the user and the one that is actually set.
+            .accessibilityHidden(true)
+    }
+}
+
 /// A row's trailing "not available here" marker, with the reason on hover and in
 /// the accessibility value rather than as a wall of text next to every control.
 struct UnavailableBadge: View {
