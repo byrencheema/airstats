@@ -144,7 +144,6 @@ struct MenuBarPane: View {
     /// competing with the one that means "shown".
     private func styleMenu(_ item: MenuBarItemConfig) -> some View {
         RowMenu(title: item.style.label,
-                width: Self.styleColumn,
                 label: "\(item.metric.label) display style") {
             Picker("Display as", selection: styleBinding(for: item)) {
                 ForEach(item.metric.supportedStyles, id: \.self) { style in
@@ -161,10 +160,10 @@ struct MenuBarPane: View {
         }
     }
 
-    /// Wide enough for "Battery Time Remaining" and "Battery Indicator", the longest
-    /// values either column can take.
+    /// Wide enough for "Battery Time Remaining", the longest metric name. The style
+    /// beside it needs no column: it is the last thing in the row and sits against the
+    /// trailing edge, where a fixed box would only add a gap.
     private static let metricColumn: CGFloat = 175
-    private static let styleColumn: CGFloat = 145
 
     private var readoutListControls: some View {
         HStack(spacing: Design.Space.m) {

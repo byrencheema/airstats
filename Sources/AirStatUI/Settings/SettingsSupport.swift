@@ -449,13 +449,14 @@ struct ReorderControls: View {
 /// reorder and delete buttons made the one control that opens a menu look like the
 /// two that do something immediately.
 ///
-/// The width is fixed by the caller rather than by the title, so a column of these
-/// puts every chevron at the same x. Sized to the longest label they can hold, since
-/// a box that resized as the value changed would move the control out from under the
-/// pointer that just used it.
+/// A caller that passes a `width` gets a column: every chevron lands at the same x,
+/// and the box does not resize as the value changes, so the control stays under the
+/// pointer that just used it. Passing none sizes the menu to its own title, for a
+/// control that sits alone against the row's trailing edge and has no column to line
+/// up with.
 struct RowMenu<Content: View>: View {
     let title: String
-    let width: CGFloat
+    var width: CGFloat?
     let label: String
     @ViewBuilder var content: Content
 
@@ -493,6 +494,9 @@ struct RowMenu<Content: View>: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        // Only where there is no column to hold: `fixedSize` collapses to the title
+        // and would throw away an explicit width.
+        .fixedSize(horizontal: width == nil, vertical: false)
         .onHover { hovering in
             withAnimation(Design.Motion.hover) { isHovering = hovering }
         }
