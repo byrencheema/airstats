@@ -150,24 +150,7 @@ public enum Design {
     public enum Motion {
         /// Numeric readouts crossfading to a new value.
         public static let value = Animation.easeOut(duration: 0.18)
-        /// Disclosure, module expand/collapse.
         ///
-        /// Critically damped on purpose. The panel's window is sized to its content, so
-        /// the height this animation produces is the window's height, and a spring that
-        /// overshoots makes the window grow past its resting size and come back. On a
-        /// panel pinned under the status item that reversal is the bounce that reads as
-        /// jitter. At a damping fraction of 1 the height only ever moves one way.
-        /// Slower than a hover or a fade, because this one is not decoration: the
-        /// window is sized to its content, so this curve is the panel's own outline
-        /// moving, and a third of a second covered a couple of hundred points in about
-        /// twenty frames.
-        public static let disclosure = Animation.spring(response: 0.45, dampingFraction: 1)
-        /// How long `disclosure` takes to settle, for the non-SwiftUI side of a
-        /// height change to line up with. Short of the spring's full settle on
-        /// purpose: by then the height has all but converged, and freezing every
-        /// reading in the app for the tail of an animation costs more than the last
-        /// point of movement is worth.
-        public static let disclosureDuration: Duration = .milliseconds(560)
         /// Panel present/dismiss.
         public static let present = Animation.easeOut(duration: 0.14)
         /// Hover highlight.

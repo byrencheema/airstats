@@ -47,12 +47,6 @@ public final class MetricsEngine {
     private var ingestCount = 0
     private var observationTask: Task<Void, Never>?
     private var powerStateObserver: NSObjectProtocol?
-    /// The snapshot that arrived while updates were held, if any. Only the newest is
-    /// kept: a held tick is late, and showing two of them back to back the moment the
-    /// hold lifts would be worse than showing one.
-    private var heldSnapshot: SystemSnapshot?
-    private var holdTask: Task<Void, Never>?
-
     public init(settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
         let s = settingsStore.settings
@@ -133,30 +127,6 @@ public final class MetricsEngine {
     }
 
     public func refreshNow() { core?.sampleNow() }
-
-    /// Stop publishing new snapshots for a moment.
-    ///
-    /// The panel resizes itself to fit its content, so any tick that changes the
-    /// content's height moves the window. That is fine when the window is standing
-    /// still and wrong while a module is animating open: the animation is already
-    /// retargeting the height every frame, and a sample landing in the middle of it
-    /// adds a second, unrelated retarget the user reads as a stutter. Holding the data
-    /// still for the length of the animation costs one late tick and nothing else.
-    ///
-    /// Sampling itself carries on; only the publication is deferred, so no history is
-    /// lost and the timestamps stay honest.
-    public func holdUpdates(for duration: Duration) {
-        holdTask?.cancel()
-        holdTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: duration)
-            guard !Task.isCancelled, let self else { return }
-            self.holdTask = nil
-            if let held = self.heldSnapshot {
-                self.heldSnapshot = nil
-                self.ingest(held)
-            }
-        }
-    }
 
     /// True when the user asked for a pause, the machine is in Low Power Mode, and
     /// there is something to freeze on.
@@ -266,10 +236,6 @@ public final class MetricsEngine {
     // MARK: Ingest
 
     func ingest(_ new: SystemSnapshot) {
-        guard holdTask == nil else {
-            heldSnapshot = new
-            return
-        }
         snapshot = new
         lastUpdate = new.capturedAt
         record(new)

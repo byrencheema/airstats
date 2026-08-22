@@ -211,12 +211,8 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // the modules nearest the bottom become unreachable.
         let available = anchor.map { ($0.minY - gap) - (visible.minY + margin) }
             ?? (visible.height - margin * 2)
-        // Rounded, not just the origin below. `y` is derived from the height, so a
-        // fractional height put the panel's *top* edge on a fraction of a point: the
-        // edge pinned under the status item slid a third of a point every time a text
-        // metric changed, which is the low-level shimmer under everything else here.
-        let size = NSSize(width: fitting.width.rounded(),
-                          height: min(fitting.height, max(available, 160)).rounded())
+        let size = NSSize(width: fitting.width,
+                          height: min(fitting.height, max(available, 160)))
 
         var x: CGFloat
         var y: CGFloat
