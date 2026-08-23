@@ -10,7 +10,6 @@ import AirStatKit
 /// two to be filed apart.
 struct AppearancePane: View {
     let settings: SettingsStore
-    let engine: MetricsEngine?
 
     private var theme: ThemeSettings { settings.settings.theme }
 
@@ -74,8 +73,6 @@ struct AppearancePane: View {
             }
 
             Section {
-                ChartPreview(history: SettingsPreview.history(engine),
-                             charts: settings.settings.charts)
                 Picker("Chart style", selection: settings.binding(\.charts.style)) {
                     ForEach(ChartStyle.allCases, id: \.self) { style in
                         Text(style.label).tag(style)
@@ -380,46 +377,5 @@ private struct ColorPalette: View {
     private func isSelected(_ color: Color) -> Bool {
         guard let a = color.themeColor, let b = current.themeColor else { return false }
         return a == b
-    }
-}
-
-/// Sparklines in the colours and the style the settings beside them set.
-///
-/// The two chart settings were the only ones in the window that changed something the
-/// user could not see from the window — "Filled Line" and "Bars" are words for a
-/// picture, and the picture was two clicks away in the panel. Three series rather than
-/// one, because the second thing this shows is the metric colours above it landing on
-/// the surface they were picked for.
-private struct ChartPreview: View {
-    let history: MetricHistory
-    let charts: ChartSettings
-
-    private static let series: [(SeriesKey, CollectorID)] = [
-        (.cpuTotal, .cpu), (.memoryUsed, .memory), (.networkDownload, .network),
-    ]
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: Design.Space.xl) {
-            ForEach(Self.series, id: \.0) { key, id in
-                VStack(alignment: .leading, spacing: Design.Space.xxs) {
-                    Text(key.label)
-                        .font(Design.Text.caption)
-                        .foregroundStyle(Design.Palette.tertiaryText)
-                    Sparkline(ChartSeries(key, from: history,
-                                          tint: Design.Palette.metric(id)),
-                              settings: charts)
-                }
-            }
-        }
-        .padding(Design.Space.l)
-        .frame(maxWidth: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: Design.Radius.card, style: .continuous)
-                .fill(.quaternary.opacity(0.5))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Chart preview")
-        .accessibilityValue("\(charts.style.label) charts, "
-                            + "\(SettingsLabels.duration(charts.historyDuration)) of history")
     }
 }
