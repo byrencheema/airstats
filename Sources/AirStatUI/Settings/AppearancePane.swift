@@ -265,18 +265,26 @@ private struct SwatchButton: View {
     }
 }
 
-/// The palette behind a swatch: the twelve system colours, the wheel, and the way
-/// back to the default.
+/// The palette behind a swatch: the twelve system colours, a picker for everything
+/// else, and the way back to the default.
 ///
-/// Twelve rather than a free choice up front because these are the colours the rest
-/// of the app is already drawn in — picking one keeps a user's override in the same
-/// family as everything they did not override, which a hand-mixed triple rarely does.
+/// Presets first because they answer the question nearly every time. They are the
+/// colours the rest of the app is already drawn in, so picking one keeps an override
+/// in the same family as everything left alone, which a hand-mixed triple rarely
+/// does. The picker below them is one drag away rather than one window away.
 private struct ColorPalette: View {
     let current: Color
     let isOverridden: Bool
     let defaultTitle: String
     @Binding var isPresented: Bool
     let set: (ThemeColor?) -> Void
+
+    /// The picker's own state, seeded from the colour on screen.
+    ///
+    /// Local rather than read back out of the store on every frame, because hue and
+    /// saturation do not survive the trip: an override is stored as a triple, and a
+    /// triple has nothing to say about which hue a black or a grey came from.
+    @State private var hsb = HSB(hue: 0, saturation: 0, brightness: 0)
 
     /// Apple's system palette, in spectrum order so the grid reads as a spectrum
     /// rather than as a list. Also the fill for a swatch standing in for nine
@@ -312,22 +320,15 @@ private struct ColorPalette: View {
 
             Divider()
 
-            Button {
-                // The popover cannot survive the panel taking key, so it is dismissed
-                // deliberately rather than left to vanish a beat later.
+            ColorEditor(hsb: $hsb) {
+                // Sampling covers the screen, so the popover is put away first rather
+                // than left to vanish underneath it.
                 isPresented = false
-                ColorPanel.open(current) { set($0) }
-            } label: {
-                Label("Custom…", systemImage: "eyedropper")
             }
-            .buttonStyle(.link)
 
             if isOverridden {
+                Divider()
                 Button {
-                    // Closing first: the wheel may still be bound to this swatch, and
-                    // leaving it open on a colour that just reverted invites the user
-                    // to drag it straight back.
-                    ColorPanel.close()
                     set(nil)
                     isPresented = false
                 } label: {
@@ -338,7 +339,27 @@ private struct ColorPalette: View {
         }
         .font(.callout)
         .padding(Design.Space.l)
+        .frame(width: Self.width)
+        .onAppear { hsb = HSB(current.themeColor ?? ThemeColor(red: 0, green: 0, blue: 0)) }
+        .onChange(of: hsb) { _, new in
+            // The user's own drag, arriving back here as a store write. Guarded so a
+            // colour that has not actually moved is not written down as an override:
+            // opening a popover is not choosing anything.
+            guard let stored = current.themeColor, !new.matches(stored) else { return }
+            set(new.themeColor)
+        }
+        .onChange(of: current) { _, new in
+            // A change from outside the picker — a preset, an All Metrics sweep, a
+            // restore. Ignored when it is the one we just made, which would otherwise
+            // round-trip through sRGB and drag the knob a hair on every frame.
+            guard let stored = new.themeColor, !hsb.matches(stored) else { return }
+            hsb = HSB(stored)
+        }
     }
+
+    /// Sized to the preset grid: six 20pt dots with their hit padding, which is also
+    /// a comfortable width for the square below them.
+    private static let width: CGFloat = 220
 
     private func preset(_ entry: (name: String, color: Color)) -> some View {
         Button {

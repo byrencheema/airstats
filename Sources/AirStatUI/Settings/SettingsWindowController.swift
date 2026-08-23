@@ -45,9 +45,6 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// keeping that resident until quit is the worst of both worlds — the window is
     /// discarded on close and rebuilt on the next `show`.
     public func windowWillClose(_ notification: Notification) {
-        // The colour panel is not ours and does not go with the window; left alone it
-        // stays on screen editing a swatch that no longer exists.
-        ColorPanel.close()
         window = nil
     }
 
@@ -170,10 +167,6 @@ struct SettingsRootView: View {
         .frame(width: windowWidth, height: windowHeight)
         .onAppear { onPaneChange?(tab) }
         .onChange(of: tab) { _, newValue in
-            // The colour wheel belongs to the row that opened it. Leaving another
-            // pane's swatch being edited from a floating window is how you end up
-            // dragging a colour onto something you cannot see.
-            ColorPanel.close()
             onPaneChange?(newValue)
         }
     }

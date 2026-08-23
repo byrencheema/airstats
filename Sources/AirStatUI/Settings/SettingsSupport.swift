@@ -342,58 +342,6 @@ struct RestoreDefaultsButton: View {
     }
 }
 
-/// The shared colour panel: opened on behalf of one swatch, and closed rather than
-/// left standing.
-///
-/// There is exactly one `NSColorPanel` per process and nothing in AppKit takes
-/// responsibility for closing it, so the wheel outlives the row that opened it: switch
-/// panes, or close the whole window, and it is still floating there editing a swatch
-/// nobody can see.
-///
-/// Driven by target/action rather than by a `ColorPicker`, because the control that
-/// opens it here is a popover — and a popover closes the moment the panel takes key,
-/// taking any binding living inside it with it. The handler is held here instead,
-/// where it outlives the view that installed it.
-@MainActor
-enum ColorPanel {
-
-    private final class Target: NSObject {
-        var handler: (ThemeColor) -> Void = { _ in }
-
-        @objc func colorChanged(_ sender: NSColorPanel) {
-            // A colour that will not resolve into sRGB cannot be stored, and storing a
-            // wrong one is worse than declining the edit.
-            guard let stored = Color(nsColor: sender.color).themeColor else { return }
-            handler(stored)
-        }
-    }
-
-    private static let target = Target()
-
-    /// Opens the wheel on `current`, reporting every change until something else opens
-    /// it or it is closed.
-    static func open(_ current: Color, onChange: @escaping (ThemeColor) -> Void) {
-        let panel = NSColorPanel.shared
-        panel.showsAlpha = false
-        // Before the target is installed: assigning the colour fires the action, and
-        // on a row still on its default that would write an override the user never
-        // picked.
-        panel.color = NSColor(current)
-        target.handler = onChange
-        panel.setTarget(target)
-        panel.setAction(#selector(Target.colorChanged(_:)))
-        panel.makeKeyAndOrderFront(nil)
-    }
-
-    static func close() {
-        guard NSColorPanel.sharedColorPanelExists else { return }
-        target.handler = { _ in }
-        NSColorPanel.shared.setTarget(nil)
-        NSColorPanel.shared.setAction(nil)
-        NSColorPanel.shared.orderOut(nil)
-    }
-}
-
 /// Explanatory text under a control, styled as a macOS settings footnote.
 struct SettingsFootnote: View {
     private let text: String
