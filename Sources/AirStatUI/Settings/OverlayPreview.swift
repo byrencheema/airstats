@@ -26,9 +26,12 @@ struct OverlayPreview: View {
     @State private var contentHeight: CGFloat = OverlayPreview.maxHeight / OverlayPreview.scale
 
     private static let scale: CGFloat = 0.65
-    /// Tall enough that nothing anyone is likely to have set needs scrolling: the
-    /// shipped three compact modules come to about 105pt here, and six still fit.
-    private static let maxHeight: CGFloat = 190
+    /// Sized off the worst case anyone lands on without deliberately building it: the
+    /// three shipped modules expanded, which measure 265pt and so 172pt here. The cap
+    /// clears that with a module in hand, and costs nothing when it is not reached —
+    /// the well is only ever as tall as the overlay in it. A cap is still needed at
+    /// all because nine expanded modules come to about 736pt, which would be the pane.
+    private static let maxHeight: CGFloat = 240
 
     /// Widest the column can get, so the controls beside it keep a usable width even
     /// at the largest overlay. Past this the thumbnail scrolls sideways rather than
