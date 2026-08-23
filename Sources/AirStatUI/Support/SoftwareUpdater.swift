@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import Sparkle
@@ -68,7 +69,14 @@ public final class SoftwareUpdater {
 
     /// The user asked. Sparkle answers in its own window, with an update, an error or
     /// "you are up to date", which is the reason this app links it at all.
+    ///
+    /// The activation is ours rather than Sparkle's. Sparkle activates the app too, but
+    /// only from inside the same call, and by then this app has nothing to activate
+    /// from: the panel this is usually called from never makes AirStats active, and it
+    /// closes on the way out. Its window then opens behind whatever the user was
+    /// looking at, which reads exactly like the button having done nothing.
     public func checkForUpdates() {
+        NSApp.activate(ignoringOtherApps: true)
         controller.updater.checkForUpdates()
     }
 
