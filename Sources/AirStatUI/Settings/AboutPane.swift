@@ -41,23 +41,6 @@ struct AboutPane: View {
             }
 
             Section {
-                HStack(spacing: Design.Space.l) {
-                    // Everything past the press belongs to Sparkle: it reports up to
-                    // date, an error, or an update with its release notes and an
-                    // Install button, in its own window.
-                    Button("Check for Updates…") { updater?.checkForUpdates() }
-                        .disabled(updater?.canCheck != true)
-                        .accessibilityHint("Asks airstats.app whether a newer version exists")
-                    Spacer()
-                }
-                if let checked = lastCheckedNote {
-                    SettingsFootnote(checked)
-                }
-            } header: {
-                Text("Updates")
-            }
-
-            Section {
                 MetricContent(systemState) { system in
                     Group {
                         LabeledContent("Computer", value: system.computerName)
@@ -99,14 +82,11 @@ struct AboutPane: View {
                 Text("Settings File")
             }
 
+            // One section's defaults are restored from the bar under that section's
+            // own pane, where the user can see what is about to change. This is the
+            // only reset that reaches settings you are not looking at, so it is the
+            // only one that belongs here.
             Section {
-                Menu("Restore One Section…") {
-                    ForEach(SettingsStore.SettingsSection.allCases, id: \.self) { section in
-                        Button(section.label) { settings.resetSection(section) }
-                    }
-                }
-                .fixedSize()
-
                 Button("Restore All Settings…", role: .destructive) { isConfirmingFullReset = true }
                     .confirmationDialog("Restore every setting to its defaults?",
                                         isPresented: $isConfirmingFullReset) {
@@ -115,7 +95,7 @@ struct AboutPane: View {
                         }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("Your menu bar readouts, panel layout, overlay, notification rules and shortcuts all go back to how AirStats shipped.")
+                        Text("Your menu bar readouts, overlay, colours, notification rules and shortcuts all go back to how AirStats shipped.")
                     }
             } header: {
                 Text("Reset")
@@ -136,18 +116,6 @@ struct AboutPane: View {
             return "Development build"
         }
         return "Version \(short)"
-    }
-
-    // MARK: Updates
-
-    /// Standing answer to "is this thing actually running?", which the button alone
-    /// cannot give: the automatic check is silent when it finds nothing, so a user who
-    /// has never pressed anything would otherwise see no sign of it at all.
-    private var lastCheckedNote: String? {
-        guard let checked = updater?.lastCheck else { return nil }
-        let relative = RelativeDateTimeFormatter()
-        relative.unitsStyle = .full
-        return "Last checked \(relative.localizedString(for: checked, relativeTo: Date()))."
     }
 
     private func coreText(_ system: SystemInfoSnapshot) -> String {

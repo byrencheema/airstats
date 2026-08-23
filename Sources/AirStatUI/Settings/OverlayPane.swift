@@ -15,18 +15,62 @@ struct OverlayPane: View {
 
     var body: some View {
         Form {
+            // No header: it would repeat the pane's own name in the source list
+            // beside it, and this row is the pane's subject rather than a section of
+            // it — everything below configures the thing this switch puts on screen.
             Section {
                 Toggle("Show the overlay", isOn: settings.binding(\.overlay.isEnabled))
-            } header: {
-                Text("Overlay")
+            } footer: {
+                if !overlay.isEnabled {
+                    SettingsFootnote("Turn this on to put the overlay on screen. "
+                                     + "The settings below shape it once it is there.")
+                }
             }
 
+            // The preview and the list that fills it, side by side. Stacked, the
+            // thumbnail was a band across the pane and the modules were somewhere
+            // below it; beside them, reordering one is watching the other.
+            //
+            // Below the switch rather than above it, so a pane opened with the overlay
+            // off says it is off before it shows what it would look like. The preview
+            // itself is never disabled: what the overlay would be is exactly what
+            // someone deciding whether to switch it on wants to see.
             Section {
-                moduleList
-                moduleControls
+                HStack(alignment: .top, spacing: Design.Space.xl) {
+                    if let engine {
+                        OverlayPreview(engine: engine, settings: settings)
+                    }
+                    VStack(alignment: .leading, spacing: Design.Space.m) {
+                        moduleList
+                        moduleControls
+                    }
+                    .disabled(!overlay.isEnabled)
+                }
             } header: {
                 Text("Modules")
             }
+
+            Section {
+                SettingsSlider(title: "Width",
+                               value: settings.quantized(\.overlay.width, step: 4),
+                               range: 160...480,
+                               format: SettingsLabels.points)
+                Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
+                SettingsSlider(title: "Opacity",
+                               value: settings.quantized(\.overlay.opacity, step: 0.05),
+                               range: 0.2...1,
+                               format: SettingsLabels.percent)
+                Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
+                if overlay.dimsWhenInactive {
+                    SettingsSlider(title: "Faded opacity",
+                                   value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
+                                   range: 0.15...1,
+                                   format: SettingsLabels.percent)
+                }
+            } header: {
+                Text("Size & Transparency")
+            }
+            .disabled(!overlay.isEnabled)
 
             Section {
                 Picker("Position", selection: settings.binding(\.overlay.corner)) {
@@ -45,49 +89,10 @@ struct OverlayPane: View {
                     }
                     .disabled(overlay.originX == nil && overlay.originY == nil)
                 }
-                LabeledContent("Width") {
-                    HStack(spacing: Design.Space.l) {
-                        Slider(value: settings.quantized(\.overlay.width, step: 4), in: 160...480)
-                            .frame(minWidth: 140)
-                        Text(SettingsLabels.points(overlay.width))
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(Design.Palette.secondaryText)
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                }
-                Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
             } header: {
-                Text("Placement")
+                Text("Position")
             }
-
-            Section {
-                LabeledContent("Opacity") {
-                    HStack(spacing: Design.Space.l) {
-                        Slider(value: settings.quantized(\.overlay.opacity, step: 0.05), in: 0.2...1)
-                            .frame(minWidth: 140)
-                        Text(SettingsLabels.percent(overlay.opacity))
-                            .font(.body.monospacedDigit())
-                            .foregroundStyle(Design.Palette.secondaryText)
-                            .frame(width: 52, alignment: .trailing)
-                    }
-                }
-                Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
-                if overlay.dimsWhenInactive {
-                    LabeledContent("Faded opacity") {
-                        HStack(spacing: Design.Space.l) {
-                            Slider(value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
-                                   in: 0.15...1)
-                                .frame(minWidth: 140)
-                            Text(SettingsLabels.percent(overlay.inactiveOpacity))
-                                .font(.body.monospacedDigit())
-                                .foregroundStyle(Design.Palette.secondaryText)
-                                .frame(width: 52, alignment: .trailing)
-                        }
-                    }
-                }
-            } header: {
-                Text("Transparency")
-            }
+            .disabled(!overlay.isEnabled)
 
             Section {
                 Picker("Layer", selection: settings.binding(\.overlay.depth)) {
@@ -104,15 +109,10 @@ struct OverlayPane: View {
                     .font(.callout)
                     .foregroundStyle(Design.Palette.secondaryText)
             }
+            // Restore Defaults below stays live: a pane the user has switched off is
+            // still a pane they may want to put back the way it shipped.
+            .disabled(!overlay.isEnabled)
 
-            Section {
-                HStack {
-                    Spacer()
-                    RestoreDefaultsButton(settings: settings,
-                                          sections: SettingsTab.overlay.sections,
-                                          title: "Overlay")
-                }
-            }
         }
         .settingsFormStyle()
     }
@@ -134,18 +134,14 @@ struct OverlayPane: View {
                                         itemLabel: module.label) { offset in
                             move(module, by: offset)
                         }
-                        Button {
+                        RowIconButton(systemName: "trash",
+                                      help: overlay.modules.count <= 1
+                                          ? "The overlay needs at least one module."
+                                          : "Remove \(module.label) from the overlay",
+                                      label: "Remove \(module.label)") {
                             settings.update { $0.overlay.modules.removeAll { $0 == module } }
-                        } label: {
-                            Image(systemName: "minus.circle")
                         }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(Design.Palette.tertiaryText)
                         .disabled(overlay.modules.count <= 1)
-                        .help(overlay.modules.count <= 1
-                              ? "The overlay needs at least one module."
-                              : "Remove \(module.label) from the overlay")
-                        .accessibilityLabel("Remove \(module.label)")
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(module.label)

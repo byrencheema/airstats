@@ -9,12 +9,18 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let engine: MetricsEngine
     private let settings: SettingsStore
     private let updater: SoftwareUpdater?
+    /// Shared with the threshold monitor, so the notifications pane reports the same
+    /// grant the alerts actually depend on rather than a second opinion.
+    private let authority: NotificationAuthority?
     private var window: NSWindow?
 
-    public init(engine: MetricsEngine, settings: SettingsStore, updater: SoftwareUpdater? = nil) {
+    public init(engine: MetricsEngine, settings: SettingsStore,
+                updater: SoftwareUpdater? = nil,
+                authority: NotificationAuthority? = nil) {
         self.engine = engine
         self.settings = settings
         self.updater = updater
+        self.authority = authority
         super.init()
     }
 
@@ -39,16 +45,14 @@ public final class SettingsWindowController: NSObject, NSWindowDelegate {
     /// keeping that resident until quit is the worst of both worlds — the window is
     /// discarded on close and rebuilt on the next `show`.
     public func windowWillClose(_ notification: Notification) {
-        // The colour panel is not ours and does not go with the window; left alone it
-        // stays on screen editing a swatch that no longer exists.
-        ColorPanel.close()
         window = nil
     }
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow()
         let root = SettingsRootView(settings: settings, engine: engine,
-                                    updater: updater) { [weak window] tab in
+                                    updater: updater,
+                                    authority: authority) { [weak window] tab in
             window?.title = tab.label
         }
         window.delegate = self
@@ -109,6 +113,8 @@ struct SettingsRootView: View {
     let engine: MetricsEngine?
     /// Nil in the offscreen renderer, which has no app lifecycle to hang an updater on.
     let updater: SoftwareUpdater?
+    /// Nil for the same reason: `UNUserNotificationCenter` traps outside an app bundle.
+    let authority: NotificationAuthority?
     /// Lets the window title follow the selected pane, which is what System
     /// Settings does and what `navigationTitle` used to give us for free.
     var onPaneChange: ((SettingsTab) -> Void)?
@@ -128,10 +134,12 @@ struct SettingsRootView: View {
     private static let titlebarInset: CGFloat = 28
 
     init(settings: SettingsStore, engine: MetricsEngine? = nil, updater: SoftwareUpdater? = nil,
+         authority: NotificationAuthority? = nil,
          initialTab: SettingsTab? = nil, onPaneChange: ((SettingsTab) -> Void)? = nil) {
         self.settings = settings
         self.engine = engine
         self.updater = updater
+        self.authority = authority
         self.onPaneChange = onPaneChange
         _tab = State(initialValue: initialTab ?? SettingsTab.renderDefault)
     }
@@ -149,17 +157,16 @@ struct SettingsRootView: View {
                 .fill(Design.Palette.separator)
                 .frame(width: Design.Space.hairline)
                 .accessibilityHidden(true)
-            pane
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 0) {
+                pane
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                paneFooter
+            }
         }
         .padding(.top, SettingsRootView.titlebarInset)
         .frame(width: windowWidth, height: windowHeight)
         .onAppear { onPaneChange?(tab) }
         .onChange(of: tab) { _, newValue in
-            // The colour wheel belongs to the row that opened it. Leaving another
-            // pane's swatch being edited from a floating window is how you end up
-            // dragging a colour onto something you cannot see.
-            ColorPanel.close()
             onPaneChange?(newValue)
         }
     }
@@ -199,6 +206,14 @@ struct SettingsRootView: View {
                 .accessibilityHidden(true)
 
                 ForEach(SettingsTab.allCases) { item in
+                    if item.startsGroup {
+                        Rectangle()
+                            .fill(Design.Palette.separator)
+                            .frame(height: Design.Space.hairline)
+                            .padding(.horizontal, Design.Space.m)
+                            .padding(.vertical, Design.Space.xs)
+                            .accessibilityHidden(true)
+                    }
                     Button {
                         tab = item
                     } label: {
@@ -264,8 +279,37 @@ struct SettingsRootView: View {
         case .menuBar: MenuBarPane(settings: settings, engine: engine)
         case .appearance: AppearancePane(settings: settings)
         case .overlay: OverlayPane(settings: settings, engine: engine)
-        case .notifications: NotificationsPane(settings: settings, engine: engine)
+        case .notifications: NotificationsPane(settings: settings, engine: engine,
+                                               authority: authority)
+        case .shortcuts: ShortcutsPane(settings: settings)
         case .about: AboutPane(settings: settings, engine: engine, updater: updater)
+        }
+    }
+
+    /// One bar under every pane, carrying that pane's restore-defaults.
+    ///
+    /// It was a section at the bottom of each pane's form, which put a destructive
+    /// control in a different place on every pane — and always behind a scroll, since
+    /// it is by definition the last thing. As a bar it is in one place, reachable
+    /// without scrolling, and outside the form, which is the right register for a
+    /// control that acts on the form rather than being part of it.
+    @ViewBuilder
+    private var paneFooter: some View {
+        if !tab.sections.isEmpty {
+            VStack(spacing: 0) {
+                Rectangle()
+                    .fill(Design.Palette.separator)
+                    .frame(height: Design.Space.hairline)
+                    .accessibilityHidden(true)
+                HStack {
+                    Spacer()
+                    RestoreDefaultsButton(settings: settings,
+                                          sections: tab.sections,
+                                          title: tab.label)
+                }
+                .padding(.horizontal, Design.Space.l)
+                .padding(.vertical, Design.Space.s)
+            }
         }
     }
 }

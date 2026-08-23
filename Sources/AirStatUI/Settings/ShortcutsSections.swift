@@ -2,11 +2,11 @@ import SwiftUI
 import AppKit
 import AirStatKit
 
-/// The shortcut rows, as sections for another pane's `Form`.
+/// The shortcut rows, as sections for a `Form`.
 ///
-/// Three recorder rows did not need a source-list entry of their own, so these live
-/// in General now. They are still their own file: the conflict detection below is the
-/// substance of the feature and does not belong in a pane about sampling and units.
+/// Separate from `ShortcutsPane` because the conflict detection below is the substance
+/// of the feature and is worth reading on its own, without a pane's scaffolding
+/// wrapped around it.
 struct ShortcutsFormSections: View {
     let settings: SettingsStore
 
@@ -16,14 +16,17 @@ struct ShortcutsFormSections: View {
 
     var body: some View {
         Group {
+            // No header: it would repeat the pane's own name in the source list
+            // beside it.
             Section {
                 ForEach(ShortcutAction.allCases, id: \.self) { action in
                     LabeledContent(action.label) {
                         ShortcutRecorderField(action: action, settings: settings)
                     }
                 }
-            } header: {
-                Text("Shortcuts")
+            } footer: {
+                SettingsFootnote("These work anywhere in macOS, including while another "
+                                 + "app is frontmost. AirStats stays in the background.")
             }
 
             if !conflicts.isEmpty {
@@ -32,7 +35,7 @@ struct ShortcutsFormSections: View {
                         SettingsCaution(conflict)
                     }
                 } header: {
-                    Text("Shortcut Conflicts")
+                    Text("Conflicts")
                 }
             }
         }

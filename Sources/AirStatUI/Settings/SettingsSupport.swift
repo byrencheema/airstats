@@ -4,15 +4,23 @@ import AirStatKit
 
 // MARK: - Panes
 
-/// The settings window's sections, in sidebar order.
+/// The settings window's panes, in sidebar order and in groups.
 ///
-/// Six, where there were eight. Charts was two settings and a wall of prose about
-/// four more that no longer exist; it is a section of Appearance now, next to the
-/// colours it shares a subject with. Shortcuts was three recorder rows, and sits in
-/// General. Nothing was lost in either move — an eight-item source list for an app
-/// with one window and one menu bar item was the thing that read as unfinished.
+/// Charts was its own pane of two settings and a wall of prose about four more that no
+/// longer exist; it is a section of Appearance now, next to the colours it shares a
+/// subject with. Shortcuts went the other way: folded into General, it ended up below
+/// Sampling and Units in a scroll nobody reached, which is a poor place for the one
+/// setting a user arrives already looking for. Three rows is a thin pane, but a pane
+/// is findable and the bottom of another pane's scroll is not.
 public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
-    case general, menuBar, appearance, overlay, notifications, about
+    // Order is the source list's order, and it is grouped: what the app is, then the
+    // three things it does, then how it looks and how you reach it, then about. A flat
+    // list of six left "Appearance" sitting between "Menu Bar" and "Overlay", which
+    // are the two surfaces it applies to.
+    case general
+    case menuBar, overlay, notifications
+    case appearance, shortcuts
+    case about
 
     public var id: String { rawValue }
 
@@ -23,7 +31,19 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .appearance: return "Appearance"
         case .overlay: return "Overlay"
         case .notifications: return "Notifications"
+        case .shortcuts: return "Shortcuts"
         case .about: return "About"
+        }
+    }
+
+    /// Whether a rule is drawn above this row in the source list. The groups are the
+    /// hierarchy: without them the panes read as one undifferentiated list, and
+    /// nothing says that Menu Bar, Overlay and Notifications are the same kind of
+    /// thing while General and About are not.
+    var startsGroup: Bool {
+        switch self {
+        case .menuBar, .appearance, .about: return true
+        default: return false
         }
     }
 
@@ -34,6 +54,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .appearance: return "paintpalette"
         case .overlay: return "macwindow.on.rectangle"
         case .notifications: return "bell.badge"
+        case .shortcuts: return "keyboard"
         case .about: return "info.circle"
         }
     }
@@ -42,11 +63,12 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     /// restore-defaults without hardcoding the mapping. About edits nothing of its own.
     public var sections: [SettingsStore.SettingsSection] {
         switch self {
-        case .general: return [.general, .shortcuts]
+        case .general: return [.general]
         case .menuBar: return [.menuBar]
         case .appearance: return [.theme, .charts]
         case .overlay: return [.overlay]
         case .notifications: return [.notifications]
+        case .shortcuts: return [.shortcuts]
         case .about: return []
         }
     }
@@ -227,6 +249,50 @@ enum SettingsPreview {
     }
 }
 
+/// A slider with its bounds written at the ends of the track and its value at the row's
+/// trailing edge.
+///
+/// The value alone answers "what is it set to" and nothing else. "220 pt" at the end of
+/// an unlabelled track does not say whether that is near the bottom of the range or the
+/// top, so the only way to learn what the control can do was to drag it to both ends
+/// and put it back.
+struct SettingsSlider: View {
+    let title: String
+    let value: Binding<Double>
+    let range: ClosedRange<Double>
+    let format: (Double) -> String
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: Design.Space.l) {
+                Slider(value: value, in: range) {
+                    EmptyView()
+                } minimumValueLabel: {
+                    bound(range.lowerBound)
+                } maximumValueLabel: {
+                    bound(range.upperBound)
+                }
+                .frame(minWidth: 150)
+
+                Text(format(value.wrappedValue))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .frame(width: 52, alignment: .trailing)
+            }
+        }
+        .accessibilityValue(format(value.wrappedValue))
+    }
+
+    private func bound(_ value: Double) -> some View {
+        Text(format(value))
+            .font(.caption)
+            .foregroundStyle(Design.Palette.tertiaryText)
+            // The ends are a scale, not a readout; announcing them would put two more
+            // numbers between the user and the one that is actually set.
+            .accessibilityHidden(true)
+    }
+}
+
 /// A row's trailing "not available here" marker, with the reason on hover and in
 /// the accessibility value rather than as a wall of text next to every control.
 struct UnavailableBadge: View {
@@ -276,17 +342,24 @@ struct RestoreDefaultsButton: View {
     }
 }
 
-/// The shared colour panel, closed rather than left standing.
+/// The window's own glass, for a surface that has to sit on top of it.
 ///
-/// `ColorPicker` opens the one process-wide `NSColorPanel` and never takes
-/// responsibility for closing it, so the wheel outlives the row that opened it: switch
-/// panes, or close the whole window, and it is still floating there editing a swatch
-/// nobody can see. Nothing in AppKit does this for us.
-enum ColorPanel {
-    static func close() {
-        guard NSColorPanel.sharedColorPanelExists else { return }
-        NSColorPanel.shared.orderOut(nil)
+/// A popover is its own window and comes with AppKit's popover material, which in dark
+/// mode is far darker than the `.hudWindow` glass this settings window is made of. The
+/// result reads as a black hole punched over the app rather than as a sheet lifted off
+/// it. Made of the same material, the two match by construction, in both appearances
+/// and against whatever is behind the window.
+struct GlassBackdrop: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+
+    func makeNSView(context: Context) -> GlassBackdropView {
+        // Active rather than following the window: a popover's parent window is not
+        // key while the popover is up, which would grey the glass exactly when it is
+        // being looked at.
+        GlassBackdropView(material: material, state: .active)
     }
+
+    func updateNSView(_ view: GlassBackdropView, context: Context) {}
 }
 
 /// Explanatory text under a control, styled as a macOS settings footnote.
@@ -355,7 +428,6 @@ struct SettingsListBox<Content: View>: View {
 /// insertion line shown while something is dragged over it.
 struct SettingsListRow<Content: View>: View {
     var isFirst: Bool = false
-    var isSelected: Bool = false
     var isDropTarget: Bool = false
     @ViewBuilder var content: Content
 
@@ -372,17 +444,6 @@ struct SettingsListRow<Content: View>: View {
                 .padding(.horizontal, Design.Space.m)
                 .padding(.vertical, Design.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    if isSelected {
-                        // The tint alone was not enough to say "this row is the one the
-                        // controls below are editing" — at 18% it reads as a hover
-                        // state. The bar is what makes the selection an assertion.
-                        ZStack(alignment: .leading) {
-                            Design.Palette.accent.opacity(0.18)
-                            Design.Palette.accent.frame(width: 3)
-                        }
-                    }
-                }
                 .contentShape(Rectangle())
         }
     }
@@ -420,18 +481,123 @@ struct ReorderControls: View {
 
     var body: some View {
         HStack(spacing: Design.Space.xxs) {
-            Button { move(-1) } label: { Image(systemName: "chevron.up") }
+            RowIconButton(systemName: "chevron.up",
+                          help: "Move \(itemLabel) up",
+                          label: "Move \(itemLabel) up") { move(-1) }
                 .disabled(!canMoveUp)
-                .help("Move \(itemLabel) up")
-                .accessibilityLabel("Move \(itemLabel) up")
-            Button { move(1) } label: { Image(systemName: "chevron.down") }
+            RowIconButton(systemName: "chevron.down",
+                          help: "Move \(itemLabel) down",
+                          label: "Move \(itemLabel) down") { move(1) }
                 .disabled(!canMoveDown)
-                .help("Move \(itemLabel) down")
-                .accessibilityLabel("Move \(itemLabel) down")
         }
-        .buttonStyle(.borderless)
-        .font(.caption)
-        .foregroundStyle(Design.Palette.secondaryText)
+    }
+}
+
+/// A pull-down in a list row.
+///
+/// The highlight is drawn around the value the menu changes, not around its chevron.
+/// AppKit's own menu button rings the indicator, which in a row that also carries
+/// reorder and delete buttons made the one control that opens a menu look like the
+/// two that do something immediately.
+///
+/// A caller that passes a `width` gets a column: every chevron lands at the same x,
+/// and the box does not resize as the value changes, so the control stays under the
+/// pointer that just used it. Passing none sizes the menu to its own title, for a
+/// control that sits alone against the row's trailing edge and has no column to line
+/// up with.
+struct RowMenu<Content: View>: View {
+    let title: String
+    var width: CGFloat?
+    let label: String
+    @ViewBuilder var content: Content
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    var body: some View {
+        Menu { content } label: {
+            HStack(spacing: Design.Space.xs) {
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: Design.Space.xs)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(isEnabled ? Design.Palette.tertiaryText
+                                               : Design.Palette.quaternaryText)
+            }
+            .padding(.horizontal, Design.Space.xs)
+            .padding(.vertical, 3)
+            .frame(width: width, alignment: .leading)
+            .background {
+                RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
+                    .fill(isHovering && isEnabled
+                          ? Design.Palette.primaryText.opacity(0.08)
+                          : Color.clear)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: Design.Radius.control,
+                                           style: .continuous))
+        }
+        // `.button` with a plain button style is the one combination that draws the
+        // label exactly as written. `.borderlessButton` substitutes AppKit's own
+        // pop-up chrome, which puts its indicator on the leading edge and ignores the
+        // width, and `.fixedSize()` on top of that collapses the frame to the title.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        // Only where there is no column to hold: `fixedSize` collapses to the title
+        // and would throw away an explicit width.
+        .fixedSize(horizontal: width == nil, vertical: false)
+        .onHover { hovering in
+            withAnimation(Design.Motion.hover) { isHovering = hovering }
+        }
+        .accessibilityLabel(label)
+    }
+}
+
+/// A glyph button in a list row, sized for the pointer rather than for the glyph.
+///
+/// A bare `Image` in a borderless `Button` is only as clickable as the strokes it
+/// draws — a chevron at caption size is about 10pt across, well under the 24pt the
+/// HIG asks for, and it gave no sign it was a button until it had already been hit.
+/// The frame is the hit target, the fill is the sign, and neither is visible until
+/// the pointer is over the row.
+struct RowIconButton: View {
+    let systemName: String
+    let help: String
+    let label: String
+    let action: () -> Void
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovering = false
+
+    private static let side: CGFloat = 22
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .semibold))
+                .frame(width: Self.side, height: Self.side)
+                .background {
+                    RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
+                        .fill(isHovering && isEnabled
+                              ? Design.Palette.primaryText.opacity(0.10)
+                              : Color.clear)
+                }
+                // The frame alone is not a hit target: a Button's shape is its label's
+                // drawn content, and an empty background draws nothing.
+                .contentShape(RoundedRectangle(cornerRadius: Design.Radius.control,
+                                               style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(isEnabled
+                         ? (isHovering ? Design.Palette.primaryText : Design.Palette.secondaryText)
+                         : Design.Palette.quaternaryText)
+        .onHover { hovering in
+            withAnimation(Design.Motion.hover) { isHovering = hovering }
+        }
+        .help(help)
+        .accessibilityLabel(label)
     }
 }
 
