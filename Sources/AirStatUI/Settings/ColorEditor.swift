@@ -225,41 +225,54 @@ struct ColorEditor: View {
 
     // MARK: Hue
 
+    /// The track and the knob are separate properties, and every measurement below is
+    /// a named `CGFloat`. Written inline it is one expression the 6.1 type checker on
+    /// CI gives up on, even though newer ones solve it.
+    private static let hueKnob: CGFloat = sliderHeight + 4
+
+    private var hueTrack: some View {
+        LinearGradient(colors: Self.hueStops, startPoint: .leading, endPoint: .trailing)
+            .frame(height: Self.sliderHeight)
+            .clipShape(Capsule())
+            .overlay {
+                Capsule().strokeBorder(Design.Palette.primaryText.opacity(0.15))
+            }
+    }
+
+    private func hueKnobView(travel: CGFloat) -> some View {
+        let inset: CGFloat = Self.hueKnob / 2
+        let x: CGFloat = inset + CGFloat(hsb.hue) * travel
+        return Circle()
+            .fill(hsb.pureHue)
+            .overlay { Circle().strokeBorder(.white, lineWidth: 2) }
+            .overlay { Circle().strokeBorder(.black.opacity(0.2)) }
+            .frame(width: Self.hueKnob, height: Self.hueKnob)
+            .shadow(color: .black.opacity(0.25), radius: 1)
+            // Inset by the knob's own radius so the ends of the track are
+            // reachable: a knob centred on 0 hangs half of itself off the edge
+            // and the last few degrees of hue cannot be selected.
+            .position(x: x, y: inset)
+    }
+
     private var hueSlider: some View {
         GeometryReader { proxy in
-            let width = proxy.size.width
+            let width: CGFloat = proxy.size.width
+            let travel: CGFloat = max(width - Self.hueKnob, 1)
             ZStack(alignment: .leading) {
-                LinearGradient(colors: Self.hueStops, startPoint: .leading, endPoint: .trailing)
-                    .frame(height: Self.sliderHeight)
-                    .clipShape(Capsule())
-                    .overlay {
-                        Capsule().strokeBorder(Design.Palette.primaryText.opacity(0.15))
-                    }
-                Circle()
-                    .fill(hsb.pureHue)
-                    .overlay { Circle().strokeBorder(.white, lineWidth: 2) }
-                    .overlay { Circle().strokeBorder(.black.opacity(0.2)) }
-                    .frame(width: Self.sliderHeight + 4, height: Self.sliderHeight + 4)
-                    .shadow(color: .black.opacity(0.25), radius: 1)
-                    // Inset by the knob's own radius so the ends of the track are
-                    // reachable: a knob centred on 0 hangs half of itself off the edge
-                    // and the last few degrees of hue cannot be selected.
-                    .position(x: (Self.sliderHeight + 4) / 2
-                              + hsb.hue * max(width - Self.sliderHeight - 4, 1),
-                              y: (Self.sliderHeight + 4) / 2)
+                hueTrack
+                hueKnobView(travel: travel)
             }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0).onChanged { value in
-                    let inset = (Self.sliderHeight + 4) / 2
-                    let travel = max(width - Self.sliderHeight - 4, 1)
-                    hsb.hue = (value.location.x - inset) / travel
+                    let inset: CGFloat = Self.hueKnob / 2
+                    hsb.hue = Double((value.location.x - inset) / travel)
                 }
             )
         }
         // The knob stands a little proud of the track, as AppKit's own do, so it is
         // never clipped at either end of the hue.
-        .frame(height: Self.sliderHeight + 4)
+        .frame(height: Self.hueKnob)
         .accessibilityElement()
         .accessibilityLabel("Hue")
         .accessibilityValue("\(Int((hsb.hue * 360).rounded())) degrees")
