@@ -340,6 +340,9 @@ private struct ColorPalette: View {
         .font(.callout)
         .padding(Design.Space.l)
         .frame(width: Self.width)
+        // The settings window's own glass, over the popover's darker one. See
+        // `GlassBackdrop`.
+        .background { GlassBackdrop().ignoresSafeArea() }
         .onAppear { hsb = HSB(current.themeColor ?? ThemeColor(red: 0, green: 0, blue: 0)) }
         .onChange(of: hsb) { _, new in
             // The user's own drag, arriving back here as a store write. Guarded so a

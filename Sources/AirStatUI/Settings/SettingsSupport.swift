@@ -342,6 +342,26 @@ struct RestoreDefaultsButton: View {
     }
 }
 
+/// The window's own glass, for a surface that has to sit on top of it.
+///
+/// A popover is its own window and comes with AppKit's popover material, which in dark
+/// mode is far darker than the `.hudWindow` glass this settings window is made of. The
+/// result reads as a black hole punched over the app rather than as a sheet lifted off
+/// it. Made of the same material, the two match by construction, in both appearances
+/// and against whatever is behind the window.
+struct GlassBackdrop: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .hudWindow
+
+    func makeNSView(context: Context) -> GlassBackdropView {
+        // Active rather than following the window: a popover's parent window is not
+        // key while the popover is up, which would grey the glass exactly when it is
+        // being looked at.
+        GlassBackdropView(material: material, state: .active)
+    }
+
+    func updateNSView(_ view: GlassBackdropView, context: Context) {}
+}
+
 /// Explanatory text under a control, styled as a macOS settings footnote.
 struct SettingsFootnote: View {
     private let text: String
