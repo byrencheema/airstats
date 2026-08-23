@@ -278,7 +278,7 @@ struct SettingsRootView: View {
         case .general: GeneralPane(settings: settings, updater: updater)
         case .menuBar: MenuBarPane(settings: settings, engine: engine)
         case .appearance: AppearancePane(settings: settings)
-        case .overlay: OverlayPane(settings: settings, engine: engine)
+        case .desktopWidget: DesktopWidgetPane(settings: settings, engine: engine)
         case .notifications: NotificationsPane(settings: settings, engine: engine,
                                                authority: authority)
         case .shortcuts: ShortcutsPane(settings: settings)

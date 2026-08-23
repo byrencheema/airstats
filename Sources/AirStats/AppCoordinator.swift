@@ -13,7 +13,7 @@ final class AppCoordinator {
 
     private let statusItem: StatusItemController
     private let panel: PanelController
-    private let overlay: OverlayController
+    private let desktopWidget: DesktopWidgetController
     private let settingsWindow: SettingsWindowController
     private let thresholdMonitor: ThresholdMonitor
     private let hotKeys: GlobalHotKeyCenter
@@ -36,7 +36,7 @@ final class AppCoordinator {
         self.updater = updater
         self.statusItem = StatusItemController(engine: engine, settings: store)
         self.panel = PanelController(engine: engine, settings: store, updates: updater)
-        self.overlay = OverlayController(engine: engine, settings: store)
+        self.desktopWidget = DesktopWidgetController(engine: engine, settings: store)
         self.settingsWindow = SettingsWindowController(engine: engine, settings: store,
                                                       updater: updater, authority: authority)
         self.thresholdMonitor = ThresholdMonitor(engine: engine, settings: store, authority: authority)
@@ -59,8 +59,8 @@ final class AppCoordinator {
         panel.onRequestSettings = { [weak self] in self?.showSettings() }
         panel.onRequestQuit = { NSApp.terminate(nil) }
 
-        overlay.onVisibilityChange = { [weak self] visible in
-            self?.engine.setOverlayVisible(visible)
+        desktopWidget.onVisibilityChange = { [weak self] visible in
+            self?.engine.setDesktopWidgetVisible(visible)
         }
 
         // A hot key must do exactly what the equivalent menu item does, including
@@ -70,7 +70,7 @@ final class AppCoordinator {
             guard let self else { return }
             switch action {
             case .togglePanel: self.togglePanel()
-            case .toggleOverlay: self.toggleOverlay()
+            case .toggleDesktopWidget: self.toggleDesktopWidget()
             case .openSettings: self.showSettings()
             }
         }
@@ -83,7 +83,7 @@ final class AppCoordinator {
         // only when it finds something.
         updater.start()
         updateAnnouncer.start()
-        overlay.syncWithSettings()
+        desktopWidget.syncWithSettings()
 
         registerSystemObservers()
         // The system follows the stored preference, and then the preference follows the
@@ -108,7 +108,7 @@ final class AppCoordinator {
         thresholdMonitor.stop()
         engine.stop()
         statusItem.remove()
-        overlay.hide()
+        desktopWidget.hide()
         settingsStore.flush()
     }
 
@@ -143,19 +143,19 @@ final class AppCoordinator {
         settingsWindow.show()
     }
 
-    private func toggleOverlay() {
-        settingsStore.update { $0.overlay.isEnabled.toggle() }
-        overlay.syncWithSettings()
+    private func toggleDesktopWidget() {
+        settingsStore.update { $0.desktopWidget.isEnabled.toggle() }
+        desktopWidget.syncWithSettings()
     }
 
     private func showContextMenu() {
         let menu = NSMenu()
         menu.addItem(withTitle: "Settings…", action: #selector(menuShowSettings), keyEquivalent: ",")
             .target = self
-        let overlayItem = menu.addItem(withTitle: "Show Overlay",
-                                       action: #selector(menuToggleOverlay), keyEquivalent: "")
-        overlayItem.target = self
-        overlayItem.state = settingsStore.settings.overlay.isEnabled ? .on : .off
+        let desktopWidgetItem = menu.addItem(withTitle: "Show Desktop Widget",
+                                       action: #selector(menuToggleDesktopWidget), keyEquivalent: "")
+        desktopWidgetItem.target = self
+        desktopWidgetItem.state = settingsStore.settings.desktopWidget.isEnabled ? .on : .off
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit AirStats", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.presentMenu(menu)
@@ -163,7 +163,7 @@ final class AppCoordinator {
 
     @objc private func menuShowSettings() { showSettings() }
 
-    @objc private func menuToggleOverlay() { toggleOverlay() }
+    @objc private func menuToggleDesktopWidget() { toggleDesktopWidget() }
 
     // MARK: System observers
 
@@ -214,7 +214,7 @@ final class AppCoordinator {
             object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    self.overlay.screenConfigurationChanged()
+                    self.desktopWidget.screenConfigurationChanged()
                     if self.panel.isVisible {
                         self.panelAnchor = self.statusItem.anchorRect
                         self.panel.reanchor(to: self.panelAnchor,

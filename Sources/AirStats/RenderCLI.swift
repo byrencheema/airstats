@@ -38,7 +38,7 @@ enum RenderCLI {
             case "--light": appearances.append(false)
             case "--dark": appearances.append(true)
             // The colour a user picks is already carried on Request.settings and read
-            // by MenuBarRenderModel and the overlay; only a way to say so was missing.
+            // by MenuBarRenderModel and the desktop widget; only a way to say so was missing.
             // The panel ignores it on purpose, it is monochrome by design.
             case "--tint":
                 index += 1
@@ -47,11 +47,11 @@ enum RenderCLI {
                     exit(2)
                 }
                 settings.theme.setAllColors(color)
-            // The overlay's shape is decided by two settings a reviewer cannot reach
+            // The desktop widget's shape is decided by two settings a reviewer cannot reach
             // from the command line otherwise, and its worst case (nine modules,
             // expanded) is exactly the one worth looking at.
             case "--expanded":
-                settings.overlay.isCompact = false
+                settings.desktopWidget.isCompact = false
             case "--modules":
                 index += 1
                 let names = (arguments[safe: index] ?? "").split(separator: ",")
@@ -61,7 +61,7 @@ enum RenderCLI {
                     exit(2)
                 }
                 var seen: Set<PanelModule> = []
-                settings.overlay.modules = parsed.filter { seen.insert($0).inserted }
+                settings.desktopWidget.modules = parsed.filter { seen.insert($0).inserted }
             case "--scenario":
                 index += 1
                 guard let scenario = OffscreenRenderer.Scenario(rawValue: arguments[safe: index] ?? "") else {

@@ -1,7 +1,7 @@
 import SwiftUI
 import AirStatKit
 
-struct OverlayPane: View {
+struct DesktopWidgetPane: View {
     let settings: SettingsStore
     let engine: MetricsEngine?
 
@@ -11,7 +11,7 @@ struct OverlayPane: View {
         MetricAvailability(snapshot: SettingsPreview.snapshot(engine))
     }
 
-    private var overlay: OverlaySettings { settings.settings.overlay }
+    private var desktopWidget: DesktopWidgetSettings { settings.settings.desktopWidget }
 
     var body: some View {
         Form {
@@ -19,10 +19,10 @@ struct OverlayPane: View {
             // beside it, and this row is the pane's subject rather than a section of
             // it — everything below configures the thing this switch puts on screen.
             Section {
-                Toggle("Show the overlay", isOn: settings.binding(\.overlay.isEnabled))
+                Toggle("Show the desktop widget", isOn: settings.binding(\.desktopWidget.isEnabled))
             } footer: {
-                if !overlay.isEnabled {
-                    SettingsFootnote("Turn this on to put the overlay on screen. "
+                if !desktopWidget.isEnabled {
+                    SettingsFootnote("Turn this on to put the desktop widget on screen. "
                                      + "The settings below shape it once it is there.")
                 }
             }
@@ -31,20 +31,20 @@ struct OverlayPane: View {
             // thumbnail was a band across the pane and the modules were somewhere
             // below it; beside them, reordering one is watching the other.
             //
-            // Below the switch rather than above it, so a pane opened with the overlay
+            // Below the switch rather than above it, so a pane opened with the desktop widget
             // off says it is off before it shows what it would look like. The preview
-            // itself is never disabled: what the overlay would be is exactly what
+            // itself is never disabled: what the desktop widget would be is exactly what
             // someone deciding whether to switch it on wants to see.
             Section {
                 HStack(alignment: .top, spacing: Design.Space.xl) {
                     if let engine {
-                        OverlayPreview(engine: engine, settings: settings)
+                        DesktopWidgetPreview(engine: engine, settings: settings)
                     }
                     VStack(alignment: .leading, spacing: Design.Space.m) {
                         moduleList
                         moduleControls
                     }
-                    .disabled(!overlay.isEnabled)
+                    .disabled(!desktopWidget.isEnabled)
                 }
             } header: {
                 Text("Modules")
@@ -52,66 +52,66 @@ struct OverlayPane: View {
 
             Section {
                 SettingsSlider(title: "Width",
-                               value: settings.quantized(\.overlay.width, step: 4),
+                               value: settings.quantized(\.desktopWidget.width, step: 4),
                                range: 160...480,
                                format: SettingsLabels.points)
-                Toggle("Use compact layout", isOn: settings.binding(\.overlay.isCompact))
+                Toggle("Use compact layout", isOn: settings.binding(\.desktopWidget.isCompact))
                 SettingsSlider(title: "Opacity",
-                               value: settings.quantized(\.overlay.opacity, step: 0.05),
+                               value: settings.quantized(\.desktopWidget.opacity, step: 0.05),
                                range: 0.2...1,
                                format: SettingsLabels.percent)
-                Toggle("Fade when not in use", isOn: settings.binding(\.overlay.dimsWhenInactive))
-                if overlay.dimsWhenInactive {
+                Toggle("Fade when not in use", isOn: settings.binding(\.desktopWidget.dimsWhenInactive))
+                if desktopWidget.dimsWhenInactive {
                     SettingsSlider(title: "Faded opacity",
-                                   value: settings.quantized(\.overlay.inactiveOpacity, step: 0.05),
+                                   value: settings.quantized(\.desktopWidget.inactiveOpacity, step: 0.05),
                                    range: 0.15...1,
                                    format: SettingsLabels.percent)
                 }
             } header: {
                 Text("Size & Transparency")
             }
-            .disabled(!overlay.isEnabled)
+            .disabled(!desktopWidget.isEnabled)
 
             Section {
-                Picker("Position", selection: settings.binding(\.overlay.corner)) {
-                    ForEach(OverlayCorner.allCases, id: \.self) { corner in
+                Picker("Position", selection: settings.binding(\.desktopWidget.corner)) {
+                    ForEach(DesktopWidgetCorner.allCases, id: \.self) { corner in
                         Text(corner.label).tag(corner)
                     }
                 }
-                if overlay.corner == .free {
+                if desktopWidget.corner == .free {
                     LabeledContent("Saved position", value: savedPositionText)
                         .foregroundStyle(Design.Palette.secondaryText)
                     Button("Forget Saved Position") {
                         settings.update {
-                            $0.overlay.originX = nil
-                            $0.overlay.originY = nil
+                            $0.desktopWidget.originX = nil
+                            $0.desktopWidget.originY = nil
                         }
                     }
-                    .disabled(overlay.originX == nil && overlay.originY == nil)
+                    .disabled(desktopWidget.originX == nil && desktopWidget.originY == nil)
                 }
             } header: {
                 Text("Position")
             }
-            .disabled(!overlay.isEnabled)
+            .disabled(!desktopWidget.isEnabled)
 
             Section {
-                Picker("Layer", selection: settings.binding(\.overlay.depth)) {
-                    ForEach(OverlayDepth.allCases, id: \.self) { depth in
+                Picker("Layer", selection: settings.binding(\.desktopWidget.depth)) {
+                    ForEach(DesktopWidgetDepth.allCases, id: \.self) { depth in
                         Text(depth.label).tag(depth)
                     }
                 }
-                Toggle("Click through the overlay", isOn: settings.binding(\.overlay.isClickThrough))
-                Toggle("Show on all spaces", isOn: settings.binding(\.overlay.showsOnAllSpaces))
+                Toggle("Click through the desktop widget", isOn: settings.binding(\.desktopWidget.isClickThrough))
+                Toggle("Show on all spaces", isOn: settings.binding(\.desktopWidget.showsOnAllSpaces))
             } header: {
                 Text("Behaviour")
             } footer: {
-                Text(overlay.depth.detail)
+                Text(desktopWidget.depth.detail)
                     .font(.callout)
                     .foregroundStyle(Design.Palette.secondaryText)
             }
             // Restore Defaults below stays live: a pane the user has switched off is
             // still a pane they may want to put back the way it shipped.
-            .disabled(!overlay.isEnabled)
+            .disabled(!desktopWidget.isEnabled)
 
         }
         .settingsFormStyle()
@@ -121,7 +121,7 @@ struct OverlayPane: View {
 
     private var moduleList: some View {
         SettingsListBox {
-            ForEach(Array(overlay.modules.enumerated()), id: \.element) { index, module in
+            ForEach(Array(desktopWidget.modules.enumerated()), id: \.element) { index, module in
                 SettingsListRow(isFirst: index == 0, isDropTarget: module == dropTarget) {
                     HStack(spacing: Design.Space.m) {
                         ModuleLabel(module: module)
@@ -130,18 +130,18 @@ struct OverlayPane: View {
                             UnavailableBadge(reason: reason)
                         }
                         ReorderControls(canMoveUp: index > 0,
-                                        canMoveDown: index < overlay.modules.count - 1,
+                                        canMoveDown: index < desktopWidget.modules.count - 1,
                                         itemLabel: module.label) { offset in
                             move(module, by: offset)
                         }
                         RowIconButton(systemName: "trash",
-                                      help: overlay.modules.count <= 1
-                                          ? "The overlay needs at least one module."
-                                          : "Remove \(module.label) from the overlay",
+                                      help: desktopWidget.modules.count <= 1
+                                          ? "The desktop widget needs at least one module."
+                                          : "Remove \(module.label) from the desktop widget",
                                       label: "Remove \(module.label)") {
-                            settings.update { $0.overlay.modules.removeAll { $0 == module } }
+                            settings.update { $0.desktopWidget.modules.removeAll { $0 == module } }
                         }
-                        .disabled(overlay.modules.count <= 1)
+                        .disabled(desktopWidget.modules.count <= 1)
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(module.label)
@@ -158,7 +158,7 @@ struct OverlayPane: View {
                 }
             }
         }
-        .accessibilityLabel("Overlay modules")
+        .accessibilityLabel("Desktop Widget modules")
     }
 
     private var moduleControls: some View {
@@ -166,7 +166,7 @@ struct OverlayPane: View {
             Menu {
                 ForEach(availableModules, id: \.self) { module in
                     Button(module.label) {
-                        settings.update { $0.overlay.modules.append(module) }
+                        settings.update { $0.desktopWidget.modules.append(module) }
                     }
                 }
             } label: {
@@ -175,39 +175,39 @@ struct OverlayPane: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .disabled(availableModules.isEmpty)
-            .help(availableModules.isEmpty ? "Every module is already in the overlay." : "")
-            .accessibilityLabel("Add a module to the overlay")
+            .help(availableModules.isEmpty ? "Every module is already in the desktop widget." : "")
+            .accessibilityLabel("Add a module to the desktop widget")
 
             Spacer()
         }
     }
 
     private var availableModules: [PanelModule] {
-        PanelModule.allCases.filter { !overlay.modules.contains($0) }
+        PanelModule.allCases.filter { !desktopWidget.modules.contains($0) }
     }
 
     private func move(_ module: PanelModule, by offset: Int) {
         settings.update { s in
-            guard let index = s.overlay.modules.firstIndex(of: module) else { return }
+            guard let index = s.desktopWidget.modules.firstIndex(of: module) else { return }
             let target = index + offset
-            guard s.overlay.modules.indices.contains(target) else { return }
-            s.overlay.modules.swapAt(index, target)
+            guard s.desktopWidget.modules.indices.contains(target) else { return }
+            s.desktopWidget.modules.swapAt(index, target)
         }
     }
 
     private func move(_ module: PanelModule, to destination: Int) -> Bool {
-        guard let source = overlay.modules.firstIndex(of: module), source != destination,
-              overlay.modules.indices.contains(destination) else { return false }
+        guard let source = desktopWidget.modules.firstIndex(of: module), source != destination,
+              desktopWidget.modules.indices.contains(destination) else { return false }
         settings.update { s in
-            guard s.overlay.modules.indices.contains(source),
-                  s.overlay.modules.indices.contains(destination) else { return }
-            s.overlay.modules.insert(s.overlay.modules.remove(at: source), at: destination)
+            guard s.desktopWidget.modules.indices.contains(source),
+                  s.desktopWidget.modules.indices.contains(destination) else { return }
+            s.desktopWidget.modules.insert(s.desktopWidget.modules.remove(at: source), at: destination)
         }
         return true
     }
 
     private var savedPositionText: String {
-        guard let x = overlay.originX, let y = overlay.originY else { return "Not set" }
+        guard let x = desktopWidget.originX, let y = desktopWidget.originY else { return "Not set" }
         return "\(Int(x)), \(Int(y))"
     }
 }

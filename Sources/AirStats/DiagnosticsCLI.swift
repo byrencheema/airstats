@@ -44,7 +44,7 @@ enum DiagnosticsCLI {
       --interval S    seconds between samples (default 1)
       --verbose       print every sample, not just the last
 
-    Render surfaces:  menuBar, panel, overlay, settings   (omit for all)
+    Render surfaces:  menuBar, panel, desktopWidget, settings   (omit for all)
     Render flags:
       --out DIR       output directory (default ./render)
       --scenario S    nominal | underLoad | charging | degraded | pending  (omit for all)

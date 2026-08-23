@@ -26,7 +26,7 @@ public enum MetricFailure: Sendable, Equatable, Hashable {
 
     /// A two-word stand-in for `message`, for surfaces too narrow to wrap prose.
     ///
-    /// The overlay shows this in the slot a reading would have occupied, so a metric
+    /// The desktop widget shows this in the slot a reading would have occupied, so a metric
     /// this Mac cannot provide costs one line instead of three. The full message is
     /// still what the tooltip and VoiceOver read out.
     public var shortLabel: String {

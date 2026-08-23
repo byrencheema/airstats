@@ -191,7 +191,7 @@ public final class GlobalHotKeyCenter {
 
     /// Recording a shortcut has to take effect without a relaunch, and the recorder
     /// writes straight to the store, so the registrations are driven from the store
-    /// the way the overlay drives its window configuration.
+    /// the way the desktop widget drives its window configuration.
     private func beginObservingSettings() {
         observationTask?.cancel()
         let changes = settings.changes

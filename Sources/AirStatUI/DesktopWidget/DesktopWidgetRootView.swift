@@ -2,49 +2,49 @@ import SwiftUI
 import AppKit
 import AirStatKit
 
-/// Interaction state the window controller owns and the overlay's content reacts to.
+/// Interaction state the window controller owns and the desktop widget's content reacts to.
 ///
 /// Width lives here rather than being read straight from settings so a resize drag
 /// can update sixty times a second without writing sixty configuration files; the
 /// controller persists the final value once the drag ends.
 @MainActor
 @Observable
-final class OverlayLayout {
+final class DesktopWidgetLayout {
     var width: Double
-    /// True while the click-through escape hatch is held, so the overlay can show
+    /// True while the click-through escape hatch is held, so the desktop widget can show
     /// that it is temporarily grabbable.
     var isGrabbable: Bool = false
 
     init(width: Double) { self.width = width }
 }
 
-/// The overlay's own presentation: denser and quieter than the panel.
+/// The desktop widget's own presentation: denser and quieter than the panel.
 ///
-/// The panel is a place you look *at*; the overlay is something you look *past*.
+/// The panel is a place you look *at*; the desktop widget is something you look *past*.
 /// So every module here is the same three things in the same order: a header line
 /// carrying the one reading that matters, a bar, and supporting rows indented under
 /// the title. Compact keeps one supporting row, expanded keeps them all. Nothing here
 /// gets the panel's charts, its two-column grids or its 20pt headline.
-struct OverlayRootView: View {
+struct DesktopWidgetRootView: View {
     let engine: MetricsEngine
     let settings: SettingsStore
-    var layout: OverlayLayout?
+    var layout: DesktopWidgetLayout?
 
-    private var overlay: OverlaySettings { settings.settings.overlay }
+    private var desktopWidget: DesktopWidgetSettings { settings.settings.desktopWidget }
 
     /// A decoded configuration can repeat a module; identity in a `ForEach` must be
     /// unique or SwiftUI will reuse the wrong view.
     private var modules: [PanelModule] {
         var seen = Set<PanelModule>()
-        return overlay.modules.filter { seen.insert($0).inserted }
+        return desktopWidget.modules.filter { seen.insert($0).inserted }
     }
 
-    private var width: CGFloat { CGFloat(layout?.width ?? overlay.width) }
+    private var width: CGFloat { CGFloat(layout?.width ?? desktopWidget.width) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Space.l) {
             ForEach(modules, id: \.self) { module in
-                OverlayModuleView(module: module, engine: engine, isCompact: overlay.isCompact)
+                DesktopWidgetModuleView(module: module, engine: engine, isCompact: desktopWidget.isCompact)
             }
         }
         // Equal top and bottom. A window with more space under its content than over
@@ -60,7 +60,7 @@ struct OverlayRootView: View {
         .animation(Design.Motion.respectingAccessibility(Design.Motion.hover),
                    value: layout?.isGrabbable ?? false)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("AirStats overlay")
+        .accessibilityLabel("AirStats desktop widget")
     }
 
     private var shape: RoundedRectangle {
@@ -69,7 +69,7 @@ struct OverlayRootView: View {
 
     /// The border is normally just enough edge definition to survive a busy
     /// wallpaper; while the escape hatch is held it turns accent-coloured, which is
-    /// the only signal the user gets that a click-through overlay is grabbable again.
+    /// the only signal the user gets that a click-through desktop widget is grabbable again.
     private var borderColor: Color {
         (layout?.isGrabbable ?? false) ? Design.Palette.accent : Design.Palette.separator
     }
@@ -77,7 +77,7 @@ struct OverlayRootView: View {
 
 // MARK: - One module
 
-private struct OverlayModuleView: View {
+private struct DesktopWidgetModuleView: View {
     let module: PanelModule
     let engine: MetricsEngine
     let isCompact: Bool
@@ -96,17 +96,17 @@ private struct OverlayModuleView: View {
         VStack(alignment: .leading, spacing: Design.Space.xs) {
             switch readout {
             case .value(let readout):
-                OverlayHeaderRow(readout: readout)
+                DesktopWidgetHeaderRow(readout: readout)
                 barRow(fraction: readout.fraction, tint: readout.tint)
                 ForEach(details(of: readout)) { detail in
-                    OverlayDetailRow(detail: detail)
+                    DesktopWidgetDetailRow(detail: detail)
                         .padding(.leading, Self.indent)
                 }
             case .failure(let failure):
                 // One line, not four. The panel has room to explain why a sensor is
                 // missing; a HUD that spends three lines saying "no reading" is
                 // charging full price for a module that has nothing to report.
-                OverlayHeaderRow(readout: OverlayReadout(module: module, value: nil),
+                DesktopWidgetHeaderRow(readout: DesktopWidgetReadout(module: module, value: nil),
                                  failure: failure)
                 if failure == .pending { pendingReservation }
             }
@@ -120,7 +120,7 @@ private struct OverlayModuleView: View {
     /// process and the machine's own chip name were set smaller and fainter than the
     /// rows underneath them. Collapsing it into the top of this list is what makes a
     /// compact module a fixed three lines tall for every metric.
-    private func details(of readout: OverlayReadout) -> [OverlayDetail] {
+    private func details(of readout: DesktopWidgetReadout) -> [DesktopWidgetDetail] {
         isCompact ? Array(readout.details.prefix(1)) : readout.details
     }
 
@@ -150,7 +150,7 @@ private struct OverlayModuleView: View {
     /// Every module is `.pending` until its collector's first sample lands, and the
     /// ones that difference two samples stay pending for a tick after that. A pending
     /// module drawn as its one honest line is a fraction of the height it is about to
-    /// become; a few of those and the overlay opens short and then jumps, which looks
+    /// become; a few of those and the desktop widget opens short and then jumps, which looks
     /// like a bug in the window rather than a metric that has not arrived. The other
     /// failures get no reservation on purpose: an unsupported sensor is not about to
     /// start working, and holding space for it would be holding space forever.
@@ -163,7 +163,7 @@ private struct OverlayModuleView: View {
         // A real string, not an empty one: an empty `Text` lays out at zero height and
         // would reserve nothing at all.
         ForEach(Array(0..<reservedRowCount), id: \.self) { _ in
-            OverlayDetailRow(detail: OverlayDetail("pending", "\u{2014}", "\u{2014}"))
+            DesktopWidgetDetailRow(detail: DesktopWidgetDetail("pending", "\u{2014}", "\u{2014}"))
                 .padding(.leading, Self.indent)
                 .hidden()
                 .accessibilityHidden(true)
@@ -193,9 +193,9 @@ private struct OverlayModuleView: View {
 
     // MARK: Snapshot → readout
 
-    /// Every module collapses to the same shape, so the overlay has exactly one
+    /// Every module collapses to the same shape, so the desktop widget has exactly one
     /// layout to get right instead of nine.
-    private var readout: MetricState<OverlayReadout> {
+    private var readout: MetricState<DesktopWidgetReadout> {
         switch module {
         case .cpu: return cpuReadout
         case .memory: return memoryReadout
@@ -209,44 +209,44 @@ private struct OverlayModuleView: View {
         }
     }
 
-    private var cpuReadout: MetricState<OverlayReadout> {
+    private var cpuReadout: MetricState<DesktopWidgetReadout> {
         engine.cpu.map { cpu in
-            var readout = OverlayReadout(module: module, value: formatter.percent(cpu.total.busy))
+            var readout = DesktopWidgetReadout(module: module, value: formatter.percent(cpu.total.busy))
             readout.fraction = cpu.total.busy
             readout.details = [
-                OverlayDetail("user", "User", formatter.percent(cpu.total.user)),
-                OverlayDetail("system", "System", formatter.percent(cpu.total.system)),
-                OverlayDetail("load", "Load", formatter.fixed(cpu.loadAverage.one, decimals: 2)),
+                DesktopWidgetDetail("user", "User", formatter.percent(cpu.total.user)),
+                DesktopWidgetDetail("system", "System", formatter.percent(cpu.total.system)),
+                DesktopWidgetDetail("load", "Load", formatter.fixed(cpu.loadAverage.one, decimals: 2)),
             ]
             return readout
         }
     }
 
-    private var memoryReadout: MetricState<OverlayReadout> {
+    private var memoryReadout: MetricState<DesktopWidgetReadout> {
         engine.memory.map { memory in
-            var readout = OverlayReadout(module: module, value: formatter.percent(memory.usedFraction))
+            var readout = DesktopWidgetReadout(module: module, value: formatter.percent(memory.usedFraction))
             readout.fraction = memory.usedFraction
             readout.details = [
-                OverlayDetail("used", "Used",
+                DesktopWidgetDetail("used", "Used",
                               "\(formatter.memory(memory.usedBytes)) of \(formatter.memory(memory.totalBytes))"),
-                OverlayDetail("pressure", "Pressure", formatter.percent(memory.pressureFraction)),
-                OverlayDetail("swap", "Swap", formatter.memory(memory.swapUsedBytes)),
+                DesktopWidgetDetail("pressure", "Pressure", formatter.percent(memory.pressureFraction)),
+                DesktopWidgetDetail("swap", "Swap", formatter.memory(memory.swapUsedBytes)),
             ]
             return readout
         }
     }
 
-    private var gpuReadout: MetricState<OverlayReadout> {
+    private var gpuReadout: MetricState<DesktopWidgetReadout> {
         engine.gpu.map { gpu in
             let device = gpu.primary
             let utilization = device?.utilization
-            var readout = OverlayReadout(
+            var readout = DesktopWidgetReadout(
                 module: module,
                 value: utilization.map { formatter.percent($0) } ?? MetricFormatter.unavailable)
             readout.fraction = utilization
             if let device, let used = device.vramUsedBytes, let total = device.vramTotalBytes, total > 0 {
                 readout.details = [
-                    OverlayDetail("vram", device.memoryLabel,
+                    DesktopWidgetDetail("vram", device.memoryLabel,
                                   "\(formatter.memory(used)) of \(formatter.memory(total))"),
                 ]
             }
@@ -254,62 +254,62 @@ private struct OverlayModuleView: View {
         }
     }
 
-    private var networkReadout: MetricState<OverlayReadout> {
+    private var networkReadout: MetricState<DesktopWidgetReadout> {
         engine.network.map { network in
             // The headline keeps its arrow because a bare rate does not say which
             // direction it is going. The line below it is a labelled row like every
             // other, rather than a bare "↑ 340 KB/s" floating against the right edge.
-            var readout = OverlayReadout(
+            var readout = DesktopWidgetReadout(
                 module: module,
                 value: "↓ " + formatter.networkRate(network.downloadBytesPerSecond))
             var details = [
-                OverlayDetail("up", "Upload", formatter.networkRate(network.uploadBytesPerSecond)),
-                OverlayDetail("type", "Link", network.connectionType.label),
+                DesktopWidgetDetail("up", "Upload", formatter.networkRate(network.uploadBytesPerSecond)),
+                DesktopWidgetDetail("type", "Link", network.connectionType.label),
             ]
             if let ssid = network.wifi?.ssid {
-                details.append(OverlayDetail("ssid", "Network", ssid))
+                details.append(DesktopWidgetDetail("ssid", "Network", ssid))
             }
             readout.details = details
             return readout
         }
     }
 
-    private var diskReadout: MetricState<OverlayReadout> {
+    private var diskReadout: MetricState<DesktopWidgetReadout> {
         engine.disk.map { disk in
             let root = disk.rootVolume
-            var readout = OverlayReadout(
+            var readout = DesktopWidgetReadout(
                 module: module,
                 value: root.map { formatter.percent($0.usedFraction) } ?? MetricFormatter.unavailable)
             readout.fraction = root?.usedFraction
             readout.details = [
-                OverlayDetail("read", "Read", formatter.diskRate(disk.readBytesPerSecond)),
-                OverlayDetail("write", "Write", formatter.diskRate(disk.writeBytesPerSecond)),
+                DesktopWidgetDetail("read", "Read", formatter.diskRate(disk.readBytesPerSecond)),
+                DesktopWidgetDetail("write", "Write", formatter.diskRate(disk.writeBytesPerSecond)),
             ]
             if let root {
                 readout.details.insert(
-                    OverlayDetail("free", "Free", formatter.storage(root.freeBytes)), at: 0)
+                    DesktopWidgetDetail("free", "Free", formatter.storage(root.freeBytes)), at: 0)
             }
             return readout
         }
     }
 
-    private var batteryReadout: MetricState<OverlayReadout> {
+    private var batteryReadout: MetricState<DesktopWidgetReadout> {
         engine.power.map { power in
             guard power.hasBattery, let percentage = power.percentage else {
                 // A desktop Mac has no battery to report; system draw is the honest
                 // substitute, and an em dash when even that is unavailable.
-                var readout = OverlayReadout(module: module, value: formatter.watts(power.systemWatts))
+                var readout = DesktopWidgetReadout(module: module, value: formatter.watts(power.systemWatts))
                 readout.details = [
-                    OverlayDetail("source", "Source", power.isPluggedIn ? "AC power" : "Unknown"),
+                    DesktopWidgetDetail("source", "Source", power.isPluggedIn ? "AC power" : "Unknown"),
                 ]
                 return readout
             }
-            var readout = OverlayReadout(module: module,
+            var readout = DesktopWidgetReadout(module: module,
                                          value: formatter.percentValue(percentage))
             readout.fraction = percentage / 100
             readout.details = [
-                OverlayDetail("state", "Status", batteryCaption(power)),
-                OverlayDetail("power", "Draw", formatter.watts(power.batteryWatts)),
+                DesktopWidgetDetail("state", "Status", batteryCaption(power)),
+                DesktopWidgetDetail("power", "Draw", formatter.watts(power.batteryWatts)),
             ]
             return readout
         }
@@ -327,40 +327,40 @@ private struct OverlayModuleView: View {
         return "\(formatter.duration(empty)) left"
     }
 
-    private var thermalReadout: MetricState<OverlayReadout> {
+    private var thermalReadout: MetricState<DesktopWidgetReadout> {
         engine.thermal.map { thermal in
-            var readout = OverlayReadout(module: module,
+            var readout = DesktopWidgetReadout(module: module,
                                          value: formatter.temperature(thermal.cpuCelsius))
-            readout.details = [OverlayDetail("pressure", "Pressure", thermal.pressure.label)]
+            readout.details = [DesktopWidgetDetail("pressure", "Pressure", thermal.pressure.label)]
             if let fan = thermal.fans.first {
-                readout.details.append(OverlayDetail("fan", fan.name, formatter.rpm(fan.currentRPM)))
+                readout.details.append(DesktopWidgetDetail("fan", fan.name, formatter.rpm(fan.currentRPM)))
             }
             return readout
         }
     }
 
-    private var processReadout: MetricState<OverlayReadout> {
+    private var processReadout: MetricState<DesktopWidgetReadout> {
         engine.processes.map { snapshot in
-            var readout = OverlayReadout(module: module,
+            var readout = DesktopWidgetReadout(module: module,
                                          value: formatter.count(snapshot.totalProcessCount))
             // The busiest process is the first of these rather than a quieter line
             // above them, so the loudest reading is not the faintest thing on screen.
             readout.details = snapshot.processes
                 .sorted { $0.cpuPercent > $1.cpuPercent }
                 .prefix(4)
-                .map { OverlayDetail("pid-\($0.pid)", $0.name,
+                .map { DesktopWidgetDetail("pid-\($0.pid)", $0.name,
                                      formatter.unclampedPercent($0.cpuPercent)) }
             return readout
         }
     }
 
-    private var systemReadout: MetricState<OverlayReadout> {
+    private var systemReadout: MetricState<DesktopWidgetReadout> {
         engine.system.map { system in
-            var readout = OverlayReadout(module: module, value: formatter.uptime(system.uptime))
+            var readout = DesktopWidgetReadout(module: module, value: formatter.uptime(system.uptime))
             readout.details = [
-                OverlayDetail("chip", "Chip", system.chipName),
-                OverlayDetail("os", system.osName, system.osVersion),
-                OverlayDetail("host", "Host", system.computerName),
+                DesktopWidgetDetail("chip", "Chip", system.chipName),
+                DesktopWidgetDetail("os", system.osName, system.osVersion),
+                DesktopWidgetDetail("host", "Host", system.computerName),
             ]
             return readout
         }
@@ -369,8 +369,8 @@ private struct OverlayModuleView: View {
 
 // MARK: - Rows
 
-private struct OverlayHeaderRow: View {
-    let readout: OverlayReadout
+private struct DesktopWidgetHeaderRow: View {
+    let readout: DesktopWidgetReadout
     /// Set when the metric has no reading. The reason takes the value's place instead
     /// of adding a line under it.
     var failure: MetricFailure?
@@ -385,13 +385,13 @@ private struct OverlayHeaderRow: View {
                 // menu bar — and a coloured icon on a grey label was the app disagreeing
                 // with itself about which of the two the colour meant.
                 .foregroundStyle(Design.Palette.secondaryText)
-                .frame(width: OverlayModuleView.iconColumn)
+                .frame(width: DesktopWidgetModuleView.iconColumn)
             SwiftUI.Text(readout.title)
                 .font(Design.Text.sectionHeader)
                 .foregroundStyle(Design.Palette.secondaryText)
                 .lineLimit(1)
             Spacer(minLength: Design.Space.m)
-            LineStrut(font: Design.Text.overlayValue)
+            LineStrut(font: Design.Text.desktopWidgetValue)
             if let failure {
                 SwiftUI.Text(failure.shortLabel)
                     .font(Design.Text.caption)
@@ -399,7 +399,7 @@ private struct OverlayHeaderRow: View {
                     .lineLimit(1)
             } else if let value = readout.value {
                 SwiftUI.Text(value)
-                    .font(Design.Text.overlayValue)
+                    .font(Design.Text.desktopWidgetValue)
                     .foregroundStyle(Design.Palette.primaryText)
                     .lineLimit(1)
                     .contentTransition(.numericText())
@@ -438,8 +438,8 @@ private struct LineStrut: View {
 /// right under a 20pt headline and wrong under a 14pt one: at that distance a fan
 /// speed in full contrast reads as something you are being told to look at. These sit
 /// a size and a step of contrast below the header, which is the whole point of them.
-private struct OverlayDetailRow: View {
-    let detail: OverlayDetail
+private struct DesktopWidgetDetailRow: View {
+    let detail: DesktopWidgetDetail
 
     var body: some View {
         HStack(spacing: Design.Space.rowGap) {
@@ -450,7 +450,7 @@ private struct OverlayDetailRow: View {
                 .truncationMode(.tail)
             Spacer(minLength: Design.Space.s)
             SwiftUI.Text(detail.value)
-                .font(Design.Text.overlayDetailValue)
+                .font(Design.Text.desktopWidgetDetailValue)
                 .foregroundStyle(Design.Palette.secondaryText)
                 .lineLimit(1)
                 .contentTransition(.numericText())
@@ -477,7 +477,7 @@ private struct FailureHelp: ViewModifier {
 
 // MARK: - Model
 
-private struct OverlayDetail: Identifiable, Equatable, Sendable {
+private struct DesktopWidgetDetail: Identifiable, Equatable, Sendable {
     let id: String
     let label: String
     let value: String
@@ -491,7 +491,7 @@ private struct OverlayDetail: Identifiable, Equatable, Sendable {
 
 /// `Equatable` and `Sendable` because it travels inside a `MetricState`, which is how
 /// every module gets the same honest handling of an unavailable metric for free.
-private struct OverlayReadout: Equatable, Sendable {
+private struct DesktopWidgetReadout: Equatable, Sendable {
     var title: String
     var symbol: String
     var tint: Color
@@ -499,7 +499,7 @@ private struct OverlayReadout: Equatable, Sendable {
     /// `UnavailableNote` — never a zero standing in for a number we do not have.
     var value: String?
     var fraction: Double?
-    var details: [OverlayDetail] = []
+    var details: [DesktopWidgetDetail] = []
 
     init(module: PanelModule, value: String?) {
         self.title = module.label

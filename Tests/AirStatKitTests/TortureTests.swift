@@ -24,46 +24,46 @@ struct TortureTests {
 
     @Test("a garbage depth value does not throw or wipe the file")
     func garbageDepth() throws {
-        #expect(try decode(#"{"overlay":{"depth":"upside-down"}}"#).overlay.depth == .aboveEverything)
-        #expect(try decode(#"{"overlay":{"depth":17}}"#).overlay.depth == .aboveEverything)
-        #expect(try decode(#"{"overlay":{"depth":null}}"#).overlay.depth == .aboveEverything)
-        #expect(try decode(#"{"overlay":{"depth":{"a":1}}}"#).overlay.depth == .aboveEverything)
+        #expect(try decode(#"{"overlay":{"depth":"upside-down"}}"#).desktopWidget.depth == .aboveEverything)
+        #expect(try decode(#"{"overlay":{"depth":17}}"#).desktopWidget.depth == .aboveEverything)
+        #expect(try decode(#"{"overlay":{"depth":null}}"#).desktopWidget.depth == .aboveEverything)
+        #expect(try decode(#"{"overlay":{"depth":{"a":1}}}"#).desktopWidget.depth == .aboveEverything)
         // A garbage new key falls through to the retired one rather than to the
         // default, so an upgrade that goes wrong still lands on what the user chose.
         #expect(try decode(#"{"overlay":{"depth":"upside-down","floatsAboveEverything":false}}"#)
-                .overlay.depth == .withWindows)
+                .desktopWidget.depth == .withWindows)
     }
 
-    @Test("hostile numbers never make the overlay invisible or zero-sized")
+    @Test("hostile numbers never make the desktop widget invisible or zero-sized")
     func hostileNumbers() throws {
         let s = try decode(#"{"overlay":{"width":-9999,"opacity":-5,"inactiveOpacity":900}}"#)
-        #expect(s.overlay.width >= 160)
-        #expect(s.overlay.opacity >= 0.2)
-        #expect(s.overlay.inactiveOpacity <= 1)
+        #expect(s.desktopWidget.width >= 160)
+        #expect(s.desktopWidget.opacity >= 0.2)
+        #expect(s.desktopWidget.inactiveOpacity <= 1)
 
         let big = try decode(#"{"overlay":{"width":1e308,"opacity":1e308}}"#)
-        #expect(big.overlay.width.isFinite && big.overlay.width <= 480)
-        #expect(big.overlay.opacity.isFinite && big.overlay.opacity <= 1)
+        #expect(big.desktopWidget.width.isFinite && big.desktopWidget.width <= 480)
+        #expect(big.desktopWidget.opacity.isFinite && big.desktopWidget.opacity <= 1)
     }
 
     @Test("a NaN origin does not survive into the layout")
     func nanOrigin() throws {
         let s = try decode(#"{"overlay":{"originX":"nan","originY":"nan"}}"#)
-        #expect(s.overlay.originX == nil || s.overlay.originX!.isFinite)
-        #expect(s.overlay.originY == nil || s.overlay.originY!.isFinite)
+        #expect(s.desktopWidget.originX == nil || s.desktopWidget.originX!.isFinite)
+        #expect(s.desktopWidget.originY == nil || s.desktopWidget.originY!.isFinite)
     }
 
     @Test("an empty or nonsense module list falls back to something drawable")
     func moduleList() throws {
-        #expect(!(try decode(#"{"overlay":{"modules":[]}}"#).overlay.modules.isEmpty))
-        #expect(!(try decode(#"{"overlay":{"modules":["nope","nada"]}}"#).overlay.modules.isEmpty))
-        #expect(!(try decode(#"{"overlay":{"modules":"cpu"}}"#).overlay.modules.isEmpty))
+        #expect(!(try decode(#"{"overlay":{"modules":[]}}"#).desktopWidget.modules.isEmpty))
+        #expect(!(try decode(#"{"overlay":{"modules":["nope","nada"]}}"#).desktopWidget.modules.isEmpty))
+        #expect(!(try decode(#"{"overlay":{"modules":"cpu"}}"#).desktopWidget.modules.isEmpty))
     }
 
-    @Test("a duplicated module cannot reach the overlay's ForEach identity")
+    @Test("a duplicated module cannot reach the desktop widget's ForEach identity")
     func duplicateModules() throws {
         let s = try decode(#"{"overlay":{"modules":["cpu","cpu","memory","cpu"]}}"#)
-        #expect(s.overlay.modules == [.cpu, .memory], "duplicates survived decoding")
+        #expect(s.desktopWidget.modules == [.cpu, .memory], "duplicates survived decoding")
     }
 
     @Test("a settings file that is a directory, empty, or binary garbage still opens")
@@ -72,35 +72,35 @@ struct TortureTests {
             let d = dir()
             try? payload.write(to: d.appendingPathComponent("settings.json"))
             let store = SettingsStore(directory: d)
-            #expect(store.settings.overlay.width >= 160, "a bad file cost the defaults")
+            #expect(store.settings.desktopWidget.width >= 160, "a bad file cost the defaults")
         }
     }
 
     @Test("importing hostile JSON never throws past the caller or wipes the store")
     func hostileImport() {
         let store = SettingsStore(directory: dir())
-        let before = store.settings.overlay.depth
+        let before = store.settings.desktopWidget.depth
         for payload in ["[]", "null", "{\"overlay\":[]}", String(repeating: "{", count: 5_000)] {
             _ = try? store.importJSON(Data(payload.utf8))
         }
-        #expect(store.settings.overlay.width >= 160)
-        #expect(store.settings.overlay.depth == before || OverlayDepth.allCases.contains(store.settings.overlay.depth))
+        #expect(store.settings.desktopWidget.width >= 160)
+        #expect(store.settings.desktopWidget.depth == before || DesktopWidgetDepth.allCases.contains(store.settings.desktopWidget.depth))
     }
 
     @Test("an exported file round-trips through import unchanged")
     func exportImportRoundTrip() throws {
         let store = SettingsStore(directory: dir())
         store.update {
-            $0.overlay.depth = .wallpaper
-            $0.overlay.modules = [.system, .cpu]
-            $0.overlay.isCompact = false
+            $0.desktopWidget.depth = .wallpaper
+            $0.desktopWidget.modules = [.system, .cpu]
+            $0.desktopWidget.isCompact = false
         }
         let data = try store.exportJSON()
         let other = SettingsStore(directory: dir())
         try other.importJSON(data)
-        #expect(other.settings.overlay.depth == .wallpaper)
-        #expect(other.settings.overlay.modules == [.system, .cpu])
-        #expect(other.settings.overlay.isCompact == false)
+        #expect(other.settings.desktopWidget.depth == .wallpaper)
+        #expect(other.settings.desktopWidget.modules == [.system, .cpu])
+        #expect(other.settings.desktopWidget.isCompact == false)
     }
 
     @Test("truncated and non-object JSON is survivable")
@@ -114,14 +114,14 @@ struct TortureTests {
 
     @Test("every depth produces a finite, in-range window level")
     func depthLevels() {
-        for d in OverlayDepth.allCases {
+        for d in DesktopWidgetDepth.allCases {
             let raw = d.windowLevel.rawValue
             #expect(raw > Int(CGWindowLevelForKey(.minimumWindow)))
             #expect(raw < Int(CGWindowLevelForKey(.maximumWindow)))
         }
     }
 
-    // MARK: Overlay reservation table
+    // MARK: Desktop widget reservation table
 
     @Test("every module has a distinct raw value and survives a round trip")
     func moduleRawValues() throws {
@@ -194,17 +194,17 @@ struct WindowTortureTests {
                 "\(controller.activeEventMonitorCount) monitors survived")
     }
 
-    /// Every depth, twice each, with the overlay showing. A level written in the wrong
+    /// Every depth, twice each, with the desktop widget showing. A level written in the wrong
     /// order silently collapses to `.floating`, which is the bug this guards.
     @Test("cycling every depth keeps the window at the level it asked for")
     func depthCycling() async throws {
         let s = store()
-        s.update { $0.overlay.isEnabled = true }
-        let controller = OverlayController(engine: MetricsEngine(settingsStore: s), settings: s)
+        s.update { $0.desktopWidget.isEnabled = true }
+        let controller = DesktopWidgetController(engine: MetricsEngine(settingsStore: s), settings: s)
         controller.show()
         do {
-            for depth in OverlayDepth.allCases {
-                s.update { $0.overlay.depth = depth }
+            for depth in DesktopWidgetDepth.allCases {
+                s.update { $0.desktopWidget.depth = depth }
                 // The controller watches the store over an async sequence, so the
                 // change lands some turns later, exactly as it does in the app. Polled
                 // rather than slept on, so a busy main actor cannot make this flaky.
@@ -219,11 +219,11 @@ struct WindowTortureTests {
         #expect(controller.activeEventMonitorCount == 0)
     }
 
-    @Test("an overlay shown and hidden repeatedly leaks no monitors")
-    func overlayMonitorsDoNotLeak() async {
+    @Test("a desktop widget shown and hidden repeatedly leaks no monitors")
+    func desktopWidgetMonitorsDoNotLeak() async {
         let s = store()
-        s.update { $0.overlay.isEnabled = true }
-        let controller = OverlayController(engine: MetricsEngine(settingsStore: s), settings: s)
+        s.update { $0.desktopWidget.isEnabled = true }
+        let controller = DesktopWidgetController(engine: MetricsEngine(settingsStore: s), settings: s)
         for _ in 0..<3 {
             controller.show()
             controller.hide()
@@ -361,17 +361,17 @@ struct HostileStringTests {
         #expect(size.height.isFinite && size.height < 20_000, "panel grew to \(size.height) tall")
     }
 
-    @Test("the same strings cannot widen the overlay")
-    func overlayWidthHolds() {
+    @Test("the same strings cannot widen the desktop widget")
+    func desktopWidgetWidthHolds() {
         let s = store()
         s.update {
-            $0.overlay.isCompact = false
-            $0.overlay.modules = PanelModule.allCases
+            $0.desktopWidget.isCompact = false
+            $0.desktopWidget.modules = PanelModule.allCases
         }
         let engine = MetricsEngine(settingsStore: s)
         engine.loadFixture(snapshot: hostileSnapshot(), history: MetricHistory(capacity: 60, sampleInterval: 1))
-        let size = fittingSize(of: OverlayRootView(engine: engine, settings: s, layout: nil))
-        #expect(abs(size.width - s.settings.overlay.width) < 0.5, "overlay grew to \(size.width)")
-        #expect(size.height.isFinite && size.height < 20_000, "overlay grew to \(size.height) tall")
+        let size = fittingSize(of: DesktopWidgetRootView(engine: engine, settings: s, layout: nil))
+        #expect(abs(size.width - s.settings.desktopWidget.width) < 0.5, "desktop widget grew to \(size.width)")
+        #expect(size.height.isFinite && size.height < 20_000, "desktop widget grew to \(size.height) tall")
     }
 }

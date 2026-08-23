@@ -95,7 +95,7 @@ struct AboutPane: View {
                         }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("Your menu bar readouts, overlay, colours, notification rules and shortcuts all go back to how AirStats shipped.")
+                        Text("Your menu bar readouts, desktop widget, colours, notification rules and shortcuts all go back to how AirStats shipped.")
                     }
             } header: {
                 Text("Reset")

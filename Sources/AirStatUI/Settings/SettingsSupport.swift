@@ -15,10 +15,10 @@ import AirStatKit
 public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     // Order is the source list's order, and it is grouped: what the app is, then the
     // three things it does, then how it looks and how you reach it, then about. A flat
-    // list of six left "Appearance" sitting between "Menu Bar" and "Overlay", which
+    // list of six left "Appearance" sitting between "Menu Bar" and "Desktop Widget", which
     // are the two surfaces it applies to.
     case general
-    case menuBar, overlay, notifications
+    case menuBar, desktopWidget, notifications
     case appearance, shortcuts
     case about
 
@@ -29,7 +29,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .general: return "General"
         case .menuBar: return "Menu Bar"
         case .appearance: return "Appearance"
-        case .overlay: return "Overlay"
+        case .desktopWidget: return "Desktop Widget"
         case .notifications: return "Notifications"
         case .shortcuts: return "Shortcuts"
         case .about: return "About"
@@ -38,7 +38,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
     /// Whether a rule is drawn above this row in the source list. The groups are the
     /// hierarchy: without them the panes read as one undifferentiated list, and
-    /// nothing says that Menu Bar, Overlay and Notifications are the same kind of
+    /// nothing says that Menu Bar, Desktop Widget and Notifications are the same kind of
     /// thing while General and About are not.
     var startsGroup: Bool {
         switch self {
@@ -52,7 +52,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .general: return "gearshape"
         case .menuBar: return "menubar.rectangle"
         case .appearance: return "paintpalette"
-        case .overlay: return "macwindow.on.rectangle"
+        case .desktopWidget: return "macwindow.on.rectangle"
         case .notifications: return "bell.badge"
         case .shortcuts: return "keyboard"
         case .about: return "info.circle"
@@ -66,7 +66,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
         case .general: return [.general]
         case .menuBar: return [.menuBar]
         case .appearance: return [.theme, .charts]
-        case .overlay: return [.overlay]
+        case .desktopWidget: return [.desktopWidget]
         case .notifications: return [.notifications]
         case .shortcuts: return [.shortcuts]
         case .about: return []
@@ -77,8 +77,8 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
     ///
     /// The render harness constructs `SettingsRootView` with no arguments, so the
     /// only way to inspect a pane other than the first is to let the environment
-    /// choose it. `AIRSTAT_SETTINGS_TAB=overlay AirStats --render settings` renders
-    /// the overlay pane; unset, it behaves exactly as the real window does.
+    /// choose it. `AIRSTAT_SETTINGS_TAB=desktopWidget AirStats --render settings` renders
+    /// the desktop widget pane; unset, it behaves exactly as the real window does.
     static var renderDefault: SettingsTab {
         guard let raw = ProcessInfo.processInfo.environment["AIRSTAT_SETTINGS_TAB"],
               let tab = SettingsTab(rawValue: raw) else { return .general }

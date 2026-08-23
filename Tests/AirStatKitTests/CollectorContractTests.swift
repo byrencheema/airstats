@@ -54,7 +54,7 @@ struct CollectorContractTests {
     /// A collector that needs two samples to difference against has nothing wrong with
     /// it on the first one. The distinction is load-bearing in the UI: a pending module
     /// holds its full height open because a reading is coming, and a failed one
-    /// collapses to a line. Reporting the baseline as a failure made the overlay open a
+    /// collapses to a line. Reporting the baseline as a failure made the desktop widget open a
     /// row short and jump a tick later.
     @Test("a collector still taking its baseline is pending, not failed")
     func baselineSamplesArePending() {

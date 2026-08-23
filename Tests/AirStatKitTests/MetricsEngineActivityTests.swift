@@ -86,8 +86,8 @@ struct LowPowerPauseTests {
         #expect(engine.activity == .panel)
         engine.setPanelVisible(false)
         #expect(engine.activity == .suspended)
-        engine.setOverlayVisible(true)
-        #expect(engine.activity == .overlay)
+        engine.setDesktopWidgetVisible(true)
+        #expect(engine.activity == .desktopWidget)
     }
 
     @Test("the pause outranks the occlusion throttle")

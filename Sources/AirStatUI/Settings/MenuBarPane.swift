@@ -121,7 +121,7 @@ struct MenuBarPane: View {
             // Deleting belongs on the row it deletes. As a button under the list it
             // acted on "the selected readout", and the only thing naming that readout
             // was a tint on one row — a destructive control whose target you had to
-            // infer. It also matches the overlay's module list, which is the same
+            // infer. It also matches the desktop widget's module list, which is the same
             // list of the same metrics doing the same job.
             RowIconButton(systemName: "trash",
                           help: items.count <= 1

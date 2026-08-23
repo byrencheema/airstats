@@ -80,7 +80,7 @@ public struct DetailChart: View {
                 ForEach(Array(series.enumerated()), id: \.offset) { _, item in
                     calloutBody(item, showsName: showsSeriesNames)
                 }
-                // The numbers outrank the words that label them: in a 220pt overlay a
+                // The numbers outrank the words that label them: in a 220pt desktop widget a
                 // truncated "2…." is worse than a dropped name.
                 .layoutPriority(1)
             }
@@ -88,7 +88,7 @@ public struct DetailChart: View {
     }
 
     /// The newest sample, tagged with the series' colour so a two-series chart needs
-    /// no separate legend. In an overlay-width chart the dot alone carries the
+    /// no separate legend. In a desktop widget-width chart the dot alone carries the
     /// identification, so the written name is the first thing to go.
     private func calloutBody(_ item: ChartSeries, showsName: Bool) -> some View {
         HStack(spacing: Design.Space.xs) {

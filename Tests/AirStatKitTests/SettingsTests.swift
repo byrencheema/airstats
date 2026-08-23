@@ -18,34 +18,34 @@ struct SettingsDecodingTests {
     }
 
     /// A settings file written by 1.2.1 or earlier has `floatsAboveEverything` and no
-    /// `depth`, and the upgrade must not silently move anyone's overlay.
-    @Test("a pre-1.3 overlay layer converts from the old boolean")
-    func overlayDepthMigratesFromLegacyBool() throws {
-        #expect(try decode(#"{"overlay":{"floatsAboveEverything":true}}"#).overlay.depth
+    /// `depth`, and the upgrade must not silently move anyone's desktop widget.
+    @Test("a pre-1.3 desktop widget layer converts from the old boolean")
+    func desktopWidgetDepthMigratesFromLegacyBool() throws {
+        #expect(try decode(#"{"overlay":{"floatsAboveEverything":true}}"#).desktopWidget.depth
                 == .aboveEverything)
-        #expect(try decode(#"{"overlay":{"floatsAboveEverything":false}}"#).overlay.depth
+        #expect(try decode(#"{"overlay":{"floatsAboveEverything":false}}"#).desktopWidget.depth
                 == .withWindows)
-        #expect(try decode(#"{"overlay":{}}"#).overlay.depth == .aboveEverything)
+        #expect(try decode(#"{"overlay":{}}"#).desktopWidget.depth == .aboveEverything)
     }
 
     /// The new key wins, so a file that somehow carries both is not dragged backwards
     /// by the one nothing writes any more.
     @Test("a stored layer beats the boolean it replaced")
-    func overlayDepthPrefersTheNewKey() throws {
+    func desktopWidgetDepthPrefersTheNewKey() throws {
         let settings = try decode(#"{"overlay":{"depth":"wallpaper","floatsAboveEverything":true}}"#)
-        #expect(settings.overlay.depth == .wallpaper)
+        #expect(settings.desktopWidget.depth == .wallpaper)
     }
 
     /// Round-tripping must not resurrect the retired key, or every save would write a
     /// field the next version has to keep reading.
-    @Test("saving an overlay writes the layer and not the old boolean")
-    func overlayDepthRoundTrips() throws {
+    @Test("saving a desktop widget writes the layer and not the old boolean")
+    func desktopWidgetDepthRoundTrips() throws {
         var settings = Settings()
-        settings.overlay.depth = .wallpaper
+        settings.desktopWidget.depth = .wallpaper
         let data = try JSONEncoder().encode(settings)
         let text = String(decoding: data, as: UTF8.self)
         #expect(!text.contains("floatsAboveEverything"))
-        #expect(try JSONDecoder().decode(Settings.self, from: data).overlay.depth == .wallpaper)
+        #expect(try JSONDecoder().decode(Settings.self, from: data).desktopWidget.depth == .wallpaper)
     }
 
     /// Asserted by content, not against the constant the app reads. The defaults check
@@ -90,8 +90,8 @@ struct SettingsDecodingTests {
          "charts":{"historyDuration":999999}}
         """)
         #expect(settings.general.updateInterval == 60)
-        #expect(settings.overlay.opacity == 0.2)   // never invisible
-        #expect(settings.overlay.width == 480)
+        #expect(settings.desktopWidget.opacity == 0.2)   // never invisible
+        #expect(settings.desktopWidget.width == 480)
         #expect(settings.charts.historyDuration == 3600)
     }
 
@@ -128,7 +128,7 @@ struct SettingsDecodingTests {
     func roundTrip() throws {
         var original = Settings()
         original.general.temperatureUnit = .fahrenheit
-        original.overlay.isEnabled = true
+        original.desktopWidget.isEnabled = true
         original.menuBar.items.append(MenuBarItemConfig(metric: .gpuUsage, style: .graph))
         let data = try JSONEncoder().encode(original)
         let restored = try JSONDecoder().decode(Settings.self, from: data)
@@ -164,7 +164,7 @@ struct RequiredSourceTests {
     func menuBarOnly() {
         var settings = Settings()
         settings.menuBar.items = [MenuBarItemConfig(metric: .cpuUsage)]
-        let sources = settings.requiredSources(panelVisible: false, overlayVisible: false)
+        let sources = settings.requiredSources(panelVisible: false, desktopWidgetVisible: false)
         #expect(sources.contains(.cpu))
         #expect(!sources.contains(.power))     // nothing on screen needs the battery
         #expect(!sources.contains(.processes)) // the expensive one stays off
@@ -174,7 +174,7 @@ struct RequiredSourceTests {
     func panelOpen() {
         var settings = Settings()
         settings.menuBar.items = [MenuBarItemConfig(metric: .cpuUsage)]
-        let sources = settings.requiredSources(panelVisible: true, overlayVisible: false)
+        let sources = settings.requiredSources(panelVisible: true, desktopWidgetVisible: false)
         #expect(sources.contains(.processes))
         #expect(sources.contains(.power))
     }
@@ -185,7 +185,7 @@ struct RequiredSourceTests {
         settings.menuBar.items = [MenuBarItemConfig(metric: .cpuUsage)]
         settings.notifications.isEnabled = true
         settings.notifications.rules = [ThresholdRule(metric: .batteryLow, isEnabled: true)]
-        let sources = settings.requiredSources(panelVisible: false, overlayVisible: false)
+        let sources = settings.requiredSources(panelVisible: false, desktopWidgetVisible: false)
         #expect(sources.contains(.power))
     }
 }

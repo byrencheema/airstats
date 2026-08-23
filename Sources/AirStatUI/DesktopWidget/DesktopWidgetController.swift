@@ -3,25 +3,25 @@ import ApplicationServices
 import SwiftUI
 import AirStatKit
 
-/// Manages the optional always-on-top overlay window.
+/// Manages the optional always-on-top desktop widget window.
 ///
-/// Everything here is window behaviour: where the overlay sits, how it follows the
+/// Everything here is window behaviour: where the desktop widget sits, how it follows the
 /// user between Spaces and displays, how it gets out of the way, and how it is moved
-/// and resized. The content it shows is `OverlayRootView`.
+/// and resized. The content it shows is `DesktopWidgetRootView`.
 @MainActor
-public final class OverlayController: NSObject, NSWindowDelegate {
+public final class DesktopWidgetController: NSObject, NSWindowDelegate {
 
     public var onVisibilityChange: ((Bool) -> Void)?
-    /// Optional hook so the overlay's context menu can offer Settings. Left unwired,
+    /// Optional hook so the desktop widget's context menu can offer Settings. Left unwired,
     /// the menu simply omits the item rather than showing a dead one.
     public var onRequestSettings: (() -> Void)?
 
     private let engine: MetricsEngine
     private let settings: SettingsStore
-    private let layout: OverlayLayout
-    private let hoverProxy = OverlayHoverProxy()
+    private let layout: DesktopWidgetLayout
+    private let hoverProxy = DesktopWidgetHoverProxy()
 
-    private var panel: OverlayPanel?
+    private var panel: DesktopWidgetPanel?
     private var trackingArea: NSTrackingArea?
 
     private var interaction: Interaction?
@@ -46,7 +46,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     public init(engine: MetricsEngine, settings: SettingsStore) {
         self.engine = engine
         self.settings = settings
-        self.layout = OverlayLayout(width: settings.settings.overlay.width)
+        self.layout = DesktopWidgetLayout(width: settings.settings.desktopWidget.width)
         super.init()
         beginObservingSettings()
     }
@@ -61,14 +61,14 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     // MARK: Presentation
 
-    /// Bring the overlay into line with the current settings, creating or tearing
+    /// Bring the desktop widget into line with the current settings, creating or tearing
     /// down the window as needed.
     public func syncWithSettings() {
-        if settings.settings.overlay.isEnabled {
+        if settings.settings.desktopWidget.isEnabled {
             show()
         } else {
             hide()
-            // Turning the overlay off is a statement that it is not wanted, not that it
+            // Turning the desktop widget off is a statement that it is not wanted, not that it
             // is briefly out of the way, so its view tree goes too: an ordered-out window
             // is still on AppKit's window list and holds all 4.7 MB of dirty heap
             // (`footprint`, MALLOC_SMALL, this machine) that building it cost.
@@ -84,17 +84,17 @@ public final class OverlayController: NSObject, NSWindowDelegate {
         panel.interaction = nil
         panel.delegate = nil
         panel.close()
-        WindowLog.log("overlay window released")
+        WindowLog.log("desktop widget window released")
     }
 
     public func show() {
         let panel = self.panel ?? makeWindow()
         self.panel = panel
-        apply(settings.settings.overlay, to: panel)
-        // `orderFrontRegardless` rather than `makeKeyAndOrderFront`: the overlay must
+        apply(settings.settings.desktopWidget, to: panel)
+        // `orderFrontRegardless` rather than `makeKeyAndOrderFront`: the desktop widget must
         // appear over the frontmost app without that app losing focus.
         panel.orderFrontRegardless()
-        WindowLog.log("overlay shown frame=\(panel.frame) level=\(panel.level.rawValue) monitors=\(activeEventMonitorCount)")
+        WindowLog.log("desktop widget shown frame=\(panel.frame) level=\(panel.level.rawValue) monitors=\(activeEventMonitorCount)")
         onVisibilityChange?(true)
     }
 
@@ -105,7 +105,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
         isPointerNear = false
         isTemporarilyInteractive = false
         layout.isGrabbable = false
-        WindowLog.log("overlay hidden monitors=\(activeEventMonitorCount)")
+        WindowLog.log("desktop widget hidden monitors=\(activeEventMonitorCount)")
         onVisibilityChange?(false)
     }
 
@@ -119,14 +119,14 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     // MARK: Window
 
-    private func makeWindow() -> OverlayPanel {
-        let root = OverlayRootView(engine: engine, settings: settings, layout: layout)
+    private func makeWindow() -> DesktopWidgetPanel {
+        let root = DesktopWidgetRootView(engine: engine, settings: settings, layout: layout)
         // The window follows its content's height, so a module appearing or a metric
-        // becoming unavailable resizes the overlay instead of clipping it.
+        // becoming unavailable resizes the desktop widget instead of clipping it.
         let hosting = ContentSizedHostingView(rootView: root)
         hosting.onContentSizeChange = { [weak self] in self?.scheduleContentResize() }
 
-        let panel = OverlayPanel(contentView: hosting)
+        let panel = DesktopWidgetPanel(contentView: hosting)
         panel.interaction = self
         panel.delegate = self
         panel.setContentSize(hosting.fittingSize)
@@ -141,7 +141,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     private func installTrackingArea(on view: NSView) {
         if let trackingArea { view.removeTrackingArea(trackingArea) }
-        // `.inVisibleRect` keeps the area correct as the overlay is resized;
+        // `.inVisibleRect` keeps the area correct as the desktop widget is resized;
         // `.activeAlways` is what makes it work while another app is frontmost.
         let area = NSTrackingArea(rect: .zero,
                                   options: [.mouseEnteredAndExited, .mouseMoved,
@@ -156,29 +156,29 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     ///
     /// Idempotent on purpose: it runs on every settings revision, and anything that
     /// wrote back to settings from here would loop.
-    private func apply(_ overlay: OverlaySettings, to panel: OverlayPanel) {
+    private func apply(_ desktopWidget: DesktopWidgetSettings, to panel: DesktopWidgetPanel) {
         // Order matters and is not optional. Setting `isFloatingPanel` assigns the
         // window's level as a side effect — `.floating` when true, `.normal` when
         // false — so a level written before it is thrown away. Measured: with the two
         // lines the other way round every depth reported `kCGFloatingWindowLevel`.
-        panel.isFloatingPanel = overlay.depth != .wallpaper
-        panel.level = overlay.depth.windowLevel
-        // On the wallpaper the overlay is part of the desktop, and a desktop does not
+        panel.isFloatingPanel = desktopWidget.depth != .wallpaper
+        panel.level = desktopWidget.depth.windowLevel
+        // On the wallpaper the desktop widget is part of the desktop, and a desktop does not
         // cast a shadow onto itself. Everywhere else the shadow is what lifts it off
         // whatever it is covering.
-        panel.hasShadow = overlay.depth != .wallpaper
-        panel.collectionBehavior = overlay.showsOnAllSpaces
+        panel.hasShadow = desktopWidget.depth != .wallpaper
+        panel.collectionBehavior = desktopWidget.showsOnAllSpaces
             ? [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
             : [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
 
         // Width is handed to SwiftUI, not to the window: the hosting view reports its
         // new ideal size once it has re-laid out, and `applyContentSize` turns that
         // into a frame with the right height for the new width.
-        if interaction == nil, layout.width != overlay.width {
-            layout.width = overlay.width
+        if interaction == nil, layout.width != desktopWidget.width {
+            layout.width = desktopWidget.width
         }
 
-        applyClickThrough(overlay)
+        applyClickThrough(desktopWidget)
         updateAlpha(animated: false)
         if interaction == nil { reposition() }
     }
@@ -188,7 +188,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     /// Overlaps a corner needs to be within to be considered "dropped on" it.
     private static let snapDistance: CGFloat = 32
     private static let edgeMargin: CGFloat = Design.Space.xl
-    /// Mirrors the clamp `SettingsStore.sanitize` applies to `overlay.width`; a drag
+    /// Mirrors the clamp `SettingsStore.sanitize` applies to `desktopWidget.width`; a drag
     /// must not be able to produce a value the store would silently change back.
     private static let widthRange: ClosedRange<Double> = 160...480
     /// How close to a side edge a press counts as a resize rather than a move.
@@ -196,27 +196,27 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     private func reposition() {
         guard let panel else { return }
-        let frame = placement(for: settings.settings.overlay, size: panel.frame.size)
+        let frame = placement(for: settings.settings.desktopWidget, size: panel.frame.size)
         rememberEdges(frame)
         guard frame != panel.frame else { return }
         panel.setFrame(frame, display: true)
     }
 
-    private func placement(for overlay: OverlaySettings, size: NSSize) -> NSRect {
+    private func placement(for desktopWidget: DesktopWidgetSettings, size: NSSize) -> NSRect {
         // A hand-edited settings file can contain a NaN, which would poison every
         // comparison the placement makes and leave the window unplaceable.
         let saved: NSPoint? = {
-            guard let x = overlay.originX, let y = overlay.originY, x.isFinite, y.isFinite else { return nil }
+            guard let x = desktopWidget.originX, let y = desktopWidget.originY, x.isFinite, y.isFinite else { return nil }
             return NSPoint(x: x, y: y)
         }()
-        let frame = OverlayPlacement.resolvedFrame(corner: overlay.corner,
+        let frame = DesktopWidgetPlacement.resolvedFrame(corner: desktopWidget.corner,
                                                    savedOrigin: saved,
                                                    size: size,
                                                    displays: displays,
                                                    currentFrame: panel?.frame,
                                                    margin: Self.edgeMargin)
-        if overlay.corner == .free, let saved, frame.origin != saved {
-            WindowLog.log("saved overlay position \(saved) adjusted to \(frame.origin) for the attached displays")
+        if desktopWidget.corner == .free, let saved, frame.origin != saved {
+            WindowLog.log("saved desktop widget position \(saved) adjusted to \(frame.origin) for the attached displays")
         }
         return frame
     }
@@ -226,7 +226,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     /// A saved or dragged frame, pulled back onto whatever displays exist now.
     private func validated(_ frame: NSRect) -> NSRect {
-        OverlayPlacement.resolvedFrame(corner: .free, savedOrigin: frame.origin, size: frame.size,
+        DesktopWidgetPlacement.resolvedFrame(corner: .free, savedOrigin: frame.origin, size: frame.size,
                                        displays: displays, currentFrame: frame,
                                        margin: Self.edgeMargin)
     }
@@ -241,9 +241,9 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     private func updateAlpha(animated: Bool) {
         guard let panel else { return }
-        let overlay = settings.settings.overlay
-        let isAwake = !overlay.dimsWhenInactive || isPointerNear || isTemporarilyInteractive
-        let target = isAwake ? overlay.opacity : overlay.inactiveOpacity
+        let desktopWidget = settings.settings.desktopWidget
+        let isAwake = !desktopWidget.dimsWhenInactive || isPointerNear || isTemporarilyInteractive
+        let target = isAwake ? desktopWidget.opacity : desktopWidget.inactiveOpacity
         guard abs(panel.alphaValue - target) > 0.001 else { return }
 
         guard animated, motionDuration > 0 else {
@@ -266,28 +266,28 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     // MARK: Click-through
 
     /// Click-through hands every click to whatever is underneath, which also means the
-    /// overlay can no longer be dragged, resized, or right-clicked — including to turn
+    /// desktop widget can no longer be dragged, resized, or right-clicked — including to turn
     /// click-through back off. Two ways out, in order of reliability:
     ///
     /// 1. The setting lives in Settings, reachable from the status item, which is
-    ///    unaffected by anything the overlay does. This is the guaranteed route and the
-    ///    reason the toggle is not offered *only* on the overlay itself.
-    /// 2. Holding ⌥⌘ makes the overlay interactive for as long as it is held, so it can
+    ///    unaffected by anything the desktop widget does. This is the guaranteed route and the
+    ///    reason the toggle is not offered *only* on the desktop widget itself.
+    /// 2. Holding ⌥⌘ makes the desktop widget interactive for as long as it is held, so it can
     ///    be grabbed in place. This needs the app to be trusted for accessibility —
     ///    keyboard events cannot be observed globally otherwise — so it is installed
     ///    only when that is already true, and never prompts.
-    private func applyClickThrough(_ overlay: OverlaySettings) {
-        panel?.ignoresMouseEvents = overlay.isClickThrough && !isTemporarilyInteractive
+    private func applyClickThrough(_ desktopWidget: DesktopWidgetSettings) {
+        panel?.ignoresMouseEvents = desktopWidget.isClickThrough && !isTemporarilyInteractive
 
         // A window that ignores mouse events receives no tracking-area callbacks
         // either, so proximity has to come from somewhere else while it is on.
-        if overlay.isClickThrough && overlay.dimsWhenInactive {
+        if desktopWidget.isClickThrough && desktopWidget.dimsWhenInactive {
             installProximityMonitor()
         } else {
             removeProximityMonitor()
         }
 
-        if overlay.isClickThrough {
+        if desktopWidget.isClickThrough {
             installEscapeHatchMonitors()
         } else {
             removeEscapeHatchMonitors()
@@ -299,18 +299,18 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     }
 
     public func setClickThrough(_ enabled: Bool) {
-        settings.update { $0.overlay.isClickThrough = enabled }
+        settings.update { $0.desktopWidget.isClickThrough = enabled }
     }
 
     private func installProximityMonitor() {
         guard proximityMonitor == nil else { return }
         // Event-driven, not polled: this fires only when the pointer actually moves,
-        // and does nothing at all unless it crosses the overlay's boundary.
+        // and does nothing at all unless it crosses the desktop widget's boundary.
         proximityMonitor = NSEvent.addGlobalMonitorForEvents(
             matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
                 Task { @MainActor in self?.updatePointerProximity() }
             }
-        WindowLog.log("overlay proximity monitor installed (click-through) monitors=\(activeEventMonitorCount)")
+        WindowLog.log("desktop widget proximity monitor installed (click-through) monitors=\(activeEventMonitorCount)")
     }
 
     private func removeProximityMonitor() {
@@ -340,7 +340,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
                 Task { @MainActor in self?.updateEscapeHatch(event.modifierFlags) }
             }
         }
-        WindowLog.log("overlay escape-hatch monitors installed trusted=\(AXIsProcessTrusted()) monitors=\(activeEventMonitorCount)")
+        WindowLog.log("desktop widget escape-hatch monitors installed trusted=\(AXIsProcessTrusted()) monitors=\(activeEventMonitorCount)")
     }
 
     private func removeEscapeHatchMonitors() {
@@ -362,14 +362,14 @@ public final class OverlayController: NSObject, NSWindowDelegate {
         guard held != isTemporarilyInteractive else { return }
         isTemporarilyInteractive = held
         layout.isGrabbable = held
-        panel?.ignoresMouseEvents = settings.settings.overlay.isClickThrough && !held
+        panel?.ignoresMouseEvents = settings.settings.desktopWidget.isClickThrough && !held
         updateAlpha(animated: true)
-        WindowLog.log("overlay escape hatch \(held ? "engaged" : "released")")
+        WindowLog.log("desktop widget escape hatch \(held ? "engaged" : "released")")
     }
 
     // MARK: Settings observation
 
-    /// The overlay is configured from a window it does not own, so it watches the
+    /// The desktop widget is configured from a window it does not own, so it watches the
     /// store directly. Without this, toggling click-through in Settings would change
     /// nothing until something else happened to call `syncWithSettings`.
     private func beginObservingSettings() {
@@ -398,7 +398,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     private var hasPendingResize = false
 
-    /// A window grows from its bottom-left corner, so a taller overlay would grow
+    /// A window grows from its bottom-left corner, so a taller desktop widget would grow
     /// upwards and one pinned to the top of the screen would creep off it. Re-pin
     /// whichever edges the user's corner choice implies, then re-validate.
     private func applyContentSize() {
@@ -406,20 +406,20 @@ public final class OverlayController: NSObject, NSWindowDelegate {
         let size = content.fittingSize
         guard size.width > 0, size.height > 0, size != panel.frame.size else { return }
 
-        let overlay = settings.settings.overlay
+        let desktopWidget = settings.settings.desktopWidget
         var frame = NSRect(origin: panel.frame.origin, size: size)
         if let edges = anchorEdges {
-            if anchorsToTop(overlay) { frame.origin.y = edges.maxY - size.height }
-            if anchorsToTrailing(overlay) { frame.origin.x = edges.maxX - size.width }
+            if anchorsToTop(desktopWidget) { frame.origin.y = edges.maxY - size.height }
+            if anchorsToTrailing(desktopWidget) { frame.origin.x = edges.maxX - size.width }
         }
         frame = validated(frame)
         panel.setFrame(frame, display: true)
         rememberEdges(frame)
 
-        // Keep the stored position honest, or the overlay would move by the height
+        // Keep the stored position honest, or the desktop widget would move by the height
         // difference the next time it is created.
-        if overlay.corner == .free,
-           overlay.originX != Double(frame.minX) || overlay.originY != Double(frame.minY) {
+        if desktopWidget.corner == .free,
+           desktopWidget.originX != Double(frame.minX) || desktopWidget.originY != Double(frame.minY) {
             persist(corner: .free, origin: frame.origin)
         }
     }
@@ -439,19 +439,19 @@ public final class OverlayController: NSObject, NSWindowDelegate {
         anchorEdges = (frame.maxX, frame.maxY)
     }
 
-    private func anchorsToTop(_ overlay: OverlaySettings) -> Bool {
-        switch overlay.corner {
+    private func anchorsToTop(_ desktopWidget: DesktopWidgetSettings) -> Bool {
+        switch desktopWidget.corner {
         case .topLeft, .topRight: return true
         case .bottomLeft, .bottomRight: return false
         case .free:
-            // A freely placed overlay keeps whichever half of the screen it lives in.
+            // A freely placed desktop widget keeps whichever half of the screen it lives in.
             guard let panel, let display = host(of: panel.frame) else { return true }
             return panel.frame.midY > display.visibleFrame.midY
         }
     }
 
-    private func anchorsToTrailing(_ overlay: OverlaySettings) -> Bool {
-        switch overlay.corner {
+    private func anchorsToTrailing(_ desktopWidget: DesktopWidgetSettings) -> Bool {
+        switch desktopWidget.corner {
         case .topRight, .bottomRight: return true
         case .topLeft, .bottomLeft: return false
         case .free:
@@ -461,7 +461,7 @@ public final class OverlayController: NSObject, NSWindowDelegate {
     }
 
     private func host(of frame: NSRect) -> DisplayGeometry? {
-        OverlayPlacement.display(containing: frame, in: displays)
+        DesktopWidgetPlacement.display(containing: frame, in: displays)
     }
 
     // MARK: Interaction
@@ -473,20 +473,20 @@ public final class OverlayController: NSObject, NSWindowDelegate {
 
     private enum ResizeEdge { case leading, trailing }
 
-    private func persist(corner: OverlayCorner, origin: NSPoint?) {
+    private func persist(corner: DesktopWidgetCorner, origin: NSPoint?) {
         settings.update {
-            $0.overlay.corner = corner
-            $0.overlay.originX = origin.map { Double($0.x) }
-            $0.overlay.originY = origin.map { Double($0.y) }
+            $0.desktopWidget.corner = corner
+            $0.desktopWidget.originX = origin.map { Double($0.x) }
+            $0.desktopWidget.originY = origin.map { Double($0.y) }
         }
     }
 }
 
 // MARK: - Move and resize
 
-extension OverlayController: OverlayInteractionHandler {
+extension DesktopWidgetController: DesktopWidgetInteractionHandler {
 
-    func overlayMouseDown(_ event: NSEvent) -> Bool {
+    func desktopWidgetMouseDown(_ event: NSEvent) -> Bool {
         guard let panel else { return false }
         let frame = panel.frame
         let pointer = NSEvent.mouseLocation
@@ -502,7 +502,7 @@ extension OverlayController: OverlayInteractionHandler {
         return true
     }
 
-    func overlayMouseDragged(_ event: NSEvent) -> Bool {
+    func desktopWidgetMouseDragged(_ event: NSEvent) -> Bool {
         guard let panel, let interaction else { return false }
         let pointer = NSEvent.mouseLocation
 
@@ -511,7 +511,7 @@ extension OverlayController: OverlayInteractionHandler {
             let origin = NSPoint(x: windowOrigin.x + pointer.x - pointerOrigin.x,
                                  y: windowOrigin.y + pointer.y - pointerOrigin.y)
             // Free movement during the drag; the drop is what gets validated, so the
-            // overlay can be dragged across a display boundary.
+            // desktop widget can be dragged across a display boundary.
             panel.setFrameOrigin(NSPoint(x: origin.x.rounded(), y: origin.y.rounded()))
 
         case .resizing(let edge, let startFrame, let pointerOrigin):
@@ -529,14 +529,14 @@ extension OverlayController: OverlayInteractionHandler {
         return true
     }
 
-    func overlayMouseUp(_ event: NSEvent) -> Bool {
+    func desktopWidgetMouseUp(_ event: NSEvent) -> Bool {
         guard let panel, let interaction else { return false }
         self.interaction = nil
 
         switch interaction {
         case .moving:
             let corner = snapCorner(for: panel.frame)
-            let frame = OverlayPlacement.resolvedFrame(corner: corner,
+            let frame = DesktopWidgetPlacement.resolvedFrame(corner: corner,
                                                        savedOrigin: panel.frame.origin,
                                                        size: panel.frame.size,
                                                        displays: displays,
@@ -545,31 +545,31 @@ extension OverlayController: OverlayInteractionHandler {
             panel.setFrame(frame, display: true)
             rememberEdges(frame)
             persist(corner: corner, origin: corner == .free ? frame.origin : nil)
-            WindowLog.log("overlay dropped corner=\(corner.rawValue) origin=\(frame.origin)")
+            WindowLog.log("desktop widget dropped corner=\(corner.rawValue) origin=\(frame.origin)")
 
         case .resizing:
             let width = min(max(Double(panel.frame.width), Self.widthRange.lowerBound),
                             Self.widthRange.upperBound)
             rememberEdges(panel.frame)
             // One write at the end of the gesture rather than one per frame.
-            settings.update { $0.overlay.width = width }
-            if settings.settings.overlay.corner == .free {
+            settings.update { $0.desktopWidget.width = width }
+            if settings.settings.desktopWidget.corner == .free {
                 persist(corner: .free, origin: panel.frame.origin)
             }
-            WindowLog.log("overlay resized width=\(width)")
+            WindowLog.log("desktop widget resized width=\(width)")
         }
         return true
     }
 
     /// Dropping near a corner of the current display snaps to it — which is also what
     /// converts a free position back into one that survives a resolution change.
-    private func snapCorner(for frame: NSRect) -> OverlayCorner {
+    private func snapCorner(for frame: NSRect) -> DesktopWidgetCorner {
         guard let display = host(of: frame) else { return .free }
-        return OverlayPlacement.snapCorner(for: frame, visible: display.visibleFrame,
+        return DesktopWidgetPlacement.snapCorner(for: frame, visible: display.visibleFrame,
                                            margin: Self.edgeMargin, snapDistance: Self.snapDistance)
     }
 
-    func overlayRightMouseDown(_ event: NSEvent) {
+    func desktopWidgetRightMouseDown(_ event: NSEvent) {
         guard let panel, let contentView = panel.contentView else { return }
         contextMenu().popUp(positioning: nil, at: event.locationInWindow, in: contentView)
     }
@@ -583,7 +583,7 @@ extension OverlayController: OverlayInteractionHandler {
 }
 
 /// Which window stack each depth maps to.
-extension OverlayDepth {
+extension DesktopWidgetDepth {
     var windowLevel: NSWindow.Level {
         switch self {
         // `.screenSaver` is the level that stays visible over a full-screen app;
@@ -592,7 +592,7 @@ extension OverlayDepth {
         case .withWindows: return .floating
         // One step above the window the desktop picture is drawn in, which is the only
         // place "on the wallpaper" can mean anything: at the picture's own level the
-        // ordering between the two is undefined and the overlay disappears behind it
+        // ordering between the two is undefined and the desktop widget disappears behind it
         // about half the time. Still below the desktop icons and every ordinary window.
         case .wallpaper:
             return NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
@@ -602,37 +602,37 @@ extension OverlayDepth {
 
 // MARK: - Context menu
 
-extension OverlayController {
+extension DesktopWidgetController {
 
     private func contextMenu() -> NSMenu {
-        let overlay = settings.settings.overlay
+        let desktopWidget = settings.settings.desktopWidget
         let menu = NSMenu()
 
-        for corner in OverlayCorner.allCases where corner != .free {
+        for corner in DesktopWidgetCorner.allCases where corner != .free {
             let item = menu.addItem(withTitle: corner.label,
                                     action: #selector(chooseCorner(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = corner.rawValue
-            item.state = overlay.corner == corner ? .on : .off
+            item.state = desktopWidget.corner == corner ? .on : .off
         }
         menu.addItem(.separator())
 
         let compact = menu.addItem(withTitle: "Compact", action: #selector(toggleCompact), keyEquivalent: "")
         compact.target = self
-        compact.state = overlay.isCompact ? .on : .off
+        compact.state = desktopWidget.isCompact ? .on : .off
 
         let dim = menu.addItem(withTitle: "Dim When Inactive",
                                action: #selector(toggleDimming), keyEquivalent: "")
         dim.target = self
-        dim.state = overlay.dimsWhenInactive ? .on : .off
+        dim.state = desktopWidget.dimsWhenInactive ? .on : .off
 
         let layer = NSMenu()
-        for depth in OverlayDepth.allCases {
+        for depth in DesktopWidgetDepth.allCases {
             let item = layer.addItem(withTitle: depth.label,
                                      action: #selector(chooseDepth(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = depth.rawValue
-            item.state = overlay.depth == depth ? .on : .off
+            item.state = desktopWidget.depth == depth ? .on : .off
             item.toolTip = depth.detail
         }
         menu.setSubmenu(layer, for: menu.addItem(withTitle: "Layer", action: nil, keyEquivalent: ""))
@@ -640,47 +640,47 @@ extension OverlayController {
         let clickThrough = menu.addItem(withTitle: "Click-Through",
                                         action: #selector(toggleClickThrough), keyEquivalent: "")
         clickThrough.target = self
-        clickThrough.state = overlay.isClickThrough ? .on : .off
+        clickThrough.state = desktopWidget.isClickThrough ? .on : .off
         // The one place the user is told how to undo it, at the moment they turn it on.
-        clickThrough.toolTip = "Clicks pass through to the window below. Hold ⌥⌘ to grab the overlay again, or turn this off in Settings."
+        clickThrough.toolTip = "Clicks pass through to the window below. Hold ⌥⌘ to grab the desktop widget again, or turn this off in Settings."
 
         menu.addItem(.separator())
         if onRequestSettings != nil {
             menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "")
                 .target = self
         }
-        menu.addItem(withTitle: "Hide Overlay", action: #selector(hideOverlay), keyEquivalent: "")
+        menu.addItem(withTitle: "Hide Desktop Widget", action: #selector(hideDesktopWidget), keyEquivalent: "")
             .target = self
         return menu
     }
 
     @objc private func chooseDepth(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
-              let depth = OverlayDepth(rawValue: raw) else { return }
-        settings.update { $0.overlay.depth = depth }
+              let depth = DesktopWidgetDepth(rawValue: raw) else { return }
+        settings.update { $0.desktopWidget.depth = depth }
     }
 
     @objc private func chooseCorner(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String,
-              let corner = OverlayCorner(rawValue: raw) else { return }
+              let corner = DesktopWidgetCorner(rawValue: raw) else { return }
         persist(corner: corner, origin: nil)
     }
 
     @objc private func toggleCompact() {
-        settings.update { $0.overlay.isCompact.toggle() }
+        settings.update { $0.desktopWidget.isCompact.toggle() }
     }
 
     @objc private func toggleDimming() {
-        settings.update { $0.overlay.dimsWhenInactive.toggle() }
+        settings.update { $0.desktopWidget.dimsWhenInactive.toggle() }
     }
 
     @objc private func toggleClickThrough() {
-        settings.update { $0.overlay.isClickThrough.toggle() }
+        settings.update { $0.desktopWidget.isClickThrough.toggle() }
     }
 
     @objc private func openSettings() { onRequestSettings?() }
 
-    @objc private func hideOverlay() {
-        settings.update { $0.overlay.isEnabled = false }
+    @objc private func hideDesktopWidget() {
+        settings.update { $0.desktopWidget.isEnabled = false }
     }
 }

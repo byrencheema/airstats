@@ -48,19 +48,19 @@ public enum Design {
         public static let value = Font.system(size: 11, weight: .medium).monospacedDigit()
         /// The one large number at the top of a module.
         public static let headline = Font.system(size: 20, weight: .medium).monospacedDigit()
-        /// The overlay's headline. The panel's 20pt does not fit a 220pt window that
+        /// The desktop widget's headline. The panel's 20pt does not fit a 220pt window that
         /// stacks nine of these, but a module whose reading is set at the same size as
         /// its own detail rows has no headline at all: at 11pt a fan speed shouted as
         /// loudly as the temperature above it. This is the smallest step that still
         /// reads as the thing you look at first.
-        public static let overlayValue = Font.system(size: 14, weight: .medium).monospacedDigit()
-        /// The value on an overlay supporting row. Its label is `caption`: the panel
+        public static let desktopWidgetValue = Font.system(size: 14, weight: .medium).monospacedDigit()
+        /// The value on a desktop widget supporting row. Its label is `caption`: the panel
         /// sets its detail at the same size as its labels because a 20pt headline is
         /// already three steps above them, and at 14 there is not that much room, so
         /// the rows below drop a size as well as a weight. What the user reads at a
         /// glance is the header, and these are the lines they read only if the header
         /// made them want to.
-        public static let overlayDetailValue = Font.system(size: 10, weight: .medium).monospacedDigit()
+        public static let desktopWidgetDetailValue = Font.system(size: 10, weight: .medium).monospacedDigit()
         /// Secondary detail under a headline.
         public static let caption = Font.system(size: 10, weight: .regular)
         /// Smallest legible tier — axis ticks, units, footnotes.
@@ -80,7 +80,7 @@ public enum Design {
         public static let quaternaryText = Color(nsColor: .quaternaryLabelColor)
         public static let separator = Color(nsColor: .separatorColor)
 
-        /// Selection and the overlay's grab handle. The user's system accent, always:
+        /// Selection and the desktop widget's grab handle. The user's system accent, always:
         /// this is the colour every other Mac app on their screen is selecting with,
         /// and it is not AirStat's to reassign.
         public static var accent: Color { Color(nsColor: .controlAccentColor) }
@@ -135,7 +135,7 @@ public enum Design {
     // MARK: - Shape
 
     public enum Radius {
-        /// Panel and overlay corners. 12 matches the curvature macOS gives menus and
+        /// Panel and desktop widget corners. 12 matches the curvature macOS gives menus and
         /// Control Center popovers at this size.
         public static let panel: CGFloat = 12
         public static let card: CGFloat = 8

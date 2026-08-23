@@ -406,7 +406,7 @@ struct MainActorPerformanceTests {
             var value = 0.5
             let result = Benchmark.measure("SettingsStore.update", iterations: 300) {
                 value = value > 0.9 ? 0.5 : value + 0.01
-                store.update { $0.overlay.opacity = value }
+                store.update { $0.desktopWidget.opacity = value }
             }
             // Copies the tree, mutates, sanitises, compares for equality and schedules
             // a save. A slider drag runs this at display rate.

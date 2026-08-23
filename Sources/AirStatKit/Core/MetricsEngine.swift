@@ -4,7 +4,7 @@ import Observation
 /// The app's single source of truth for live system data.
 ///
 /// Owns the background `SamplingCore`, folds every snapshot into bounded history,
-/// and translates UI state (panel open, overlay shown, screen locked) into the
+/// and translates UI state (panel open, desktop widget shown, screen locked) into the
 /// sampling activity level that decides how hard the machine works.
 @MainActor
 @Observable
@@ -37,7 +37,7 @@ public final class MetricsEngine {
     private let settingsStore: SettingsStore
     private var core: SamplingCore?
     private var isPanelVisible = false
-    private var isOverlayVisible = false
+    private var isDesktopWidgetVisible = false
     private var isMenuBarOccluded = false
     private var isSystemAsleep = false
     /// Established by `beginObservingPowerState()` rather than at init, so the engine's
@@ -91,9 +91,9 @@ public final class MetricsEngine {
         if visible { core?.sampleNow() }
     }
 
-    public func setOverlayVisible(_ visible: Bool) {
-        guard visible != isOverlayVisible else { return }
-        isOverlayVisible = visible
+    public func setDesktopWidgetVisible(_ visible: Bool) {
+        guard visible != isDesktopWidgetVisible else { return }
+        isDesktopWidgetVisible = visible
         updateActivity()
     }
 
@@ -144,8 +144,8 @@ public final class MetricsEngine {
             newActivity = .suspended
         } else if isPanelVisible {
             newActivity = .panel
-        } else if isOverlayVisible {
-            newActivity = .overlay
+        } else if isDesktopWidgetVisible {
+            newActivity = .desktopWidget
         } else if isLowPowerPaused {
             // Ranked below the surfaces the user opened deliberately and above the
             // occlusion throttle: a pause is the stronger of the two power measures,
@@ -165,7 +165,7 @@ public final class MetricsEngine {
 
     private var currentRequiredSources: Set<CollectorID> {
         settingsStore.settings.requiredSources(panelVisible: isPanelVisible,
-                                               overlayVisible: isOverlayVisible)
+                                               desktopWidgetVisible: isDesktopWidgetVisible)
     }
 
     // MARK: Settings
@@ -210,7 +210,7 @@ public final class MetricsEngine {
 
     /// Re-pushes the whole configuration, and is called for *any* accepted settings
     /// change: the engine wakes on `settingsStore.revision`, which bumps on every
-    /// mutation. Changing an overlay colour re-pushes the interval, the enabled-source
+    /// mutation. Changing a desktop widget colour re-pushes the interval, the enabled-source
     /// set and the public IP flag.
     ///
     /// That is harmless only because every setter it calls early-returns on an

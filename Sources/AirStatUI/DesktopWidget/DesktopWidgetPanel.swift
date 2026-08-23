@@ -1,25 +1,25 @@
 import AppKit
 
-/// Mouse handling the overlay window hands back to its controller.
+/// Mouse handling the desktop widget window hands back to its controller.
 ///
 /// Returning `true` means the controller consumed the event and AppKit must not see
-/// it, which is how a drag on the overlay never reaches the SwiftUI content.
+/// it, which is how a drag on the desktop widget never reaches the SwiftUI content.
 @MainActor
-protocol OverlayInteractionHandler: AnyObject {
-    func overlayMouseDown(_ event: NSEvent) -> Bool
-    func overlayMouseDragged(_ event: NSEvent) -> Bool
-    func overlayMouseUp(_ event: NSEvent) -> Bool
-    func overlayRightMouseDown(_ event: NSEvent)
+protocol DesktopWidgetInteractionHandler: AnyObject {
+    func desktopWidgetMouseDown(_ event: NSEvent) -> Bool
+    func desktopWidgetMouseDragged(_ event: NSEvent) -> Bool
+    func desktopWidgetMouseUp(_ event: NSEvent) -> Bool
+    func desktopWidgetRightMouseDown(_ event: NSEvent)
 }
 
-/// The overlay's window.
+/// The desktop widget's window.
 ///
-/// A `.nonactivatingPanel` because the overlay must never become key: taking key
+/// A `.nonactivatingPanel` because the desktop widget must never become key: taking key
 /// status would pull the insertion point out of whatever the user is typing in, and
 /// an always-on-top readout that steals focus is worse than no readout at all.
-final class OverlayPanel: NSPanel {
+final class DesktopWidgetPanel: NSPanel {
 
-    weak var interaction: (any OverlayInteractionHandler)?
+    weak var interaction: (any DesktopWidgetInteractionHandler)?
 
     init(contentView: NSView) {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 220, height: 120),
@@ -35,16 +35,16 @@ final class OverlayPanel: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .none
         isRestorable = false
-        // The controller reclaims this window with `close()` when the overlay is turned
+        // The controller reclaims this window with `close()` when the desktop widget is turned
         // off, and the default here would have the window release itself as well —
         // an over-release on a window ARC already owns.
         isReleasedWhenClosed = false
         // Dragging is handled explicitly rather than by AppKit's window-background
         // drag: AppKit gives no notification when the drag ends, and the drop is
-        // exactly where the overlay has to snap to a corner and persist its position.
+        // exactly where the desktop widget has to snap to a corner and persist its position.
         isMovableByWindowBackground = false
         isMovable = true
-        title = "AirStats Overlay"
+        title = "AirStats Desktop Widget"
         self.contentView = contentView
     }
 
@@ -57,13 +57,13 @@ final class OverlayPanel: NSPanel {
     override func sendEvent(_ event: NSEvent) {
         switch event.type {
         case .leftMouseDown:
-            if interaction?.overlayMouseDown(event) == true { return }
+            if interaction?.desktopWidgetMouseDown(event) == true { return }
         case .leftMouseDragged:
-            if interaction?.overlayMouseDragged(event) == true { return }
+            if interaction?.desktopWidgetMouseDragged(event) == true { return }
         case .leftMouseUp:
-            if interaction?.overlayMouseUp(event) == true { return }
+            if interaction?.desktopWidgetMouseUp(event) == true { return }
         case .rightMouseDown:
-            interaction?.overlayRightMouseDown(event)
+            interaction?.desktopWidgetRightMouseDown(event)
             return
         default:
             break
@@ -72,12 +72,12 @@ final class OverlayPanel: NSPanel {
     }
 }
 
-/// Tracking-area owner for the overlay.
+/// Tracking-area owner for the desktop widget.
 ///
 /// A separate object rather than a custom view so the hosting view can stay the
 /// window's content view; `NSTrackingArea` sends its messages to whatever owner it is
 /// given, and an `NSResponder` subclass is the smallest thing that can receive them.
-final class OverlayHoverProxy: NSResponder {
+final class DesktopWidgetHoverProxy: NSResponder {
     var onPointerEntered: (() -> Void)?
     var onPointerExited: (() -> Void)?
     var onPointerMoved: ((NSEvent) -> Void)?

@@ -22,7 +22,7 @@ public struct DisplayGeometry: Equatable, Sendable {
     public static var current: [DisplayGeometry] { NSScreen.screens.map(DisplayGeometry.init) }
 }
 
-/// Where the overlay goes, as pure geometry.
+/// Where the desktop widget goes, as pure geometry.
 ///
 /// Deliberately separated from the window it positions. Display arrangements that
 /// break placement — a saved position on a monitor that has since been unplugged, a
@@ -30,7 +30,7 @@ public struct DisplayGeometry: Equatable, Sendable {
 /// display that is now the second screen — are close to impossible to stage by hand
 /// and trivial to state as rectangles, so the rules live somewhere they can be
 /// checked without a Mac in that configuration.
-public enum OverlayPlacement {
+public enum DesktopWidgetPlacement {
 
     /// The display a frame mostly sits on, by overlap area. Nil when it overlaps none
     /// of them, which is the signal that a stored position is stale.
@@ -59,7 +59,7 @@ public enum OverlayPlacement {
                       width: frame.width, height: frame.height)
     }
 
-    public static func cornerFrame(_ corner: OverlayCorner, size: NSSize,
+    public static func cornerFrame(_ corner: DesktopWidgetCorner, size: NSSize,
                                    visible: NSRect, margin: CGFloat) -> NSRect {
         let origin: NSPoint
         switch corner {
@@ -69,20 +69,20 @@ public enum OverlayPlacement {
             origin = NSPoint(x: visible.minX + margin, y: visible.minY + margin)
         case .bottomRight:
             origin = NSPoint(x: visible.maxX - size.width - margin, y: visible.minY + margin)
-        // A free overlay with no saved position has never been placed; the default
-        // corner is the same one `OverlaySettings` starts at.
+        // A free desktop widget with no saved position has never been placed; the default
+        // corner is the same one `DesktopWidgetSettings` starts at.
         case .topRight, .free:
             origin = NSPoint(x: visible.maxX - size.width - margin, y: visible.maxY - size.height - margin)
         }
         return clamp(NSRect(origin: origin, size: size), into: visible)
     }
 
-    /// The frame the overlay should occupy right now.
+    /// The frame the desktop widget should occupy right now.
     ///
     /// - Parameters:
     ///   - currentFrame: where the window is at the moment, used to keep a corner on
-    ///     the display the overlay already lives on instead of yanking it to the primary.
-    public static func resolvedFrame(corner: OverlayCorner,
+    ///     the display the desktop widget already lives on instead of yanking it to the primary.
+    public static func resolvedFrame(corner: DesktopWidgetCorner,
                                      savedOrigin: NSPoint?,
                                      size: NSSize,
                                      displays: [DisplayGeometry],
@@ -109,12 +109,12 @@ public enum OverlayPlacement {
         }
     }
 
-    /// The corner a dropped overlay should snap to, or `.free` when it was dropped
-    /// somewhere in the middle. Snapping is what converts a hand-placed overlay into a
+    /// The corner a dropped desktop widget should snap to, or `.free` when it was dropped
+    /// somewhere in the middle. Snapping is what converts a hand-placed desktop widget into a
     /// position that survives a resolution change.
     public static func snapCorner(for frame: NSRect, visible: NSRect,
-                                  margin: CGFloat, snapDistance: CGFloat) -> OverlayCorner {
-        let corners: [OverlayCorner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+                                  margin: CGFloat, snapDistance: CGFloat) -> DesktopWidgetCorner {
+        let corners: [DesktopWidgetCorner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
         for corner in corners {
             let target = cornerFrame(corner, size: frame.size, visible: visible, margin: margin)
             if hypot(target.minX - frame.minX, target.minY - frame.minY) <= snapDistance {

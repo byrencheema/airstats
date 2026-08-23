@@ -13,13 +13,13 @@ import AirStatKit
 public enum OffscreenRenderer {
 
     public enum Surface: String, CaseIterable, Sendable {
-        case menuBar, panel, overlay, settings
+        case menuBar, panel, desktopWidget, settings
 
         public var label: String {
             switch self {
             case .menuBar: return "menu-bar"
             case .panel: return "panel"
-            case .overlay: return "overlay"
+            case .desktopWidget: return "desktop-widget"
             case .settings: return "settings"
             }
         }
@@ -93,9 +93,9 @@ public enum OffscreenRenderer {
         case .panel:
             return renderHosted(PanelPreviewHost(request: request), appearance: appearance,
                                 width: PanelSettings.width, scale: request.scale)
-        case .overlay:
-            return renderHosted(OverlayPreviewHost(request: request), appearance: appearance,
-                                width: request.settings.overlay.width, scale: request.scale)
+        case .desktopWidget:
+            return renderHosted(DesktopWidgetPreviewHost(request: request), appearance: appearance,
+                                width: request.settings.desktopWidget.width, scale: request.scale)
         case .settings:
             return renderHosted(SettingsPreviewHost(request: request), appearance: appearance,
                                 width: 620, scale: request.scale)
@@ -268,11 +268,11 @@ private struct PanelPreviewHost: View {
     }
 }
 
-private struct OverlayPreviewHost: View {
+private struct DesktopWidgetPreviewHost: View {
     let request: OffscreenRenderer.Request
 
     var body: some View {
-        OverlayRootView(engine: PreviewEngine.make(request), settings: PreviewEngine.store(request))
+        DesktopWidgetRootView(engine: PreviewEngine.make(request), settings: PreviewEngine.store(request))
     }
 }
 

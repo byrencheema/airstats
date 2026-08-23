@@ -16,7 +16,7 @@ An ultra lightweight macOS system monitor.
 AirStats is a system monitor for the Mac menu bar. It reads CPU, memory, GPU, network,
 disk, battery, temperature, process and host statistics from the kernel and shows them in
 three places: the menu bar itself, a panel that drops down when you click the status item,
-and a floating overlay you can leave on your desktop.
+and a desktop widget you can leave on screen.
 
 It is built to be genuinely light. A menu bar monitor runs all day, every day, so AirStats
 holds a few megabytes and a fraction of a percent of one core rather than the tens of
@@ -67,7 +67,7 @@ notarization ticket to the `.dmg`.
 | Path | What lives there |
 | --- | --- |
 | `Sources/AirStatKit` | Collectors, the sampling engine, settings, formatting. No UI. |
-| `Sources/AirStatUI` | Menu bar drawing, panel, overlay, settings window, charts, design system. |
+| `Sources/AirStatUI` | Menu bar drawing, panel, desktop widget, settings window, charts, design system. |
 | `Sources/AirStats` | The executable, app delegate, and the probe and render commands. |
 | `Tests/AirStatKitTests` | Contract tests for the collectors, plus settings and formatting. |
 | `Scripts/build.sh` | Builds the binary and assembles the `.app`. |

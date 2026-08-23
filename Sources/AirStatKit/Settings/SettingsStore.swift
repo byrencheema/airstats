@@ -89,7 +89,7 @@ public final class SettingsStore {
             case .general: s.general = GeneralSettings()
             case .menuBar: s.menuBar = MenuBarSettings()
             case .charts: s.charts = ChartSettings()
-            case .overlay: s.overlay = OverlaySettings()
+            case .desktopWidget: s.desktopWidget = DesktopWidgetSettings()
             case .notifications: s.notifications = NotificationSettings()
             case .shortcuts: s.shortcuts = ShortcutSettings()
             case .theme: s.theme = ThemeSettings()
@@ -98,7 +98,7 @@ public final class SettingsStore {
     }
 
     public enum SettingsSection: String, Sendable, CaseIterable {
-        case general, menuBar, charts, overlay, notifications, shortcuts, theme
+        case general, menuBar, charts, desktopWidget, notifications, shortcuts, theme
 
         /// What this subtree is called in the window. Here rather than in the UI layer
         /// because the reset menu lists sections, not panes — one pane now edits more
@@ -108,7 +108,7 @@ public final class SettingsStore {
             case .general: return "General"
             case .menuBar: return "Menu Bar"
             case .charts: return "Charts"
-            case .overlay: return "Overlay"
+            case .desktopWidget: return "Desktop Widget"
             case .notifications: return "Notifications"
             case .shortcuts: return "Shortcuts"
             case .theme: return "Colors"
@@ -208,12 +208,12 @@ public final class SettingsStore {
         if s.menuBar.items.isEmpty { s.menuBar.items = MenuBarSettings.defaultItems }
         // A user who disables every menu bar item still needs a way to open the app.
         if s.menuBar.enabledItems.isEmpty { s.menuBar.items[0].isEnabled = true }
-        if s.overlay.modules.isEmpty { s.overlay.modules = [.cpu, .memory, .network] }
+        if s.desktopWidget.modules.isEmpty { s.desktopWidget.modules = [.cpu, .memory, .network] }
         s.general.updateInterval = min(max(s.general.updateInterval, 0.5), 60)
         s.charts.historyDuration = min(max(s.charts.historyDuration, 30), 3600)
-        s.overlay.opacity = min(max(s.overlay.opacity, 0.2), 1)
-        s.overlay.inactiveOpacity = min(max(s.overlay.inactiveOpacity, 0.15), s.overlay.opacity)
-        s.overlay.width = min(max(s.overlay.width, 160), 480)
+        s.desktopWidget.opacity = min(max(s.desktopWidget.opacity, 0.2), 1)
+        s.desktopWidget.inactiveOpacity = min(max(s.desktopWidget.inactiveOpacity, 0.15), s.desktopWidget.opacity)
+        s.desktopWidget.width = min(max(s.desktopWidget.width, 160), 480)
         return s
     }
 

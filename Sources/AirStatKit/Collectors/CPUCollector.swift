@@ -95,7 +95,7 @@ public final class CPUCollector: MetricSource {
         // not exist yet and will on the next tick. The UI treats the two differently
         // — a pending module holds its full height open, because it is about to be
         // filled in, and a failed one collapses — so calling this a failure made the
-        // overlay open a row short and then jump.
+        // desktop widget open a row short and then jump.
         guard hasBaseline, !context.isFirstSample, !context.didWakeFromSleep,
               previousTicks.count == wanted else {
             return .pending

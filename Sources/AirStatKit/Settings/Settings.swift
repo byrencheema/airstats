@@ -468,9 +468,9 @@ public struct ChartSettings: Sendable, Codable, Equatable {
     }
 }
 
-// MARK: - Overlay
+// MARK: - Desktop widget
 
-public enum OverlayCorner: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
+public enum DesktopWidgetCorner: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
     case topLeft, topRight, bottomLeft, bottomRight, free
 
     public var label: String {
@@ -484,13 +484,13 @@ public enum OverlayCorner: String, Sendable, Codable, CaseIterable, Equatable, H
     }
 }
 
-/// Which stack of windows the overlay belongs to.
+/// Which stack of windows the desktop widget belongs to.
 ///
 /// This was a single "float above everything" switch, which could only ever say
 /// *how far up*. A readout pinned to the wallpaper is a different thing from a HUD:
 /// it is furniture the desktop happens to have, visible when nothing is covering it
 /// and never once in the way of anything.
-public enum OverlayDepth: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
+public enum DesktopWidgetDepth: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
     /// Over every window, including a full-screen app.
     case aboveEverything
     /// A normal floating utility window: above the app you are using, under a
@@ -516,34 +516,34 @@ public enum OverlayDepth: String, Sendable, Codable, CaseIterable, Equatable, Ha
     }
 }
 
-public struct OverlaySettings: Sendable, Codable, Equatable {
+public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
     public var isEnabled: Bool
     public var modules: [PanelModule]
-    public var corner: OverlayCorner
+    public var corner: DesktopWidgetCorner
     /// Saved frame in screen coordinates, used when `corner == .free`.
     public var originX: Double?
     public var originY: Double?
     public var width: Double
     public var opacity: Double
-    /// Let clicks pass through to whatever is beneath the overlay.
+    /// Let clicks pass through to whatever is beneath the desktop widget.
     public var isClickThrough: Bool
-    /// Which stack of windows the overlay belongs to.
-    public var depth: OverlayDepth
+    /// Which stack of windows the desktop widget belongs to.
+    public var depth: DesktopWidgetDepth
     public var showsOnAllSpaces: Bool
-    /// Fade the overlay down until the pointer is near it.
+    /// Fade the desktop widget down until the pointer is near it.
     public var dimsWhenInactive: Bool
     public var inactiveOpacity: Double
     public var isCompact: Bool
 
     public init(isEnabled: Bool = false,
                 modules: [PanelModule] = [.cpu, .memory, .network],
-                corner: OverlayCorner = .topRight,
+                corner: DesktopWidgetCorner = .topRight,
                 originX: Double? = nil,
                 originY: Double? = nil,
                 width: Double = 220,
                 opacity: Double = 0.9,
                 isClickThrough: Bool = false,
-                depth: OverlayDepth = .aboveEverything,
+                depth: DesktopWidgetDepth = .aboveEverything,
                 showsOnAllSpaces: Bool = true,
                 dimsWhenInactive: Bool = true,
                 inactiveOpacity: Double = 0.55,
@@ -578,7 +578,7 @@ public struct OverlaySettings: Sendable, Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         isEnabled = c.value(.isEnabled, or: false)
-        // Deduplicated, because the overlay identifies its rows by the module itself.
+        // Deduplicated, because the desktop widget identifies its rows by the module itself.
         // A hand-edited file listing "cpu" twice gives SwiftUI two views with the same
         // identity in one `ForEach`, which it resolves by animating them into each
         // other and dropping one at random.
@@ -586,17 +586,17 @@ public struct OverlaySettings: Sendable, Codable, Equatable {
         let decodedModules = c.value(.modules, or: [PanelModule.cpu, .memory, .network])
             .filter { seen.insert($0).inserted }
         modules = decodedModules.isEmpty ? [.cpu, .memory, .network] : decodedModules
-        corner = c.value(.corner, or: OverlayCorner.topRight)
+        corner = c.value(.corner, or: DesktopWidgetCorner.topRight)
         originX = try? c.decodeIfPresent(Double.self, forKey: .originX)
         originY = try? c.decodeIfPresent(Double.self, forKey: .originY)
         width = min(max(c.value(.width, or: 220.0), 160), 480)
-        // Never let a stored opacity make the overlay invisible and unrecoverable.
+        // Never let a stored opacity make the desktop widget invisible and unrecoverable.
         opacity = min(max(c.value(.opacity, or: 0.9), 0.2), 1)
         isClickThrough = c.value(.isClickThrough, or: false)
         // `floatsAboveEverything` is what shipped through 1.2.1. A file written by
         // that build has the bool and not the enum, and its two values are the first
         // two cases, so it converts without asking the user anything.
-        if let stored = try? c.decodeIfPresent(OverlayDepth.self, forKey: .depth) {
+        if let stored = try? c.decodeIfPresent(DesktopWidgetDepth.self, forKey: .depth) {
             depth = stored
         } else {
             let legacy = try? decoder.container(keyedBy: LegacyKeys.self)
@@ -743,12 +743,16 @@ public struct KeyboardShortcut: Sendable, Codable, Equatable, Hashable {
 }
 
 public enum ShortcutAction: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
-    case togglePanel, toggleOverlay, openSettings
+    case togglePanel = "togglePanel"
+    // The raw value is what a saved binding is keyed by on disk, so it stays
+    // "toggleOverlay" even though the feature is now the desktop widget.
+    case toggleDesktopWidget = "toggleOverlay"
+    case openSettings = "openSettings"
 
     public var label: String {
         switch self {
         case .togglePanel: return "Show / Hide Panel"
-        case .toggleOverlay: return "Show / Hide Overlay"
+        case .toggleDesktopWidget: return "Show / Hide Desktop Widget"
         case .openSettings: return "Open Settings"
         }
     }
@@ -937,7 +941,7 @@ public struct Settings: Sendable, Codable, Equatable {
     public var menuBar: MenuBarSettings
     public var panel: PanelSettings
     public var charts: ChartSettings
-    public var overlay: OverlaySettings
+    public var desktopWidget: DesktopWidgetSettings
     public var notifications: NotificationSettings
     public var shortcuts: ShortcutSettings
     public var theme: ThemeSettings
@@ -949,7 +953,7 @@ public struct Settings: Sendable, Codable, Equatable {
                 menuBar: MenuBarSettings = .init(),
                 panel: PanelSettings = .init(),
                 charts: ChartSettings = .init(),
-                overlay: OverlaySettings = .init(),
+                desktopWidget: DesktopWidgetSettings = .init(),
                 notifications: NotificationSettings = .init(),
                 shortcuts: ShortcutSettings = .init(),
                 theme: ThemeSettings = .init()) {
@@ -958,15 +962,17 @@ public struct Settings: Sendable, Codable, Equatable {
         self.menuBar = menuBar
         self.panel = panel
         self.charts = charts
-        self.overlay = overlay
+        self.desktopWidget = desktopWidget
         self.notifications = notifications
         self.shortcuts = shortcuts
         self.theme = theme
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, general, menuBar, panel, charts, overlay, notifications
+        case schemaVersion, general, menuBar, panel, charts, notifications
         case shortcuts, theme
+        // Stored under the old name so an installed copy keeps its settings.
+        case desktopWidget = "overlay"
     }
 
     public init(from decoder: Decoder) throws {
@@ -976,7 +982,7 @@ public struct Settings: Sendable, Codable, Equatable {
         menuBar = c.value(.menuBar, or: MenuBarSettings())
         panel = c.value(.panel, or: PanelSettings())
         charts = c.value(.charts, or: ChartSettings())
-        overlay = c.value(.overlay, or: OverlaySettings())
+        desktopWidget = c.value(.desktopWidget, or: DesktopWidgetSettings())
         notifications = c.value(.notifications, or: NotificationSettings())
         shortcuts = c.value(.shortcuts, or: ShortcutSettings())
         theme = c.value(.theme, or: ThemeSettings())
@@ -986,14 +992,14 @@ public struct Settings: Sendable, Codable, Equatable {
     ///
     /// This drives the engine's enabled-source set, and is why a user who only
     /// wants a CPU readout never pays for IOKit battery or SMC sensor polling.
-    public func requiredSources(panelVisible: Bool, overlayVisible: Bool) -> Set<CollectorID> {
+    public func requiredSources(panelVisible: Bool, desktopWidgetVisible: Bool) -> Set<CollectorID> {
         var sources = Set<CollectorID>()
         for item in menuBar.enabledItems { sources.insert(item.metric.requiredSource) }
         if panelVisible {
             for module in panel.visibleModules { sources.insert(module.requiredSource) }
         }
-        if overlayVisible {
-            for module in overlay.modules { sources.insert(module.requiredSource) }
+        if desktopWidgetVisible {
+            for module in desktopWidget.modules { sources.insert(module.requiredSource) }
         }
         if notifications.isEnabled {
             for rule in notifications.enabledRules { sources.insert(rule.metric.requiredSource) }

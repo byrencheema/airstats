@@ -46,8 +46,8 @@ public enum SamplingActivity: Int, Sendable, Equatable, Hashable, Comparable {
     case occluded = 1
     /// Normal state: menu bar visible, panel closed.
     case menuBar = 2
-    /// Overlay window on screen. Same cadence as menu bar, wider source set.
-    case overlay = 3
+    /// Desktop widget window on screen. Same cadence as menu bar, wider source set.
+    case desktopWidget = 3
     /// Panel is open. Full cadence, all enabled sources including processes.
     case panel = 4
 
@@ -59,7 +59,7 @@ public enum SamplingActivity: Int, Sendable, Equatable, Hashable, Comparable {
         case .suspended: return .infinity
         case .occluded: return 4
         case .menuBar: return 1
-        case .overlay: return 1
+        case .desktopWidget: return 1
         case .panel: return 1
         }
     }
