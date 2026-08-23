@@ -32,15 +32,31 @@ public final class NotificationAuthority {
     public private(set) var state: State = .undetermined
 
     private var task: Task<Void, Never>?
-    private var presenter: ForegroundPresenter?
+    private var relay: NotificationRelay?
+    /// What to run when the user clicks a notification, by the identifier it was
+    /// posted under. A dictionary rather than one closure for the same reason the
+    /// delegate is shared: two features post from here, and a single slot would let
+    /// whichever registered second silently swallow the other one's clicks.
+    private var openHandlers: [String: () -> Void] = [:]
 
     public init() {}
+
+    /// Registers what a click on `identifier` should do.
+    ///
+    /// Without this a notification is a dead end: the system's own answer to a click is
+    /// to activate the app, which for a menu bar app with no window of its own is
+    /// indistinguishable from nothing happening.
+    /// Passing nil clears the registration, so a feature that stops can stop
+    /// answering for clicks it will no longer act on.
+    public func onOpen(_ identifier: String, run handler: (() -> Void)?) {
+        openHandlers[identifier] = handler
+    }
 
     /// True while a prompt is out or a delegate is installed, so a caller can assert
     /// that `reset()` really let go. Same reason `PanelController` publishes its
     /// monitor count: a delegate that outlives teardown is silent, and nothing looks
     /// wrong until the app is presenting banners on behalf of a shut-down feature.
-    public var isRunning: Bool { task != nil || presenter != nil }
+    public var isRunning: Bool { task != nil || relay != nil }
 
     /// Asks if nobody has yet, and reports whether posting is worth attempting.
     ///
@@ -79,9 +95,12 @@ public final class NotificationAuthority {
             self.task = nil
             self.state = granted ? .granted : .unavailable
             if granted {
-                let presenter = ForegroundPresenter()
-                center.delegate = presenter
-                self.presenter = presenter
+                let relay = NotificationRelay()
+                relay.onOpen = { [weak self] identifier in
+                    MainActor.assumeIsolated { self?.openHandlers[identifier]?() }
+                }
+                center.delegate = relay
+                self.relay = relay
             }
             WindowLog.log("notification authorisation \(granted ? "granted" : "refused") for \(why)")
         }
@@ -107,26 +126,43 @@ public final class NotificationAuthority {
     public func reset() {
         task?.cancel()
         task = nil
-        if let presenter {
+        if let relay {
             // The delegate is a process-wide slot on a shared singleton, so this clears
-            // it only while it still holds *our* presenter. Nothing else in the app
-            // wants that slot today, and a teardown that silently unhooks whoever does
-            // want it next is the kind of thing nobody finds for months.
+            // it only while it still holds *our* relay. Nothing else in the app wants
+            // that slot today, and a teardown that silently unhooks whoever does want
+            // it next is the kind of thing nobody finds for months.
             let center = UNUserNotificationCenter.current()
-            if center.delegate === presenter { center.delegate = nil }
-            self.presenter = nil
+            if center.delegate === relay { center.delegate = nil }
+            self.relay = nil
         }
         state = .undetermined
     }
 }
 
+/// The two halves of the delegate slot: showing a banner, and hearing a click on one.
+///
 /// macOS suppresses banners for the app that is currently frontmost. AirStats is
 /// frontmost whenever its settings window has focus, which is exactly where a user
 /// goes to set these rules up, so present them anyway.
-private final class ForegroundPresenter: NSObject, UNUserNotificationCenterDelegate {
+private final class NotificationRelay: NSObject, UNUserNotificationCenterDelegate {
+
+    var onOpen: ((String) -> Void)?
+
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 willPresent notification: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .sound])
+    }
+
+    /// Only the plain click. A notification with buttons of its own would arrive here
+    /// too, and answering those the same way would run the default action for a button
+    /// the user pressed to do something else.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        if response.actionIdentifier == UNNotificationDefaultActionIdentifier {
+            onOpen?(response.notification.request.identifier)
+        }
+        completionHandler()
     }
 }

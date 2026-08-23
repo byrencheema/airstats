@@ -20,6 +20,9 @@ public final class UpdateAnnouncer {
     /// thing that has to survive a version it no longer understands.
     private static let announcedKey = "AirStatsAnnouncedVersion"
 
+    /// What the notice is posted under, and so what a click on it comes back through.
+    private static let identifier = "update.available"
+
     private let updates: SoftwareUpdater
     private let authority: NotificationAuthority
     private let defaults: UserDefaults
@@ -46,6 +49,11 @@ public final class UpdateAnnouncer {
             _ = updates.pendingVersion
             _ = authority.state
         }
+        // A notice nobody can act on is worse than none: the system's own answer to a
+        // click is to activate the app, and a menu bar app with no window of its own
+        // looks broken doing that. Sparkle is holding the update quietly by this point,
+        // so asking it to check is what puts the window in front of the user.
+        authority.onOpen(Self.identifier) { [updates] in updates.checkForUpdates() }
         observationTask = Task { @MainActor [weak self] in
             for await _ in changes {
                 guard let self else { return }
@@ -56,6 +64,7 @@ public final class UpdateAnnouncer {
     }
 
     public func stop() {
+        authority.onOpen(Self.identifier, run: nil)
         observationTask?.cancel()
         observationTask = nil
     }
@@ -82,9 +91,9 @@ public final class UpdateAnnouncer {
         // One identifier for the whole feature, not one per version: a user who has been
         // away long enough to miss two releases wants the current notice, not a stack of
         // superseded ones.
-        authority.post(identifier: "update.available",
+        authority.post(identifier: Self.identifier,
                        title: "AirStats \(version) is available",
-                       body: "You are running \(currentVersion). Open AirStats to install it.")
+                       body: "You are running \(currentVersion). Click to install it.")
         // Written after the notification is handed over rather than before, but without
         // waiting to hear it was displayed: the failure this guards against is
         // repetition, and a banner nobody saw is a far smaller loss than a weekly one.
