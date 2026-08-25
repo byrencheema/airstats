@@ -22,12 +22,12 @@ public struct PanelRootView: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let version = updates?.pendingVersion {
-                PanelUpdateRow(version: version) { [updates] in
+            if let pending = updates?.pending {
+                PanelUpdateRow(update: pending) { [updates] in
                     // Sparkle's window is a window, and the panel closes when it loses
                     // key, so it would take the update with it on the way out.
                     actions.dismiss()
-                    updates?.checkForUpdates()
+                    updates?.installPending()
                 }
                 PanelSeparator()
             }
@@ -110,8 +110,16 @@ struct PanelSeparator: View {
 /// is furniture, and it is one row rather than a banner because an update is not more
 /// important than the readings the user opened the panel to see.
 struct PanelUpdateRow: View {
-    let version: String
+    let update: PendingUpdate
     let install: @MainActor () -> Void
+
+    /// A staged update wants a relaunch and nothing else, so the row says so instead
+    /// of promising an install it has already done.
+    private var headline: String {
+        update.isReadyToInstall ? "AirStats \(update.version) is ready" : "AirStats \(update.version) is available"
+    }
+
+    private var action: String { update.isReadyToInstall ? "Restart" : "Install" }
 
     @State private var isHovering = false
 
@@ -121,11 +129,11 @@ struct PanelUpdateRow: View {
                 Image(systemName: "arrow.down.circle.fill")
                     .font(Design.Text.label)
                     .foregroundStyle(Design.Palette.accent)
-                Text("A new version is available")
+                Text(headline)
                     .font(Design.Text.label)
                     .foregroundStyle(Design.Palette.primaryText)
                 Spacer(minLength: Design.Space.m)
-                Text("Install")
+                Text(action)
                     .font(Design.Text.caption)
                     .foregroundStyle(Design.Palette.accent)
             }
@@ -140,8 +148,9 @@ struct PanelUpdateRow: View {
                 isHovering = hovering
             }
         }
-        .accessibilityLabel("A new version is available, AirStats \(version)")
-        .accessibilityHint("Opens the updater to install it")
+        .accessibilityLabel(headline)
+        .accessibilityHint(update.isReadyToInstall ? "Relaunches AirStats into the new version"
+                                                   : "Opens the updater to install it")
     }
 }
 

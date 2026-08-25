@@ -33,4 +33,48 @@ struct UpdateAnnouncerTests {
         #expect(!UpdateAnnouncer.shouldAnnounce(pending: nil, announced: "1.2"))
         #expect(!UpdateAnnouncer.shouldAnnounce(pending: "", announced: nil))
     }
+
+    @Test("an update that will install itself is not announced")
+    func staysQuietWhenInstallingAutomatically() {
+        #expect(!UpdateAnnouncer.shouldAnnounce(pending: "1.3", announced: nil, installsAutomatically: true))
+    }
+}
+
+/// The row survives a relaunch by being written down, and what is written down has to
+/// be judged against the bundle that reads it back: an install leaves the record for
+/// the version now running, and showing that as news would be a row that never clears.
+@Suite("A pending update outlives the process")
+struct PendingUpdateTests {
+
+    @Test("a newer build than the one running is restored")
+    func restoresNewer() {
+        #expect(SoftwareUpdater.shouldRestore(pendingBuild: "8", runningBuild: "7"))
+        #expect(SoftwareUpdater.shouldRestore(pendingBuild: "10", runningBuild: "9"))
+    }
+
+    @Test("the running build, or an older one, is dropped")
+    func dropsInstalled() {
+        #expect(!SoftwareUpdater.shouldRestore(pendingBuild: "7", runningBuild: "7"))
+        #expect(!SoftwareUpdater.shouldRestore(pendingBuild: "6", runningBuild: "7"))
+        #expect(!SoftwareUpdater.shouldRestore(pendingBuild: "", runningBuild: "7"))
+        #expect(!SoftwareUpdater.shouldRestore(pendingBuild: "8", runningBuild: nil))
+    }
+
+    /// Sparkle reports the same item from several delegates in no fixed order, and a
+    /// "found" arriving after "staged" is the same update again, not a step back.
+    @Test("the stage climbs and never falls")
+    func stageOnlyClimbs() {
+        let ready = PendingUpdate(version: "1.4", build: "8", stage: .ready)
+        let found = PendingUpdate(version: "1.4", build: "8", stage: .available)
+        #expect(SoftwareUpdater.merge(current: ready, incoming: found).stage == .ready)
+        #expect(SoftwareUpdater.merge(current: found, incoming: ready).stage == .ready)
+        #expect(SoftwareUpdater.merge(current: nil, incoming: found).stage == .available)
+    }
+
+    @Test("a different release replaces the record outright")
+    func newReleaseReplaces() {
+        let ready = PendingUpdate(version: "1.4", build: "8", stage: .ready)
+        let next = PendingUpdate(version: "1.5", build: "9", stage: .available)
+        #expect(SoftwareUpdater.merge(current: ready, incoming: next) == next)
+    }
 }

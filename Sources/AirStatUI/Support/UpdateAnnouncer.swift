@@ -46,7 +46,8 @@ public final class UpdateAnnouncer {
         // granted permission at the prompt this feature raised would hear nothing until
         // the next release.
         let changes = ObservedChanges { [updates, authority] in
-            _ = updates.pendingVersion
+            _ = updates.pending
+            _ = updates.installsAutomatically
             _ = authority.state
         }
         // A notice nobody can act on is worse than none: the system's own answer to a
@@ -72,15 +73,21 @@ public final class UpdateAnnouncer {
     /// Whether this release still has something to say. Pure, because it is the whole
     /// anti-nag mechanism and its failure mode only shows up a release later in the
     /// wild: a banner every launch forever, or a release nobody is told about.
-    public nonisolated static func shouldAnnounce(pending: String?, announced: String?) -> Bool {
-        guard let pending, !pending.isEmpty else { return false }
+    ///
+    /// Silent when installs are automatic: the update will land on its own the next
+    /// time the screen locks, and a banner asking the user to do something the app is
+    /// about to do itself is the nag this feature exists to avoid.
+    public nonisolated static func shouldAnnounce(pending: String?, announced: String?,
+                                                  installsAutomatically: Bool = false) -> Bool {
+        guard let pending, !pending.isEmpty, !installsAutomatically else { return false }
         return pending != announced
     }
 
     private func announceIfNeeded() {
-        guard let version = updates.pendingVersion,
+        guard let version = updates.pending?.version,
               Self.shouldAnnounce(pending: version,
-                                  announced: defaults.string(forKey: Self.announcedKey)) else { return }
+                                  announced: defaults.string(forKey: Self.announcedKey),
+                                  installsAutomatically: updates.installsAutomatically) else { return }
 
         // Asked only now, with a release actually in hand. This is the one feature that
         // ships on, so requesting at launch would put a permission dialog in front of

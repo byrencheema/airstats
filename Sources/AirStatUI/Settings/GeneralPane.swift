@@ -86,6 +86,11 @@ struct GeneralPane: View {
                 if let checked = lastCheckedNote {
                     SettingsFootnote(checked)
                 }
+                // Sparkle stamps the check date on failure too, so without this line a
+                // feed that has been unreachable for a month reads as checked just now.
+                if let failure = updater?.lastCheckFailure {
+                    SettingsFootnote("The last check failed: \(failure)")
+                }
             } header: {
                 Text("Updates")
             } footer: {
