@@ -1,6 +1,18 @@
 import SwiftUI
 import AppKit
+import Observation
 import AirStatKit
+
+/// Ephemeral presentation state shared by the panel's SwiftUI tree and its AppKit
+/// controller. Settings remain the durable truth; the override exists only long enough
+/// to measure and animate one disclosure as a coordinated transaction.
+@MainActor
+@Observable
+final class PanelLayoutState {
+    var collapsedModulesOverride: Set<PanelModule>?
+    var isDisclosureTransitionActive = false
+    @ObservationIgnored var toggleModule: ((PanelModule) -> Void)?
+}
 
 /// Root of the click-down panel.
 ///
@@ -13,11 +25,22 @@ public struct PanelRootView: View {
     private let settings: SettingsStore
     /// Absent in the offscreen renderer, which has no Sparkle to ask.
     private let updates: SoftwareUpdater?
+    /// Absent in renderers and previews, where disclosure writes settings directly.
+    private let layout: PanelLayoutState?
 
     public init(engine: MetricsEngine, settings: SettingsStore, updates: SoftwareUpdater? = nil) {
         self.engine = engine
         self.settings = settings
         self.updates = updates
+        self.layout = nil
+    }
+
+    init(engine: MetricsEngine, settings: SettingsStore, updates: SoftwareUpdater?,
+         layout: PanelLayoutState) {
+        self.engine = engine
+        self.settings = settings
+        self.updates = updates
+        self.layout = layout
     }
 
     public var body: some View {
@@ -35,7 +58,8 @@ public struct PanelRootView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(modules.enumerated()), id: \.element) { index, module in
                         if index > 0 { PanelSeparator(isVisible: separatorNeeded(before: index)) }
-                        PanelModuleView(module: module, engine: engine, settings: settings)
+                        PanelModuleView(module: module, engine: engine, settings: settings,
+                                        layout: layout)
                     }
                 }
                 .padding(.vertical, Design.Space.xs)
@@ -63,7 +87,8 @@ public struct PanelRootView: View {
     /// list. So a separator appears only where an expanded module begins or ends, which
     /// is exactly where the eye needs to know a block started.
     private func separatorNeeded(before index: Int) -> Bool {
-        let collapsed = settings.settings.panel.collapsedModules
+        let collapsed = layout?.collapsedModulesOverride
+            ?? settings.settings.panel.collapsedModules
         let previous = modules[index - 1]
         let current = modules[index]
         return !collapsed.contains(previous) || !collapsed.contains(current)

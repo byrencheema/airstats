@@ -20,6 +20,8 @@ public final class PanelController: NSObject, NSWindowDelegate {
     /// Absent in the offscreen renderer. The panel's update row is drawn from it.
     private let updates: SoftwareUpdater?
     private var window: PanelWindow?
+    private var layout: PanelLayoutState?
+    private var isDisclosureTransitionActive = false
 
     /// Every `NSEvent` monitor and notification observer this controller owns, in one
     /// place. Two collections, one lifetime: they are installed together when the
@@ -138,6 +140,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
             guard !Task.isCancelled, let self, !self.isVisible, let window = self.window else { return }
             self.releaseTask = nil
             self.window = nil
+            self.layout = nil
             self.lastAnchor = nil
             self.lastScreen = nil
             // Dropping the delegate first: `close` notifies it, and this controller has
@@ -161,7 +164,12 @@ public final class PanelController: NSObject, NSWindowDelegate {
 
     private func existingOrNewWindow() -> PanelWindow {
         if let window { return window }
-        let root = PanelRootView(engine: engine, settings: settings, updates: updates)
+        let layout = PanelLayoutState()
+        layout.toggleModule = { [weak self] module in
+            self?.toggleModule(module)
+        }
+        let root = PanelRootView(engine: engine, settings: settings, updates: updates,
+                                 layout: layout)
             .environment(\.panelActions, PanelActions(
                 openSettings: { [weak self] in self?.onRequestSettings?() },
                 quit: { [weak self] in self?.onRequestQuit?() },
@@ -177,11 +185,103 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // Escape is handled here as well as by the key monitor, so it still works if
         // the panel is key but the monitor is not installed.
         window.onCancel = { [weak self] in self?.hide() }
+        self.layout = layout
         self.window = window
         return window
     }
 
     // MARK: Geometry
+
+    /// Toggle one module as a single AppKit/SwiftUI transaction.
+    ///
+    /// SwiftUI's intrinsic height is an animation value, so following each invalidation
+    /// makes the window chase the content one run-loop turn behind. Instead, stage the
+    /// final hierarchy synchronously to obtain one destination, restore the current
+    /// hierarchy before anything is displayed, then animate both systems to that one
+    /// destination. Intrinsic callbacks and resize delegate re-entry are ignored until
+    /// the transaction has completed.
+    func toggleModule(_ module: PanelModule) {
+        guard !isDisclosureTransitionActive else { return }
+
+        let current = settings.settings.panel.collapsedModules
+        var target = current
+        if target.contains(module) {
+            target.remove(module)
+        } else {
+            target.insert(module)
+        }
+
+        guard let window, isVisible, let layout else {
+            settings.update { $0.panel.collapsedModules = target }
+            return
+        }
+
+        isDisclosureTransitionActive = true
+        layout.isDisclosureTransitionActive = true
+
+        // Measure the final hierarchy without allowing the staging state to animate or
+        // reach the screen. The window itself remains on its current frame throughout.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            layout.collapsedModulesOverride = target
+        }
+        window.layoutIfNeeded()
+        let fitting = window.contentView?.fittingSize
+            ?? NSSize(width: PanelSettings.width, height: window.frame.height)
+        let destination = targetFrame(for: fitting, anchoredTo: lastAnchor, on: lastScreen)
+
+        withTransaction(transaction) {
+            layout.collapsedModulesOverride = current
+        }
+        window.layoutIfNeeded()
+
+        // Persist behind the presentation override so this write cannot restructure the
+        // visible tree before the coordinated transition begins.
+        settings.update { $0.panel.collapsedModules = target }
+
+        let duration = disclosureDuration
+        if duration == 0 {
+            withTransaction(transaction) {
+                layout.collapsedModulesOverride = target
+            }
+            window.setFrame(destination, display: true)
+            finishDisclosure(window: window, layout: layout)
+            return
+        }
+
+        withAnimation(Design.Motion.disclosure) {
+            layout.collapsedModulesOverride = target
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            window.animator().setFrame(destination, display: true)
+        } completionHandler: { [weak self, weak window, weak layout] in
+            MainActor.assumeIsolated {
+                guard let self, let window, let layout else { return }
+                self.finishDisclosure(window: window, layout: layout)
+            }
+        }
+    }
+
+    private var disclosureDuration: TimeInterval {
+        Design.Motion.respectingAccessibility(Design.Motion.disclosure) == nil
+            ? 0 : Design.Motion.disclosureDuration
+    }
+
+    private func finishDisclosure(window: NSWindow, layout: PanelLayoutState) {
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            layout.collapsedModulesOverride = nil
+            layout.isDisclosureTransitionActive = false
+        }
+        isDisclosureTransitionActive = false
+        // Resolve any sub-point discrepancy between the measured destination and the
+        // final intrinsic size without producing a second visible move.
+        position(window, anchoredTo: lastAnchor, on: lastScreen)
+    }
 
     /// Anchor under the status item, nudged so the panel never hangs off the screen,
     /// slides under the menu bar, or grows past the bottom of the display.
@@ -194,6 +294,13 @@ public final class PanelController: NSObject, NSWindowDelegate {
         let fitting = window.contentView?.fittingSize
             ?? NSSize(width: PanelSettings.width, height: 400)
 
+        let frame = targetFrame(for: fitting, anchoredTo: anchor, on: screen)
+        guard frame != window.frame else { return }
+        window.setFrame(frame, display: true)
+    }
+
+    private func targetFrame(for fitting: NSSize, anchoredTo anchor: NSRect?,
+                             on screen: NSScreen?) -> NSRect {
         // The status item's own screen is the right one even when it is not the
         // primary: `visibleFrame` is in global coordinates, so a display whose menu
         // bar sits below or beside the primary's still resolves correctly.
@@ -201,7 +308,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
             ?? anchor.flatMap(Self.screen(containing:))
             ?? NSScreen.main
             ?? NSScreen.screens.first
-        guard let visible = targetScreen?.visibleFrame else { return }
+        guard let visible = targetScreen?.visibleFrame else { return window?.frame ?? .zero }
 
         let margin = Design.Space.m
         let gap = Design.Space.s
@@ -245,10 +352,8 @@ public final class PanelController: NSObject, NSWindowDelegate {
         //
         // Setting the whole frame at once makes an unchanged placement a genuine no-op,
         // which is what stops the re-entrant pass from moving anything.
-        let frame = NSRect(x: x.rounded(), y: y.rounded(),
-                           width: size.width, height: size.height)
-        guard frame != window.frame else { return }
-        window.setFrame(frame, display: true)
+        return NSRect(x: x.rounded(), y: y.rounded(),
+                      width: size.width, height: size.height)
     }
 
     private static func screen(containing rect: NSRect) -> NSScreen? {
@@ -260,6 +365,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
     /// SwiftUI can invalidate its size several times in one layout pass, so the
     /// window is re-measured once on the next turn rather than on every invalidation.
     private func scheduleContentResize() {
+        guard !isDisclosureTransitionActive else { return }
         guard !hasPendingResize else { return }
         hasPendingResize = true
         Task { @MainActor [weak self] in
@@ -275,7 +381,8 @@ public final class PanelController: NSObject, NSWindowDelegate {
     /// SwiftUI grows the window downwards from its bottom-left corner; re-running the
     /// placement re-pins it under the status item and re-applies the height cap.
     public func windowDidResize(_ notification: Notification) {
-        guard let window, isVisible, !isPositioning else { return }
+        guard let window, isVisible, !isPositioning,
+              !isDisclosureTransitionActive else { return }
         position(window, anchoredTo: lastAnchor, on: lastScreen)
     }
 

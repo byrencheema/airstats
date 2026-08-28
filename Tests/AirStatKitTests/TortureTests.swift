@@ -160,6 +160,27 @@ struct WindowTortureTests {
         #expect(controller.activeEventMonitorCount == 0)
     }
 
+    @Test("a disclosure resizes once while keeping the panel's top edge anchored")
+    func disclosureResizesFromTopEdge() async throws {
+        let s = store()
+        let engine = MetricsEngine(settingsStore: s)
+        engine.loadFixture(snapshot: SnapshotFixtures.nominal,
+                           history: MetricHistory(capacity: 60, sampleInterval: 1))
+        let controller = PanelController(engine: engine, settings: s)
+        controller.show(anchoredTo: nil, on: NSScreen.main)
+        let window = try #require(NSApp.windows.first { $0.isVisible })
+        let before = window.frame
+
+        controller.toggleModule(.memory)
+        try await Task.sleep(for: .milliseconds(250))
+
+        #expect(window.frame.height > before.height,
+                "panel did not grow from \(before.height): \(window.frame.height)")
+        #expect(abs(window.frame.maxY - before.maxY) < 1,
+                "panel top moved from \(before.maxY) to \(window.frame.maxY)")
+        controller.hide()
+    }
+
     /// Anchors off the bottom, off the side, and on no screen at all. The placement
     /// clamps rather than producing a window nobody can reach.
     ///
