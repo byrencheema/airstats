@@ -217,12 +217,19 @@ public final class PanelController: NSObject, NSWindowDelegate {
         }
 
         isDisclosureTransitionActive = true
-        layout.isDisclosureTransitionActive = true
+
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        // Enter the transition on its own layout pass, before the hierarchy changes
+        // shape. The scroll indicator is retired here, so the measurement below cannot
+        // be the pass that flashes one.
+        withTransaction(transaction) {
+            layout.isDisclosureTransitionActive = true
+        }
+        window.layoutIfNeeded()
 
         // Measure the final hierarchy without allowing the staging state to animate or
         // reach the screen. The window itself remains on its current frame throughout.
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
         withTransaction(transaction) {
             layout.collapsedModulesOverride = target
         }
@@ -230,6 +237,30 @@ public final class PanelController: NSObject, NSWindowDelegate {
         let fitting = window.contentView?.fittingSize
             ?? NSSize(width: PanelSettings.width, height: window.frame.height)
         let destination = targetFrame(for: fitting, anchoredTo: lastAnchor, on: lastScreen)
+
+        let duration = disclosureDuration
+        // Reduce Motion: nothing to animate, so the ordering is the whole job. The
+        // hierarchy is already staged at its final shape, so the window is taken to the
+        // frame that fits it before anything is drawn, and the setting is written
+        // behind that. Nothing is ever laid out taller than the window holding it, and
+        // implicit AppKit animations are off for the exchange, so neither the scroller
+        // nor the backdrop has anything to fade.
+        if duration == 0 {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            window.setFrame(destination, display: false)
+            settings.update { $0.panel.collapsedModules = target }
+            withTransaction(transaction) {
+                layout.collapsedModulesOverride = nil
+                layout.isDisclosureTransitionActive = false
+            }
+            window.layoutIfNeeded()
+            window.displayIfNeeded()
+            CATransaction.commit()
+            isDisclosureTransitionActive = false
+            position(window, anchoredTo: lastAnchor, on: lastScreen)
+            return
+        }
 
         withTransaction(transaction) {
             layout.collapsedModulesOverride = current
@@ -239,16 +270,6 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // Persist behind the presentation override so this write cannot restructure the
         // visible tree before the coordinated transition begins.
         settings.update { $0.panel.collapsedModules = target }
-
-        let duration = disclosureDuration
-        if duration == 0 {
-            withTransaction(transaction) {
-                layout.collapsedModulesOverride = target
-            }
-            window.setFrame(destination, display: true)
-            finishDisclosure(window: window, layout: layout)
-            return
-        }
 
         withAnimation(Design.Motion.disclosure) {
             layout.collapsedModulesOverride = target

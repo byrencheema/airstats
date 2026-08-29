@@ -65,6 +65,19 @@ public struct PanelRootView: View {
                 .padding(.vertical, Design.Space.xs)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // No indicator, ever.
+            //
+            // The window is sized to this list, so in the ordinary case there is
+            // nothing to scroll and nothing for an indicator to report. What it does
+            // instead is flicker: every change in content height leaves one layout pass
+            // in which the list is taller than the window that has not yet grown to
+            // hold it, and the scroll view spends that pass showing a scroller. Under
+            // `Show scroll bars: Always` that scroller is a legacy one, so it also
+            // takes real width and reflows the text beneath it on the way in and out.
+            // `.never` rather than `.automatic`, because `.hidden` still defers to that
+            // setting. The list stays scrollable by trackpad and wheel for the rare
+            // case that it reaches the ceiling below.
+            .scrollIndicators(.never)
             .defaultScrollAnchor(.top)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxHeight: Self.maximumModuleHeight)
