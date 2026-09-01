@@ -52,6 +52,29 @@ struct MenuBarItemLayoutTests {
         let settings = MenuBarSettings(items: [off], usesCombinedItem: false)
         #expect(MenuBarItemLayout(settings: settings) == .combined)
     }
+
+    /// The hidden switch outranks everything else, including the empty-bar fallback
+    /// that otherwise insists on a click target: hiding is the one case where no item
+    /// is what the user asked for.
+    @Test("hidden means no item, whatever the combine switch or readouts say")
+    func hiddenMeansNoItem() {
+        for combined in [true, false] {
+            let settings = MenuBarSettings(items: [cpu, memory], usesCombinedItem: combined,
+                                           isVisible: false)
+            #expect(MenuBarItemLayout(settings: settings) == .hidden)
+        }
+        var off = cpu
+        off.isEnabled = false
+        let empty = MenuBarSettings(items: [off], usesCombinedItem: false, isVisible: false)
+        #expect(MenuBarItemLayout(settings: empty) == .hidden)
+    }
+
+    @Test("a settings file from before the hidden switch shows the item")
+    func decodingDefaultsToVisible() throws {
+        let json = Data(#"{"items":[],"usesCombinedItem":true}"#.utf8)
+        let decoded = try JSONDecoder().decode(MenuBarSettings.self, from: json)
+        #expect(decoded.isVisible)
+    }
 }
 
 @MainActor

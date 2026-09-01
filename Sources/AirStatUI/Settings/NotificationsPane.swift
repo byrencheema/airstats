@@ -26,13 +26,6 @@ struct NotificationsPane: View {
                 Toggle("Notify me about these conditions",
                        isOn: settings.binding(\.notifications.isEnabled, onChange: askIfNeeded))
                 permissionNotice
-            } footer: {
-                // The rules below are inert until this is on, and a disabled control
-                // is a weak way to say so — in light appearance macOS barely dims one.
-                // Saying it once, here, is what makes the grey mean something.
-                if !isEnabled {
-                    SettingsFootnote("Turn this on to use the rules below.")
-                }
             }
 
             Section {

@@ -237,6 +237,10 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     /// Use a single status item for everything (tidier, survives menu bar crowding)
     /// versus one status item per metric (individually re-orderable by the user).
     public var usesCombinedItem: Bool
+    /// Off, and the app puts nothing in the menu bar at all: the desktop widget is
+    /// the only surface left, and Settings is reached by launching the app again, by
+    /// its hot key, or from the widget's context menu.
+    public var isVisible: Bool
 
     /// Numbers are always set in a fixed-width face. Previously a toggle; a column of
     /// proportional digits shimmers as it changes, which is the single most visible
@@ -259,9 +263,11 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     public static let hidesIdleItems = false
 
     public init(items: [MenuBarItemConfig] = MenuBarSettings.defaultItems,
-                usesCombinedItem: Bool = true) {
+                usesCombinedItem: Bool = true,
+                isVisible: Bool = true) {
         self.items = items
         self.usesCombinedItem = usesCombinedItem
+        self.isVisible = isVisible
     }
 
     /// CPU, its temperature, GPU, and the battery.
@@ -294,7 +300,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     public var enabledItems: [MenuBarItemConfig] { items.filter(\.isEnabled) }
 
     private enum CodingKeys: String, CodingKey {
-        case items, usesCombinedItem
+        case items, usesCombinedItem, isVisible
     }
 
     /// Files written before the packing settings were removed still load: the keys
@@ -306,6 +312,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
         // An empty menu bar would leave the user with no way back into the app.
         items = decodedItems.isEmpty ? MenuBarSettings.defaultItems : decodedItems.map { $0.sanitized() }
         usesCombinedItem = c.value(.usesCombinedItem, or: true)
+        isVisible = c.value(.isVisible, or: true)
     }
 }
 

@@ -20,11 +20,6 @@ struct DesktopWidgetPane: View {
             // it — everything below configures the thing this switch puts on screen.
             Section {
                 Toggle("Show the desktop widget", isOn: settings.binding(\.desktopWidget.isEnabled))
-            } footer: {
-                if !desktopWidget.isEnabled {
-                    SettingsFootnote("Turn this on to put the desktop widget on screen. "
-                                     + "The settings below shape it once it is there.")
-                }
             }
 
             // The preview and the list that fills it, side by side. Stacked, the

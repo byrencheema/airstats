@@ -9,6 +9,7 @@ struct MenuBarPane: View {
     @State private var dropTarget: MenuBarItemConfig.ID?
 
     private var items: [MenuBarItemConfig] { settings.settings.menuBar.items }
+    private var isVisible: Bool { settings.settings.menuBar.isVisible }
 
     private var availability: MetricAvailability {
         MetricAvailability(snapshot: SettingsPreview.snapshot(engine))
@@ -16,6 +17,10 @@ struct MenuBarPane: View {
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Show in the menu bar", isOn: settings.binding(\.menuBar.isVisible))
+            }
+
             Section {
                 MenuBarPreviewStrip(model: previewModel, isEmpty: previewModel.items.isEmpty)
                     .listRowInsets(EdgeInsets())
@@ -29,6 +34,7 @@ struct MenuBarPane: View {
             } header: {
                 Text("Readouts")
             }
+            .disabled(!isVisible)
 
             Section {
                 Toggle("Combine into one menu bar item",
@@ -42,6 +48,7 @@ struct MenuBarPane: View {
                 .font(.callout)
                 .foregroundStyle(Design.Palette.secondaryText)
             }
+            .disabled(!isVisible)
 
         }
         .settingsFormStyle()

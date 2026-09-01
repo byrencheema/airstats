@@ -24,9 +24,6 @@ struct ShortcutsFormSections: View {
                         ShortcutRecorderField(action: action, settings: settings)
                     }
                 }
-            } footer: {
-                SettingsFootnote("These work anywhere in macOS, including while another "
-                                 + "app is frontmost. AirStats stays in the background.")
             }
 
             if !conflicts.isEmpty {

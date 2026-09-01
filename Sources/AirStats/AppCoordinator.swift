@@ -62,6 +62,9 @@ final class AppCoordinator {
         desktopWidget.onVisibilityChange = { [weak self] visible in
             self?.engine.setDesktopWidgetVisible(visible)
         }
+        // With the menu bar item hidden, the widget's context menu is the only visible
+        // way back into Settings.
+        desktopWidget.onRequestSettings = { [weak self] in self?.showSettings() }
 
         // A hot key must do exactly what the equivalent menu item does, including
         // leaving the frontmost app alone: the panel is worth having precisely because

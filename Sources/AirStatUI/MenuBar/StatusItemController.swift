@@ -3,15 +3,23 @@ import AirStatKit
 
 /// What the menu bar is currently made of.
 ///
-/// Either one item drawing every readout, or one item per enabled readout in the
-/// user's order. Derived from settings and compared as a whole, so flipping the
-/// combine switch or enabling a readout is a single value change the controller can
-/// act on without inspecting anything else.
+/// Either one item drawing every readout, one item per enabled readout in the user's
+/// order, or no item at all. Derived from settings and compared as a whole, so flipping
+/// the combine switch or enabling a readout is a single value change the controller
+/// can act on without inspecting anything else.
 enum MenuBarItemLayout: Equatable {
     case combined
     case separate([UUID])
+    /// The user has taken the app out of the menu bar. Nothing is installed, and the
+    /// bar reports as invisible so sampling throttles the same way it does when the
+    /// items are pushed off by crowding.
+    case hidden
 
     init(settings: MenuBarSettings) {
+        guard settings.isVisible else {
+            self = .hidden
+            return
+        }
         let enabled = settings.enabledItems.map(\.id)
         // Separate items with nothing enabled would put no item on the bar at all, and
         // with it no way back into the app short of a hot key. The combined item draws
@@ -131,6 +139,9 @@ public final class StatusItemController {
                          label: "AirStats \(config.metric.label)")
             }
             hosted = built.reversed()
+
+        case .hidden:
+            break
         }
         reportVisibility()
     }
