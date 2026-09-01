@@ -392,7 +392,10 @@ public final class PanelController: NSObject, NSWindowDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.hasPendingResize = false
-            guard let window = self.window, self.isVisible else { return }
+            // A resize queued on the turn before a click would otherwise fire mid-
+            // transition and snap the window to the destination unanimated.
+            guard let window = self.window, self.isVisible,
+                  !self.isDisclosureTransitionActive else { return }
             self.position(window, anchoredTo: self.lastAnchor, on: self.lastScreen)
         }
     }
