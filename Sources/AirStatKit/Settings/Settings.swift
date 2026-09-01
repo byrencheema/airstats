@@ -754,12 +754,14 @@ public enum ShortcutAction: String, Sendable, Codable, CaseIterable, Equatable, 
     // The raw value is what a saved binding is keyed by on disk, so it stays
     // "toggleOverlay" even though the feature is now the desktop widget.
     case toggleDesktopWidget = "toggleOverlay"
+    case toggleMenuBarItem = "toggleMenuBarItem"
     case openSettings = "openSettings"
 
     public var label: String {
         switch self {
         case .togglePanel: return "Show / Hide Panel"
         case .toggleDesktopWidget: return "Show / Hide Desktop Widget"
+        case .toggleMenuBarItem: return "Show / Hide Menu Bar Item"
         case .openSettings: return "Open Settings"
         }
     }

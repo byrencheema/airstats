@@ -74,6 +74,7 @@ final class AppCoordinator {
             switch action {
             case .togglePanel: self.togglePanel()
             case .toggleDesktopWidget: self.toggleDesktopWidget()
+            case .toggleMenuBarItem: self.toggleMenuBarItem()
             case .openSettings: self.showSettings()
             }
         }
@@ -149,6 +150,15 @@ final class AppCoordinator {
     private func toggleDesktopWidget() {
         settingsStore.update { $0.desktopWidget.isEnabled.toggle() }
         desktopWidget.syncWithSettings()
+    }
+
+    /// The panel hangs from the item, so it goes with it.
+    private func toggleMenuBarItem() {
+        if panel.isVisible {
+            panel.hide()
+            panelAnchor = nil
+        }
+        settingsStore.update { $0.menuBar.isVisible.toggle() }
     }
 
     private func showContextMenu() {
