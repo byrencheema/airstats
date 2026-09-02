@@ -62,7 +62,8 @@ public enum Design {
         /// made them want to.
         public static let desktopWidgetDetailValue = Font.system(size: 10, weight: .medium).monospacedDigit()
         /// Secondary detail under a headline.
-        public static let caption = Font.system(size: 10, weight: .regular)
+        public static let captionSize: CGFloat = 10
+        public static let caption = Font.system(size: captionSize, weight: .regular)
         /// Smallest legible tier — axis ticks, units, footnotes.
         public static let micro = Font.system(size: 9, weight: .regular)
         /// Process names and other user-supplied strings.

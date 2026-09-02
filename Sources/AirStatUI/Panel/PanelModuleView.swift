@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AirStatKit
 
 /// The one-glance answer for a module, shown on its header line.
@@ -29,6 +30,9 @@ struct PanelModuleView: View {
     let engine: MetricsEngine
     let settings: SettingsStore
     var layout: PanelLayoutState?
+    /// Width of the qualifier column beside the headline value, shared by every row so
+    /// the numbers keep one right edge. See `PanelSummary.captionColumnWidth(for:)`.
+    var captionColumnWidth: CGFloat
 
     @State private var isHovering = false
 
@@ -71,11 +75,6 @@ struct PanelModuleView: View {
     /// Kept at or under the height of the headline text beside it, so the trace never
     /// becomes the thing that decides how tall a module is.
     private static let traceHeight = Design.Chart.sparklineHeight - Design.Space.xs
-
-    /// Width of the qualifier column beside a headline value. Sized for the longest
-    /// qualifier in use ("charging"); anything longer belongs in the expanded detail,
-    /// not in a summary row, because a truncated word reads as a rendering bug.
-    private static let captionColumnWidth: CGFloat = 54
 
     /// The trace's left edge is set by whatever the headline number happens to be wide,
     /// so the sparklines on two expanded modules can sit a few points out of step.
@@ -191,19 +190,22 @@ struct PanelModuleView: View {
                     .foregroundStyle(Design.Palette.primaryText)
                     .lineLimit(1)
                     .contentTransition(.numericText())
-                // The qualifier sits in a reserved column so it cannot push the number.
+                // The qualifier sits in a shared column so it cannot push the number.
                 //
                 // Inline, a caption shifted its value left by its own width, so across the
                 // collapsed list the numbers ended at x = 254, 282, 285, 300, 323, 324 —
                 // a 70pt ragged spread that made the column impossible to scan even though
-                // the right edge looked tidy. Reserving the slot whether or not a caption
-                // exists puts every number's right edge on the same line.
-                Text(summary.caption ?? "")
-                    .font(Design.Text.caption)
-                    .foregroundStyle(Design.Palette.tertiaryText)
-                    .lineLimit(1)
-                    .frame(width: Self.captionColumnWidth, alignment: .leading)
-                    .accessibilityHidden(summary.caption == nil)
+                // the right edge looked tidy. Every row takes the slot whether or not it
+                // has a caption, which puts every number's right edge on the same line.
+                // When no row has one there is no column at all.
+                if captionColumnWidth > 0 {
+                    Text(summary.caption ?? "")
+                        .font(Design.Text.caption)
+                        .foregroundStyle(Design.Palette.tertiaryText)
+                        .lineLimit(1)
+                        .frame(width: captionColumnWidth, alignment: .leading)
+                        .accessibilityHidden(summary.caption == nil)
+                }
             }
         }
     }
@@ -227,6 +229,16 @@ struct PanelModuleView: View {
     // MARK: Summary
 
     private var summary: PanelSummary {
+        .make(for: module, engine: engine, formatter: formatter)
+    }
+
+}
+
+extension PanelSummary {
+    /// The one-glance answer for `module`, or an empty summary while it has nothing yet.
+    @MainActor
+    static func make(for module: PanelModule, engine: MetricsEngine,
+                     formatter: MetricFormatter) -> PanelSummary {
         switch module {
         case .cpu:
             guard let cpu = engine.cpu.value else { return PanelSummary() }
@@ -288,4 +300,18 @@ struct PanelModuleView: View {
         }
     }
 
+    /// The width the qualifier column needs to hold the widest caption in `summaries`.
+    ///
+    /// Measured from what is on screen rather than reserved for the longest caption the
+    /// panel can ever show: sized for "charging", the column stood mostly empty on any
+    /// Mac that was not charging and the whole right edge read as a gap. Every row still
+    /// takes the same width, so the numbers keep their shared right edge; that edge
+    /// just sits where the captions actually end.
+    static func captionColumnWidth(for summaries: [PanelSummary]) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: Design.Text.captionSize)
+        let widest = summaries.compactMap(\.caption).map {
+            ($0 as NSString).size(withAttributes: [.font: font]).width
+        }.max() ?? 0
+        return ceil(widest)
+    }
 }
