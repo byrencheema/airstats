@@ -36,7 +36,7 @@ Applications. It is signed and notarized, so it opens with no warning.
 Or with Homebrew:
 
 ```sh
-brew install --cask byrencheema/tap/airstats
+brew install --cask airstats
 ```
 
 AirStats updates itself with [Sparkle](https://sparkle-project.org). It asks airstats.app

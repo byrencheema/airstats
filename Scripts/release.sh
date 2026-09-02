@@ -162,11 +162,10 @@ uv run Scripts/appcast.py \
   --version "$VERSION" --build "$BUILD" --dmg "$DMG" --signature "$SIGNATURE" \
   ${APPCAST:+--appcast "$APPCAST"}
 
-# The cask in byrencheema/homebrew-tap pins a version and a checksum of this exact file,
-# and nothing above updates it. A release that ships without that bump leaves everyone
-# who installed with Homebrew on the previous version, with no signal that a newer one
-# exists, so the two values it needs are printed here rather than left to be recomputed
-# from memory later.
+# The homebrew/cask entry pins a version and a checksum of this exact file, and nothing
+# above updates it. Homebrew's autobump bot usually opens that PR within a day of the
+# GitHub release, but a release that ships without it leaves everyone who installed with
+# Homebrew on the previous version, so the sha256 is printed here for the manual bump.
 SHA="$(shasum -a 256 "$DMG" | cut -d ' ' -f 1)"
 
 echo
@@ -178,8 +177,7 @@ echo "Next, in this order (docs/RELEASING.md has the reasons):"
 echo "  1. git tag v$VERSION && git push origin v$VERSION"
 echo "  2. gh release create v$VERSION $DMG --title \"AirStats $VERSION\""
 echo "     The asset must be named AirStats.dmg. The appcast item already points at it."
-echo "  3. Bump Casks/a/airstats.rb in byrencheema/homebrew-tap:"
-echo "       version \"$VERSION\""
-echo "       sha256 \"$SHA\""
+echo "  3. brew bump-cask-pr airstats --version $VERSION"
+echo "     Skip it if Homebrew's autobump bot already opened one. The sha256 must be $SHA."
 echo "  4. Commit and push public/appcast.xml in airstat-site. Do this last: it is what"
 echo "     tells every installed copy to go and download the file from step 2."
