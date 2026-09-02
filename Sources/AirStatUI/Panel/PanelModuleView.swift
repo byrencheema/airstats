@@ -77,19 +77,6 @@ struct PanelModuleView: View {
     /// not in a summary row, because a truncated word reads as a rendering bug.
     private static let captionColumnWidth: CGFloat = 54
 
-    /// Gap between the header's elements, tightened from `Design.Space.m` when the gear
-    /// column arrived.
-    ///
-    /// The row was already spending its last points: at 340pt, with the trace and the
-    /// reserved qualifier column both present, an expanded Memory module fits "Memory"
-    /// and "7.4 GB" with about four points to spare. Taking twelve for a control that
-    /// has to be on the row meant twelve had to come back, and the alternatives were all
-    /// worse — a narrower trace cannot caption its own peak, a narrower qualifier column
-    /// truncates "charging", and either truncation is a reading the user cannot make.
-    /// Five gaps at six points instead of eight is a change to the rhythm, not to
-    /// anything anyone reads.
-    private static let headerSpacing = Design.Space.s
-
     /// The trace's left edge is set by whatever the headline number happens to be wide,
     /// so the sparklines on two expanded modules can sit a few points out of step.
     ///
@@ -120,80 +107,46 @@ struct PanelModuleView: View {
 
     // MARK: Header
 
-    /// The header row.
-    ///
-    /// The disclosure button stops short of the trailing edge so the gear beside it is
-    /// its own control rather than a picture inside a button: a `Menu` nested in the
-    /// row's `Button` would hand its click to the row and collapse the module instead
-    /// of opening. They share the hover highlight and the row's padding, which is why
-    /// both live under the outer stack.
     private var header: some View {
-        HStack(spacing: PanelMenuBarMenu.leadingGap) {
-            Button(action: toggleCollapsed) {
-                HStack(spacing: Self.headerSpacing) {
-                    Image(systemName: "chevron.right")
-                        .font(Design.Text.micro.weight(.semibold))
-                        .foregroundStyle(Design.Palette.tertiaryText)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .frame(width: Design.Space.m)
-                    Image(systemName: summary.icon ?? module.symbolName)
-                        .font(Design.Text.sectionHeader)
-                        .foregroundStyle(iconColor)
-                        .frame(width: Design.Space.xl)
-                    Text(module.label)
-                        .font(Design.Text.sectionHeader)
-                        .foregroundStyle(Design.Palette.secondaryText)
-                        .lineLimit(1)
-                    Spacer(minLength: Design.Space.s)
-                    trace
-                    headlineValue
-                        // The number outranks the gap in front of it.
-                        //
-                        // Without this the `HStack` splits any shortfall between the
-                        // `Spacer` and the value, so the 12pt the gear column costs came
-                        // half out of empty space and half out of the reading: "7.4 GB"
-                        // rendered as "7.4…" while 26pt of slack sat unused to its left.
-                        .layoutPriority(1)
-                }
-                .contentShape(Rectangle())
+        Button(action: toggleCollapsed) {
+            HStack(spacing: Design.Space.m) {
+                Image(systemName: "chevron.right")
+                    .font(Design.Text.micro.weight(.semibold))
+                    .foregroundStyle(Design.Palette.tertiaryText)
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .frame(width: Design.Space.m)
+                Image(systemName: summary.icon ?? module.symbolName)
+                    .font(Design.Text.sectionHeader)
+                    .foregroundStyle(iconColor)
+                    .frame(width: Design.Space.xl)
+                Text(module.label)
+                    .font(Design.Text.sectionHeader)
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .lineLimit(1)
+                Spacer(minLength: Design.Space.s)
+                trace
+                headlineValue
+                    // The number outranks the gap in front of it: without this the
+                    // `HStack` splits any shortfall between the `Spacer` and the value,
+                    // so "7.4 GB" could render as "7.4…" with slack sitting unused to
+                    // its left.
+                    .layoutPriority(1)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(module.label)
-            .accessibilityValue(summary.value ?? "")
-            .accessibilityHint(isExpanded ? "Collapse" : "Expand")
-
-            menuBarGear
+            .padding(.horizontal, Design.Space.panelInset)
+            .contentShape(Rectangle())
+            .background(hoverHighlight)
         }
-        .padding(.leading, Design.Space.panelInset)
-        .padding(.trailing, PanelMenuBarMenu.trailingInset)
-        .background(hoverHighlight)
+        .buttonStyle(.plain)
         .onHover { hovering in
             withAnimation(Design.Motion.respectingAccessibility(Design.Motion.hover)) {
                 isHovering = hovering
             }
         }
+        .accessibilityLabel(module.label)
+        .accessibilityValue(summary.value ?? "")
+        .accessibilityHint(isExpanded ? "Collapse" : "Expand")
     }
 
-    /// The gear, or the space it would have taken.
-    ///
-    /// Top Processes has no menu bar readout to configure, and dropping the control on
-    /// that one row would let its headline number run further right than every other
-    /// module's — the column of numbers is the thing being scanned, so the slot is
-    /// reserved whether or not anything sits in it.
-    @ViewBuilder
-    private var menuBarGear: some View {
-        if let control = PanelMenuBarControl(module: module, settings: settings) {
-            PanelMenuBarMenu(control: control, isRowHovered: isHovering)
-        } else {
-            Color.clear
-                .frame(width: PanelMenuBarMenu.width, height: 1)
-                .accessibilityHidden(true)
-        }
-    }
-
-    /// Symmetric even though the row's own insets are not: `background` sizes to the
-    /// row including its padding, so this inset is measured from the panel's edges and
-    /// the gear's narrower trailing inset does not pull the highlight off centre.
     @ViewBuilder
     private var hoverHighlight: some View {
         RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
