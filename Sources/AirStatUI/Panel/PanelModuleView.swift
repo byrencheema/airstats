@@ -28,6 +28,7 @@ struct PanelModuleView: View {
     let module: PanelModule
     let engine: MetricsEngine
     let settings: SettingsStore
+    var layout: PanelLayoutState?
 
     @State private var isHovering = false
 
@@ -39,7 +40,9 @@ struct PanelModuleView: View {
     }
 
     var isExpanded: Bool {
-        !settings.settings.panel.collapsedModules.contains(module)
+        let collapsed = layout?.collapsedModulesOverride
+            ?? settings.settings.panel.collapsedModules
+        return !collapsed.contains(module)
     }
 
     /// What the panel fills its bars and core cells with.
@@ -108,6 +111,8 @@ struct PanelModuleView: View {
             detail
                 .padding(.horizontal, Design.Space.panelInset)
                 .padding(.top, Design.Space.xxs)
+                .clipped()
+                .transition(.opacity)
         }
         .padding(.vertical, Design.Space.xxs)
         .environment(\.metricFormatter, formatter)
@@ -192,7 +197,11 @@ struct PanelModuleView: View {
     @ViewBuilder
     private var hoverHighlight: some View {
         RoundedRectangle(cornerRadius: Design.Radius.control, style: .continuous)
-            .fill(isHovering ? Design.Palette.track : .clear)
+            // Rows move under a stationary pointer during disclosure. Hiding the
+            // highlight while they travel prevents it flashing from one row to the
+            // next; onHover still tracks the final row underneath for the next frame.
+            .fill(isHovering && layout?.isDisclosureTransitionActive != true
+                  ? Design.Palette.track : .clear)
             .padding(.horizontal, Design.Space.s)
     }
 
@@ -246,20 +255,18 @@ struct PanelModuleView: View {
         }
     }
 
-    /// Deliberately not animated.
-    ///
-    /// The panel's window is sized to its content, so animating a disclosure animates
-    /// the window's own outline: the height is re-laid out every frame and the window
-    /// chases it a turn behind. Every version of that was some flavour of unsteady —
-    /// stepped, or bouncing, or dragging the whole table with it — and none of the
-    /// motion was carrying information. Opening on the same frame as the click is both
-    /// steadier and quicker to read.
     private func toggleCollapsed() {
-        settings.update { s in
-            if s.panel.collapsedModules.contains(module) {
-                s.panel.collapsedModules.remove(module)
-            } else {
-                s.panel.collapsedModules.insert(module)
+        if let coordinate = layout?.toggleModule {
+            coordinate(module)
+            return
+        }
+        withAnimation(Design.Motion.respectingAccessibility(Design.Motion.disclosure)) {
+            settings.update { s in
+                if s.panel.collapsedModules.contains(module) {
+                    s.panel.collapsedModules.remove(module)
+                } else {
+                    s.panel.collapsedModules.insert(module)
+                }
             }
         }
     }

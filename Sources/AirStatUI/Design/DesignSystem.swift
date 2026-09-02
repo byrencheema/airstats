@@ -150,6 +150,9 @@ public enum Design {
     public enum Motion {
         /// Numeric readouts crossfading to a new value.
         public static let value = Animation.easeOut(duration: 0.18)
+        /// A module revealing or hiding its detail while the panel follows its height.
+        public static let disclosureDuration: TimeInterval = 0.18
+        public static let disclosure = Animation.easeOut(duration: disclosureDuration)
         ///
         /// Panel present/dismiss.
         public static let present = Animation.easeOut(duration: 0.14)
