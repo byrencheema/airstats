@@ -60,14 +60,16 @@ extension PanelModuleView {
         if efficiency.isEmpty || performance.isEmpty {
             if !cpu.perCore.isEmpty {
                 PanelCoreRow(label: "\(cpu.perCore.count) cores", loads: cpu.perCore,
-                             busy: cpu.total.busy, tint: tint)
+                             busy: cpu.total.busy, tint: tint,
+                             slotWidth: PanelCoreRow.slotWidth(sharedAcross: cpu.perCore.count))
             }
         } else {
+            let slot = PanelCoreRow.slotWidth(sharedAcross: max(efficiency.count, performance.count))
             VStack(alignment: .leading, spacing: Design.Space.xs) {
                 PanelCoreRow(label: "\(efficiency.count) E-cores", loads: efficiency,
-                             busy: cpu.efficiencyBusy, tint: tint)
+                             busy: cpu.efficiencyBusy, tint: tint, slotWidth: slot)
                 PanelCoreRow(label: "\(performance.count) P-cores", loads: performance,
-                             busy: cpu.performanceBusy, tint: tint)
+                             busy: cpu.performanceBusy, tint: tint, slotWidth: slot)
             }
         }
     }
