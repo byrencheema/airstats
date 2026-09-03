@@ -114,7 +114,8 @@ struct PanelCoreRow: View {
     let loads: [CPULoad]
     let busy: Double?
     let tint: Color
-    var labelWidth: CGFloat = 58
+    var slotWidth: CGFloat = PanelCoreRow.preferredSlotWidth
+    var labelWidth: CGFloat = PanelCoreRow.defaultLabelWidth
 
     @Environment(\.metricFormatter) private var formatter
 
@@ -132,7 +133,35 @@ struct PanelCoreRow: View {
     /// a five-core row sharing the same width would draw noticeably different bar
     /// widths. Pinning the slot keeps a core the same size in both rows and lets the
     /// six-core strip run visibly longer, which is the truth about the machine.
-    private static let slotWidth: CGFloat = 28
+    ///
+    /// Preferred, not absolute. Ten P-cores at 28pt want 280pt of strip in a row that
+    /// has about 206pt to give once the label, the gaps and the value are out, and a
+    /// 24-core Ultra wants 672. Past that point the strip pushed every row in the
+    /// panel out through both sides of the window. `slotWidth(sharedAcross:)` shrinks
+    /// the slot until the widest cluster fits, and the caller hands the same answer to
+    /// every row so the two clusters still draw their cores at one size.
+    static let preferredSlotWidth: CGFloat = 28
+
+    /// Wider than the detail rows' 58pt column by the width of a second digit: an
+    /// Ultra's "24 P-cores" was the one label in the panel that truncated.
+    static let defaultLabelWidth: CGFloat = 64
+
+    /// Width held for the value column so the strip budget is honest at "100%".
+    private static let valueReserve: CGFloat = 36
+
+    /// What is left for the strip once the label, the value, the stack's three gaps
+    /// and the spacer's minimum are taken out of the panel's content width.
+    private static var stripBudget: CGFloat {
+        CGFloat(PanelSettings.width) - 2 * Design.Space.panelInset
+            - defaultLabelWidth - 4 * Design.Space.m - valueReserve
+    }
+
+    /// The slot every core row should use when the widest of them has `widestCluster`
+    /// cores: the preferred width, or the largest that fits.
+    static func slotWidth(sharedAcross widestCluster: Int) -> CGFloat {
+        guard widestCluster > 0 else { return preferredSlotWidth }
+        return min(preferredSlotWidth, stripBudget / CGFloat(widestCluster))
+    }
 
     var body: some View {
         HStack(spacing: Design.Space.m) {
@@ -143,11 +172,12 @@ struct PanelCoreRow: View {
                 .frame(width: labelWidth, alignment: .leading)
             CoreGrid(cores: loads, tint: tint, height: Self.stripHeight,
                      showsClusterLabels: false)
-                .frame(width: CGFloat(loads.count) * Self.slotWidth)
+                .frame(width: CGFloat(loads.count) * slotWidth)
             Spacer(minLength: Design.Space.m)
             Text(busy.map { formatter.percent($0) } ?? MetricFormatter.unavailable)
                 .font(Design.Text.value)
                 .foregroundStyle(Design.Palette.primaryText)
+                .fixedSize()
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(loads.count) \(label)")
