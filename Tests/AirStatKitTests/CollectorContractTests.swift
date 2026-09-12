@@ -213,6 +213,43 @@ struct CollectorContractTests {
         #expect(cpuValues == cpuValues.sorted(by: >), "processes must be sorted by CPU descending")
     }
 
+    /// The biggest resident set on the machine is usually idle, so a CPU-ranked cut
+    /// alone would never ship it, and the memory list in the panel would be ranking
+    /// the wrong processes. A sleeping perl holding 768 MB is bigger than anything a
+    /// developer machine runs at rest and uses no CPU at all once the string exists.
+    @Test("an idle process with the largest resident set is still shipped")
+    func idleMemoryHogIsShipped() throws {
+        let hog = Process()
+        hog.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        hog.arguments = ["-e", "$x = 'x' x (768 * 1024 * 1024); sleep 60"]
+        try hog.run()
+        defer { hog.terminate() }
+
+        let size = Int32(MemoryLayout<proc_taskinfo>.size)
+        func resident(_ pid: pid_t) -> UInt64 {
+            var info = proc_taskinfo()
+            let read = withUnsafeMutablePointer(to: &info) {
+                proc_pidinfo(pid, PROC_PIDTASKINFO, 0, $0, size)
+            }
+            return read == size ? info.pti_resident_size : 0
+        }
+        let deadline = Date().addingTimeInterval(10)
+        while resident(hog.processIdentifier) < 700 * 1024 * 1024, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        try #require(resident(hog.processIdentifier) >= 700 * 1024 * 1024,
+                     "the hog never became resident, so the test cannot say anything")
+        // perl assigns by copy, so the pages are resident before the CPU goes quiet.
+        Thread.sleep(forTimeInterval: 0.5)
+
+        let states = sample(ProcessCollector(), times: 2, interval: 0.3)
+        let processes = try #require(states.last?.value)
+        let hogRow = processes.processes.first { $0.pid == hog.processIdentifier }
+        #expect(hogRow != nil, "an idle 768 MB process was not shipped")
+        #expect((hogRow?.memoryBytes ?? 0) >= 700 * 1024 * 1024)
+        #expect((hogRow?.cpuPercent ?? 100) < 5)
+    }
+
     @Test("system info is static across samples and uptime advances")
     func systemInfoIsStable() {
         let collector = SystemInfoCollector()

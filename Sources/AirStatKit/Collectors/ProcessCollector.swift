@@ -14,6 +14,11 @@ public final class ProcessCollector: MetricSource {
     /// How many rows reach the UI. The panel shows a dozen at a time and sorts within
     /// what it is given, so shipping every process would be work nobody looks at.
     private static let rowLimit = 50
+    /// Ranked by CPU, the top 50 miss anything idle, and the biggest memory users
+    /// usually are idle: an editor left open holds gigabytes at 0%. These extra rows
+    /// are the largest resident sets outside the CPU cut, so a memory-ranked list has
+    /// the right processes to rank.
+    private static let memoryRowLimit = 10
 
     /// Cumulative per-process counters carried between samples, keyed by pid.
     private struct Baseline {
@@ -28,6 +33,10 @@ public final class ProcessCollector: MetricSource {
     private struct Candidate {
         var pid: pid_t
         var cpuPercent: Double
+        /// Resident size, not phys_footprint: it comes free with the task info every
+        /// process is already read for, and it only has to pick which rows get the
+        /// real figure from rusage in the second pass.
+        var residentBytes: UInt64
     }
 
     private var baselines: [pid_t: Baseline] = [:]
@@ -132,7 +141,8 @@ public final class ProcessCollector: MetricSource {
                                       diskWrite: previous?.diskWrite ?? 0,
                                       hasIO: previous?.hasIO ?? false,
                                       seenAt: generation)
-            candidates.append(Candidate(pid: pid, cpuPercent: percent))
+            candidates.append(Candidate(pid: pid, cpuPercent: percent,
+                                        residentBytes: taskInfo.pti_resident_size))
         }
 
         // Without this the dictionary would accumulate an entry for every process the
@@ -150,9 +160,18 @@ public final class ProcessCollector: MetricSource {
 
         candidates.sort { $0.cpuPercent > $1.cpuPercent }
 
+        // Rows stay in CPU order end to end: the memory picks all sit below the CPU
+        // cut by construction, and are re-sorted among themselves so the tail of the
+        // list is ordered the same way as its head.
+        if candidates.count > Self.rowLimit {
+            candidates[Self.rowLimit...].sort { $0.residentBytes > $1.residentBytes }
+            let tailEnd = min(candidates.count, Self.rowLimit + Self.memoryRowLimit)
+            candidates[Self.rowLimit..<tailEnd].sort { $0.cpuPercent > $1.cpuPercent }
+        }
+
         var rows: [ProcessRow] = []
-        rows.reserveCapacity(Self.rowLimit)
-        for candidate in candidates.prefix(Self.rowLimit) {
+        rows.reserveCapacity(Self.rowLimit + Self.memoryRowLimit)
+        for candidate in candidates.prefix(Self.rowLimit + Self.memoryRowLimit) {
             if let row = buildRow(candidate, elapsed: context.elapsed) { rows.append(row) }
         }
 

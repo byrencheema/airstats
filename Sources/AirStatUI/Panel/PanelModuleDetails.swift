@@ -105,7 +105,30 @@ extension PanelModuleView {
                     PanelDetailEntry("Swap", formatter.memory(memory.swapUsedBytes)),
                     PanelDetailEntry("Total", formatter.memory(memory.totalBytes)),
                 ])
+                memoryProcesses
             }
+        }
+    }
+
+    /// The biggest memory users, ranked here rather than in the Top Processes module
+    /// because that list answers "what is busy" and this one answers "where did the
+    /// memory go", and a user with 2 GB free is asking the second question.
+    @ViewBuilder
+    private var memoryProcesses: some View {
+        if let processes = engine.processes.value {
+            let ranked = processes.processes
+                .sorted { $0.memoryBytes > $1.memoryBytes }
+                .prefix(PanelSettings.processRowCount)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Top processes")
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .padding(.bottom, Design.Space.xxs)
+                ForEach(Array(ranked)) { process in
+                    processRow(process, value: formatter.memory(process.memoryBytes))
+                }
+            }
+            .padding(.top, Design.Space.s)
         }
     }
 
@@ -366,7 +389,7 @@ extension PanelModuleView {
         section(engine.processes) { processes in
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(topProcesses(processes)) { process in
-                    processRow(process)
+                    processRow(process, value: processValue(process))
                 }
             }
         }
@@ -393,7 +416,7 @@ extension PanelModuleView {
         (process.diskReadBytesPerSecond ?? 0) + (process.diskWriteBytesPerSecond ?? 0)
     }
 
-    private func processRow(_ process: ProcessRow) -> some View {
+    private func processRow(_ process: ProcessRow, value: String) -> some View {
         HStack(spacing: Design.Space.s) {
             processIcon(process)
             Text(process.name)
@@ -402,7 +425,7 @@ extension PanelModuleView {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: Design.Space.m)
-            Text(processValue(process))
+            Text(value)
                 .font(Design.Text.value)
                 .foregroundStyle(Design.Palette.primaryText)
                 .lineLimit(1)
@@ -410,7 +433,7 @@ extension PanelModuleView {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(process.name)
-        .accessibilityValue(processValue(process))
+        .accessibilityValue(value)
     }
 
     /// A real icon for anything with a bundle, a symbol for everything else.
