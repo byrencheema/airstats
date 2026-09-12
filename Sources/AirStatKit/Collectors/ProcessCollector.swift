@@ -14,6 +14,16 @@ public final class ProcessCollector: MetricSource {
     /// How many rows reach the UI. The panel shows a dozen at a time and sorts within
     /// what it is given, so shipping every process would be work nobody looks at.
     private static let rowLimit = 50
+    /// Ranked by CPU, the top 50 miss anything idle, and the biggest memory users
+    /// usually are idle: an editor left open holds gigabytes at 0%. These extra rows
+    /// are the largest resident sets outside the CPU cut, so a memory-ranked list has
+    /// the right processes to rank.
+    private static let memoryRowLimit = 10
+    /// The first pass ranks on resident size, but the row shows phys_footprint, and a
+    /// process whose footprint is mostly compressed pages can rank low on one and top
+    /// on the other. Reading rusage for every process would double the collector's
+    /// cost, so instead twice the tail is fetched and trimmed on the displayed figure.
+    private static let memoryCandidateLimit = 20
 
     /// Cumulative per-process counters carried between samples, keyed by pid.
     private struct Baseline {
@@ -28,6 +38,10 @@ public final class ProcessCollector: MetricSource {
     private struct Candidate {
         var pid: pid_t
         var cpuPercent: Double
+        /// Resident size, not phys_footprint: it comes free with the task info every
+        /// process is already read for, and it only has to pick which rows get the
+        /// real figure from rusage in the second pass.
+        var residentBytes: UInt64
     }
 
     private var baselines: [pid_t: Baseline] = [:]
@@ -132,7 +146,8 @@ public final class ProcessCollector: MetricSource {
                                       diskWrite: previous?.diskWrite ?? 0,
                                       hasIO: previous?.hasIO ?? false,
                                       seenAt: generation)
-            candidates.append(Candidate(pid: pid, cpuPercent: percent))
+            candidates.append(Candidate(pid: pid, cpuPercent: percent,
+                                        residentBytes: taskInfo.pti_resident_size))
         }
 
         // Without this the dictionary would accumulate an entry for every process the
@@ -151,9 +166,23 @@ public final class ProcessCollector: MetricSource {
         candidates.sort { $0.cpuPercent > $1.cpuPercent }
 
         var rows: [ProcessRow] = []
-        rows.reserveCapacity(Self.rowLimit)
+        rows.reserveCapacity(Self.rowLimit + Self.memoryRowLimit)
         for candidate in candidates.prefix(Self.rowLimit) {
             if let row = buildRow(candidate, elapsed: context.elapsed) { rows.append(row) }
+        }
+
+        // Rows stay in CPU order end to end: the memory picks all sit below the CPU
+        // cut by construction, and are re-sorted among themselves so the tail of the
+        // list is ordered the same way as its head.
+        if candidates.count > Self.rowLimit {
+            candidates[Self.rowLimit...].sort { $0.residentBytes > $1.residentBytes }
+            let tailEnd = min(candidates.count, Self.rowLimit + Self.memoryCandidateLimit)
+            var tail = candidates[Self.rowLimit..<tailEnd]
+                .compactMap { buildRow($0, elapsed: context.elapsed) }
+            tail.sort { $0.memoryBytes > $1.memoryBytes }
+            tail.removeLast(max(0, tail.count - Self.memoryRowLimit))
+            tail.sort { $0.cpuPercent > $1.cpuPercent }
+            rows.append(contentsOf: tail)
         }
 
         // `totalThreads` only covers processes this uid may inspect, which is ~60% of

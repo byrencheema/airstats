@@ -62,6 +62,17 @@ enum RenderCLI {
                 }
                 var seen: Set<PanelModule> = []
                 settings.desktopWidget.modules = parsed.filter { seen.insert($0).inserted }
+            // Every panel module starts collapsed, so a change to a module's detail
+            // cannot be reviewed without a way to open it.
+            case "--open":
+                index += 1
+                let names = (arguments[safe: index] ?? "").split(separator: ",")
+                let parsed = names.compactMap { PanelModule(rawValue: String($0)) }
+                guard parsed.count == names.count, !parsed.isEmpty else {
+                    FileHandle.standardError.write(Data("--open wants a comma-separated list of module names\n".utf8))
+                    exit(2)
+                }
+                settings.panel.collapsedModules.subtract(parsed)
             case "--scenario":
                 index += 1
                 guard let scenario = OffscreenRenderer.Scenario(rawValue: arguments[safe: index] ?? "") else {
