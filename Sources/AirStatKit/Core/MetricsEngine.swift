@@ -103,7 +103,6 @@ public final class MetricsEngine {
         guard visible != isPanelVisible else { return }
         isPanelVisible = visible
         updateActivity()
-        if visible { core?.sampleNow() }
     }
 
     public func setDesktopWidgetVisible(_ visible: Bool) {

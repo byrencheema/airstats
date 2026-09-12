@@ -66,6 +66,10 @@ final class SourceSlot<Source: MetricSource> {
                 isRetired = true
                 source.stop()
                 isStarted = false
+            } else if failure == .pending {
+                // A collector establishing its first baseline has not failed; the
+                // reading it promised for the next tick must not be pushed out.
+                retryNotBefore = nil
             } else {
                 consecutiveFailures += 1
                 let delay = consecutiveFailures >= 6
@@ -221,7 +225,11 @@ public final class SamplingCore: @unchecked Sendable {
                 pendingWakeFlag = true
                 sampleLocked(force: true)
             } else if newActivity > .menuBar {
-                sampleLocked()
+                // The panel or widget just opened: this is the one immediate sample
+                // for that surface, so it ignores cadence. `sampleNow` is not called
+                // as well, because two back-to-back passes give the counter
+                // collectors a near-zero interval to divide by.
+                sampleLocked(force: true)
             }
         }
     }
