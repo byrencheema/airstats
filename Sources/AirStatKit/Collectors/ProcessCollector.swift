@@ -19,6 +19,11 @@ public final class ProcessCollector: MetricSource {
     /// are the largest resident sets outside the CPU cut, so a memory-ranked list has
     /// the right processes to rank.
     private static let memoryRowLimit = 10
+    /// The first pass ranks on resident size, but the row shows phys_footprint, and a
+    /// process whose footprint is mostly compressed pages can rank low on one and top
+    /// on the other. Reading rusage for every process would double the collector's
+    /// cost, so instead twice the tail is fetched and trimmed on the displayed figure.
+    private static let memoryCandidateLimit = 20
 
     /// Cumulative per-process counters carried between samples, keyed by pid.
     private struct Baseline {
@@ -160,19 +165,24 @@ public final class ProcessCollector: MetricSource {
 
         candidates.sort { $0.cpuPercent > $1.cpuPercent }
 
+        var rows: [ProcessRow] = []
+        rows.reserveCapacity(Self.rowLimit + Self.memoryRowLimit)
+        for candidate in candidates.prefix(Self.rowLimit) {
+            if let row = buildRow(candidate, elapsed: context.elapsed) { rows.append(row) }
+        }
+
         // Rows stay in CPU order end to end: the memory picks all sit below the CPU
         // cut by construction, and are re-sorted among themselves so the tail of the
         // list is ordered the same way as its head.
         if candidates.count > Self.rowLimit {
             candidates[Self.rowLimit...].sort { $0.residentBytes > $1.residentBytes }
-            let tailEnd = min(candidates.count, Self.rowLimit + Self.memoryRowLimit)
-            candidates[Self.rowLimit..<tailEnd].sort { $0.cpuPercent > $1.cpuPercent }
-        }
-
-        var rows: [ProcessRow] = []
-        rows.reserveCapacity(Self.rowLimit + Self.memoryRowLimit)
-        for candidate in candidates.prefix(Self.rowLimit + Self.memoryRowLimit) {
-            if let row = buildRow(candidate, elapsed: context.elapsed) { rows.append(row) }
+            let tailEnd = min(candidates.count, Self.rowLimit + Self.memoryCandidateLimit)
+            var tail = candidates[Self.rowLimit..<tailEnd]
+                .compactMap { buildRow($0, elapsed: context.elapsed) }
+            tail.sort { $0.memoryBytes > $1.memoryBytes }
+            tail.removeLast(max(0, tail.count - Self.memoryRowLimit))
+            tail.sort { $0.cpuPercent > $1.cpuPercent }
+            rows.append(contentsOf: tail)
         }
 
         // `totalThreads` only covers processes this uid may inspect, which is ~60% of
