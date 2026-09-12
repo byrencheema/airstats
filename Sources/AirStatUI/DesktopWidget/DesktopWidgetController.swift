@@ -23,6 +23,10 @@ public final class DesktopWidgetController: NSObject, NSWindowDelegate {
 
     private var panel: DesktopWidgetPanel?
     private var trackingArea: NSTrackingArea?
+    /// The last settings snapshot applied to the window. SwiftUI observes the store
+    /// itself for content changes; this snapshot is only for avoiding repeated AppKit
+    /// window work when an unrelated setting revision arrives.
+    private var appliedSettings: DesktopWidgetSettings?
 
     private var interaction: Interaction?
     private var isPointerNear = false
@@ -80,6 +84,7 @@ public final class DesktopWidgetController: NSObject, NSWindowDelegate {
         guard let panel else { return }
         self.panel = nil
         trackingArea = nil
+        appliedSettings = nil
         anchorEdges = nil
         panel.interaction = nil
         panel.delegate = nil
@@ -90,23 +95,39 @@ public final class DesktopWidgetController: NSObject, NSWindowDelegate {
     public func show() {
         let panel = self.panel ?? makeWindow()
         self.panel = panel
-        apply(settings.settings.desktopWidget, to: panel)
+        let wasVisible = panel.isVisible
+        if !wasVisible {
+            // A window ordered out may have lost its event monitors during hide(),
+            // so treat the next presentation as a fresh AppKit application pass.
+            appliedSettings = nil
+        }
+        let needsOrdering = apply(settings.settings.desktopWidget, to: panel)
         // `orderFrontRegardless` rather than `makeKeyAndOrderFront`: the desktop widget must
         // appear over the frontmost app without that app losing focus.
-        panel.orderFrontRegardless()
-        WindowLog.log("desktop widget shown frame=\(panel.frame) level=\(panel.level.rawValue) monitors=\(activeEventMonitorCount)")
-        onVisibilityChange?(true)
+        if !wasVisible || needsOrdering {
+            panel.orderFrontRegardless()
+        }
+        if !wasVisible {
+            WindowLog.log("desktop widget shown frame=\(panel.frame) level=\(panel.level.rawValue) monitors=\(activeEventMonitorCount)")
+            onVisibilityChange?(true)
+        }
     }
 
     public func hide() {
         removeMonitors()
         guard let panel else { return }
-        panel.orderOut(nil)
+        let wasVisible = panel.isVisible
+        if wasVisible {
+            panel.orderOut(nil)
+        }
         isPointerNear = false
         isTemporarilyInteractive = false
         layout.isGrabbable = false
-        WindowLog.log("desktop widget hidden monitors=\(activeEventMonitorCount)")
-        onVisibilityChange?(false)
+        appliedSettings = nil
+        if wasVisible {
+            WindowLog.log("desktop widget hidden monitors=\(activeEventMonitorCount)")
+            onVisibilityChange?(false)
+        }
     }
 
     /// A display was attached, removed, or rearranged: a saved position can now point
@@ -152,35 +173,61 @@ public final class DesktopWidgetController: NSObject, NSWindowDelegate {
         trackingArea = area
     }
 
-    /// Apply every setting that has a window-level consequence.
+    /// Apply settings that have a window-level consequence.
     ///
-    /// Idempotent on purpose: it runs on every settings revision, and anything that
-    /// wrote back to settings from here would loop.
-    private func apply(_ desktopWidget: DesktopWidgetSettings, to panel: DesktopWidgetPanel) {
-        // Order matters and is not optional. Setting `isFloatingPanel` assigns the
-        // window's level as a side effect — `.floating` when true, `.normal` when
-        // false — so a level written before it is thrown away. Measured: with the two
-        // lines the other way round every depth reported `kCGFloatingWindowLevel`.
-        panel.isFloatingPanel = desktopWidget.depth != .wallpaper
-        panel.level = desktopWidget.depth.windowLevel
-        // On the wallpaper the desktop widget is part of the desktop, and a desktop does not
-        // cast a shadow onto itself. Everywhere else the shadow is what lifts it off
-        // whatever it is covering.
-        panel.hasShadow = desktopWidget.depth != .wallpaper
-        panel.collectionBehavior = desktopWidget.showsOnAllSpaces
-            ? [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
-            : [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+    /// The settings store also carries content configuration, which SwiftUI observes
+    /// directly. Restricting this pass to changed AppKit properties keeps a metric or
+    /// unrelated preference write from reordering, repositioning, or reinstalling
+    /// window machinery.
+    private func apply(_ desktopWidget: DesktopWidgetSettings, to panel: DesktopWidgetPanel) -> Bool {
+        let previous = appliedSettings
+        let needsOrdering = previous?.depth != desktopWidget.depth
+            || previous?.showsOnAllSpaces != desktopWidget.showsOnAllSpaces
+        if previous?.depth != desktopWidget.depth {
+            // Order matters and is not optional. Setting `isFloatingPanel` assigns the
+            // window's level as a side effect — `.floating` when true, `.normal` when
+            // false — so a level written before it is thrown away. Measured: with the two
+            // lines the other way round every depth reported `kCGFloatingWindowLevel`.
+            panel.isFloatingPanel = desktopWidget.depth != .wallpaper
+            panel.level = desktopWidget.depth.windowLevel
+            // On the wallpaper the desktop widget is part of the desktop, and a desktop does not
+            // cast a shadow onto itself. Everywhere else the shadow is what lifts it off
+            // whatever it is covering.
+            panel.hasShadow = desktopWidget.depth != .wallpaper
+        }
+        if previous?.showsOnAllSpaces != desktopWidget.showsOnAllSpaces {
+            panel.collectionBehavior = desktopWidget.showsOnAllSpaces
+                ? [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
+                : [.moveToActiveSpace, .fullScreenAuxiliary, .ignoresCycle]
+        }
 
         // Width is handed to SwiftUI, not to the window: the hosting view reports its
         // new ideal size once it has re-laid out, and `applyContentSize` turns that
         // into a frame with the right height for the new width.
-        if interaction == nil, layout.width != desktopWidget.width {
+        let widthChanged = previous?.width != desktopWidget.width
+        if interaction == nil, widthChanged {
             layout.width = desktopWidget.width
         }
 
-        applyClickThrough(desktopWidget)
-        updateAlpha(animated: false)
-        if interaction == nil { reposition() }
+        let clickThroughChanged = previous?.isClickThrough != desktopWidget.isClickThrough
+            || previous?.dimsWhenInactive != desktopWidget.dimsWhenInactive
+        if clickThroughChanged {
+            applyClickThrough(desktopWidget)
+        }
+        let opacityChanged = previous?.opacity != desktopWidget.opacity
+            || previous?.inactiveOpacity != desktopWidget.inactiveOpacity
+            || previous?.dimsWhenInactive != desktopWidget.dimsWhenInactive
+        if opacityChanged {
+            updateAlpha(animated: false)
+        }
+        let placementChanged = previous?.corner != desktopWidget.corner
+            || previous?.originX != desktopWidget.originX
+            || previous?.originY != desktopWidget.originY
+        if interaction == nil, previous == nil || placementChanged || widthChanged {
+            reposition()
+        }
+        appliedSettings = desktopWidget
+        return needsOrdering
     }
 
     // MARK: Placement

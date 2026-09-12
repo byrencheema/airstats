@@ -42,17 +42,29 @@ public final class ThresholdMonitor {
         guard observationTask == nil else { return }
         // Observation-driven like the status item rather than a timer of its own: the
         // rules can only ever change answer when a new snapshot or a new setting lands.
-        let changes = ObservedChanges { [engine, settings] in
-            _ = engine.snapshot
-            _ = settings.revision
-        }
+        // The tracking closure below is rebuilt when the feature toggles so a disabled
+        // monitor keeps only the settings wakeup and never follows the sample stream.
         observationTask = Task { @MainActor [weak self] in
-            for await _ in changes {
+            while !Task.isCancelled {
                 guard let self else { return }
+                let notificationsEnabled = self.settings.settings.notifications.isEnabled
+                let changes = ObservedChanges { [engine = self.engine, settings = self.settings] in
+                    _ = settings.revision
+                    if settings.settings.notifications.isEnabled {
+                        _ = engine.snapshot
+                    }
+                }
                 self.evaluate()
+
+                for await _ in changes {
+                    guard !Task.isCancelled else { return }
+                    self.evaluate()
+                    guard self.settings.settings.notifications.isEnabled == notificationsEnabled else {
+                        break
+                    }
+                }
             }
         }
-        evaluate()
     }
 
     public func stop() {

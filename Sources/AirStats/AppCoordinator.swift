@@ -195,29 +195,29 @@ final class AppCoordinator {
         // is just as good a reason to stop sampling.
         observers.append(workspace.addObserver(forName: NSWorkspace.screensDidSleepNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(true) }
+            MainActor.assumeIsolated { self?.engine.setScreensAsleep(true) }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.screensDidWakeNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(false) }
+            MainActor.assumeIsolated { self?.engine.setScreensAsleep(false) }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.sessionDidResignActiveNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(true) }
+            MainActor.assumeIsolated { self?.engine.setSessionActive(false) }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.sessionDidBecomeActiveNotification,
                                                object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(false) }
+            MainActor.assumeIsolated { self?.engine.setSessionActive(true) }
         })
 
         let distributed = DistributedNotificationCenter.default()
         observers.append(distributed.addObserver(forName: .init("com.apple.screenIsLocked"),
                                                  object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(true) }
+            MainActor.assumeIsolated { self?.engine.setLocked(true) }
         })
         observers.append(distributed.addObserver(forName: .init("com.apple.screenIsUnlocked"),
                                                  object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.engine.setSystemAsleep(false) }
+            MainActor.assumeIsolated { self?.engine.setLocked(false) }
         })
 
         // Screen reconfiguration moves the status item and can invalidate the

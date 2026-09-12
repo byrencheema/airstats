@@ -39,7 +39,16 @@ public final class MetricsEngine {
     private var isPanelVisible = false
     private var isDesktopWidgetVisible = false
     private var isMenuBarOccluded = false
-    private var isSystemAsleep = false
+    private struct SuspensionReasons: OptionSet {
+        let rawValue: Int
+
+        static let systemSleeping = Self(rawValue: 1 << 0)
+        static let screensSleeping = Self(rawValue: 1 << 1)
+        static let sessionInactive = Self(rawValue: 1 << 2)
+        static let locked = Self(rawValue: 1 << 3)
+    }
+
+    private var suspensionReasons: SuspensionReasons = []
     /// Established by `beginObservingPowerState()` rather than at init, so the engine's
     /// low-power state has exactly one entry point.
     private var isLowPowerMode = false
@@ -47,6 +56,8 @@ public final class MetricsEngine {
     private var ingestCount = 0
     private var observationTask: Task<Void, Never>?
     private var powerStateObserver: NSObjectProtocol?
+    private var thermalStateObserver: NSObjectProtocol?
+    private var settingsApplyTask: Task<Void, Never>?
     public init(settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
         let s = settingsStore.settings
@@ -66,6 +77,7 @@ public final class MetricsEngine {
         core.start()
         beginObservingSettings()
         beginObservingPowerState()
+        beginObservingThermalState()
     }
 
     /// True while the power-state observer is installed. The notification centre keeps
@@ -77,7 +89,10 @@ public final class MetricsEngine {
     public func stop() {
         observationTask?.cancel()
         observationTask = nil
+        settingsApplyTask?.cancel()
+        settingsApplyTask = nil
         endObservingPowerState()
+        endObservingThermalState()
         core?.stop()
         core = nil
     }
@@ -88,7 +103,6 @@ public final class MetricsEngine {
         guard visible != isPanelVisible else { return }
         isPanelVisible = visible
         updateActivity()
-        if visible { core?.sampleNow() }
     }
 
     public func setDesktopWidgetVisible(_ visible: Bool) {
@@ -106,15 +120,19 @@ public final class MetricsEngine {
     }
 
     public func setSystemAsleep(_ asleep: Bool) {
-        guard asleep != isSystemAsleep else { return }
-        isSystemAsleep = asleep
-        if !asleep {
-            core?.noteWakeFromSleep()
-            // Rates spanning a sleep are meaningless; drop the discontinuity rather
-            // than drawing a spike the machine never actually experienced.
-            history.clear()
-        }
-        updateActivity()
+        setSuspensionReason(.systemSleeping, active: asleep)
+    }
+
+    public func setScreensAsleep(_ asleep: Bool) {
+        setSuspensionReason(.screensSleeping, active: asleep)
+    }
+
+    public func setSessionActive(_ active: Bool) {
+        setSuspensionReason(.sessionInactive, active: !active)
+    }
+
+    public func setLocked(_ locked: Bool) {
+        setSuspensionReason(.locked, active: locked)
     }
 
     /// Sets the Low Power Mode state. `start()` wires this to the process's own
@@ -140,7 +158,7 @@ public final class MetricsEngine {
 
     private func updateActivity() {
         let newActivity: SamplingActivity
-        if isSystemAsleep {
+        if !suspensionReasons.isEmpty {
             newActivity = .suspended
         } else if isPanelVisible {
             newActivity = .panel
@@ -163,6 +181,28 @@ public final class MetricsEngine {
         core?.setEnabledSources(currentRequiredSources)
     }
 
+    private func setSuspensionReason(_ reason: SuspensionReasons, active: Bool) {
+        let oldReasons = suspensionReasons
+        if active {
+            suspensionReasons.insert(reason)
+        } else {
+            suspensionReasons.remove(reason)
+        }
+        guard oldReasons != suspensionReasons else { return }
+
+        if !suspensionReasons.isEmpty {
+            updateActivity()
+            return
+        }
+        if !oldReasons.isEmpty {
+            core?.noteWakeFromSleep()
+            // Rates spanning any sleep/lock interval are meaningless; drop the
+            // discontinuity only when every suspension reason has cleared.
+            history.clear()
+        }
+        updateActivity()
+    }
+
     private var currentRequiredSources: Set<CollectorID> {
         settingsStore.settings.requiredSources(panelVisible: isPanelVisible,
                                                desktopWidgetVisible: isDesktopWidgetVisible)
@@ -178,8 +218,21 @@ public final class MetricsEngine {
         observationTask = Task { @MainActor [weak self] in
             for await _ in changes {
                 guard let self else { return }
-                self.applySettings()
+                self.scheduleSettingsApply()
             }
+        }
+    }
+
+    /// Collapse a burst of settings revisions into one configuration transaction. The
+    /// settings store is main-actor isolated, so yielding once lets a slider or reset
+    /// finish its current run-loop turn before reading the final settings tree.
+    private func scheduleSettingsApply() {
+        settingsApplyTask?.cancel()
+        settingsApplyTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled, let self else { return }
+            self.applySettings()
+            self.settingsApplyTask = nil
         }
     }
 
@@ -208,6 +261,36 @@ public final class MetricsEngine {
         self.powerStateObserver = nil
     }
 
+    private func beginObservingThermalState() {
+        guard thermalStateObserver == nil else { return }
+        thermalStateObserver = NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.setThermalPressure(ProcessInfo.processInfo.thermalState)
+                }
+            }
+        setThermalPressure(ProcessInfo.processInfo.thermalState)
+    }
+
+    private func setThermalPressure(_ state: ProcessInfo.ThermalState) {
+        let pressure: ThermalPressure
+        switch state {
+        case .nominal: pressure = .nominal
+        case .fair: pressure = .fair
+        case .serious: pressure = .serious
+        case .critical: pressure = .critical
+        @unknown default: pressure = .nominal
+        }
+        core?.setThermalPressure(pressure)
+    }
+
+    private func endObservingThermalState() {
+        guard let thermalStateObserver else { return }
+        NotificationCenter.default.removeObserver(thermalStateObserver)
+        self.thermalStateObserver = nil
+    }
+
     /// Re-pushes the whole configuration, and is called for *any* accepted settings
     /// change: the engine wakes on `settingsStore.revision`, which bumps on every
     /// mutation. Changing a desktop widget colour re-pushes the interval, the enabled-source
@@ -219,9 +302,9 @@ public final class MetricsEngine {
     /// picker, because a drag runs this at display rate.
     func applySettings() {
         let s = settingsStore.settings
-        core?.setBaseInterval(s.general.updateInterval)
-        core?.setEnabledSources(currentRequiredSources)
-        core?.setPublicIPLookupEnabled(s.general.fetchesPublicIP)
+        core?.apply(.init(baseInterval: s.general.updateInterval,
+                          enabledSources: currentRequiredSources,
+                          publicIPLookupEnabled: s.general.fetchesPublicIP))
         // Turning the pause off has to resume sampling now, not at whatever UI
         // transition happens to call `updateActivity` next.
         updateActivity()
