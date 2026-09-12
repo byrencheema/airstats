@@ -195,6 +195,11 @@ public enum Design {
         /// edges; at these, 12.6pt, which sits comfortably.
         public static let stackedValueFontSize: CGFloat = 10
         public static let stackedCaptionFontSize: CGFloat = 8
+        /// The emphasised pair. A point traded from the caption to the number: the
+        /// cap heights sum to what the default pair's do, so the stack is exactly as
+        /// tall and nothing around it moves when the option is flipped.
+        public static let emphasizedStackedValueFontSize: CGFloat = 11
+        public static let emphasizedStackedCaptionFontSize: CGFloat = 7
         /// Vertical gap between the two rows, between their cap-height boxes rather
         /// than their line boxes.
         public static let stackedRowGap: CGFloat = 1

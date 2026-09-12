@@ -28,7 +28,7 @@ public final class MenuBarContentView: NSView {
     private var placements: [Placement] = []
     private var cachedWidth: CGFloat = 0
 
-    private var fonts = FontSet(monospacedDigits: true)
+    private var fonts = FontSet(monospacedDigits: true, emphasizesValues: false)
     private var textCache: [TextKey: CachedText] = [:]
     private var symbolCache: [String: NSImage] = [:]
     private var tintedSymbolCache: [TintKey: NSImage] = [:]
@@ -144,8 +144,10 @@ public final class MenuBarContentView: NSView {
 
     public func update(with model: MenuBarRenderModel) {
         guard model != self.model else { return }
-        if self.model?.usesMonospacedDigits != model.usesMonospacedDigits {
-            fonts = FontSet(monospacedDigits: model.usesMonospacedDigits)
+        if self.model?.usesMonospacedDigits != model.usesMonospacedDigits
+            || self.model?.emphasizesValues != model.emphasizesValues {
+            fonts = FontSet(monospacedDigits: model.usesMonospacedDigits,
+                            emphasizesValues: model.emphasizesValues)
             textCache.removeAll(keepingCapacity: true)
         }
         self.model = model
@@ -990,19 +992,24 @@ public final class MenuBarContentView: NSView {
         let stackedCaption: NSFont
         let batteryValue: NSFont
 
-        init(monospacedDigits: Bool) {
+        init(monospacedDigits: Bool, emphasizesValues: Bool) {
             batteryValue = .monospacedDigitSystemFont(ofSize: Layout.batteryValueFontSize,
                                                       weight: .medium)
+            let weight: NSFont.Weight = emphasizesValues ? .semibold : .regular
             let size = Design.MenuBar.valueFontSize
             value = monospacedDigits
-                ? .monospacedDigitSystemFont(ofSize: size, weight: .regular)
-                : .systemFont(ofSize: size, weight: .regular)
+                ? .monospacedDigitSystemFont(ofSize: size, weight: weight)
+                : .systemFont(ofSize: size, weight: weight)
             caption = .systemFont(ofSize: Design.MenuBar.captionFontSize, weight: .medium)
-            let stacked = Design.MenuBar.stackedValueFontSize
+            let stacked = emphasizesValues
+                ? Design.MenuBar.emphasizedStackedValueFontSize
+                : Design.MenuBar.stackedValueFontSize
             stackedValue = monospacedDigits
-                ? .monospacedDigitSystemFont(ofSize: stacked, weight: .regular)
-                : .systemFont(ofSize: stacked, weight: .regular)
-            stackedCaption = .systemFont(ofSize: Design.MenuBar.stackedCaptionFontSize,
+                ? .monospacedDigitSystemFont(ofSize: stacked, weight: weight)
+                : .systemFont(ofSize: stacked, weight: weight)
+            stackedCaption = .systemFont(ofSize: emphasizesValues
+                                            ? Design.MenuBar.emphasizedStackedCaptionFontSize
+                                            : Design.MenuBar.stackedCaptionFontSize,
                                          weight: .medium)
         }
 

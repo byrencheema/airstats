@@ -114,6 +114,7 @@ struct StatusItemControllerLayoutTests {
         #expect(slice.spacing == model.spacing)
         #expect(slice.usesFixedWidth == model.usesFixedWidth)
         #expect(slice.usesMonospacedDigits == model.usesMonospacedDigits)
+        #expect(slice.emphasizesValues == model.emphasizesValues)
         #expect(slice.isStale == model.isStale)
     }
 

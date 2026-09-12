@@ -241,6 +241,11 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     /// the only surface left, and Settings is reached by launching the app again, by
     /// its hot key, or from the widget's context menu.
     public var isVisible: Bool
+    /// Numbers a step larger and semibold, captions a step smaller. The default sets
+    /// the two rows of a stacked readout at nearly the same size in the same weight,
+    /// which reads as fine print; this is the other reading, where the number is the
+    /// thing and the caption is its footnote.
+    public var emphasizesValues: Bool
 
     /// Numbers are always set in a fixed-width face. Previously a toggle; a column of
     /// proportional digits shimmers as it changes, which is the single most visible
@@ -264,10 +269,12 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
 
     public init(items: [MenuBarItemConfig] = MenuBarSettings.defaultItems,
                 usesCombinedItem: Bool = true,
-                isVisible: Bool = true) {
+                isVisible: Bool = true,
+                emphasizesValues: Bool = false) {
         self.items = items
         self.usesCombinedItem = usesCombinedItem
         self.isVisible = isVisible
+        self.emphasizesValues = emphasizesValues
     }
 
     /// CPU, its temperature, GPU, and the battery.
@@ -300,7 +307,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     public var enabledItems: [MenuBarItemConfig] { items.filter(\.isEnabled) }
 
     private enum CodingKeys: String, CodingKey {
-        case items, usesCombinedItem, isVisible
+        case items, usesCombinedItem, isVisible, emphasizesValues
     }
 
     /// Files written before the packing settings were removed still load: the keys
@@ -313,6 +320,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
         items = decodedItems.isEmpty ? MenuBarSettings.defaultItems : decodedItems.map { $0.sanitized() }
         usesCombinedItem = c.value(.usesCombinedItem, or: true)
         isVisible = c.value(.isVisible, or: true)
+        emphasizesValues = c.value(.emphasizesValues, or: false)
     }
 }
 

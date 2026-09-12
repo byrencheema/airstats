@@ -108,6 +108,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
     public var spacing: Double
     public var usesMonospacedDigits: Bool
     public var usesFixedWidth: Bool
+    public var emphasizesValues: Bool
     public var isStale: Bool
 
     public var accessibilityDescription: String {
@@ -122,6 +123,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         self.spacing = MenuBarSettings.itemSpacing
         self.usesMonospacedDigits = MenuBarSettings.usesMonospacedDigits
         self.usesFixedWidth = MenuBarSettings.usesFixedWidth
+        self.emphasizesValues = settings.menuBar.emphasizesValues
         self.isStale = isStale
 
         var rendered: [MenuBarItemRender] = []

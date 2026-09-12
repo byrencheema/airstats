@@ -124,6 +124,14 @@ struct SettingsDecodingTests {
         #expect(MenuBarMetric.cpuUsage.supportedStyles.contains(settings.menuBar.items[0].style))
     }
 
+    /// Off by default: the bar a user already has must not change weight on update.
+    @Test("bold menu bar numbers are off unless the file says otherwise")
+    func emphasizedValuesDefaultOff() throws {
+        #expect(try decode("{}").menuBar.emphasizesValues == false)
+        #expect(try decode(#"{"menuBar":{}}"#).menuBar.emphasizesValues == false)
+        #expect(try decode(#"{"menuBar":{"emphasizesValues":true}}"#).menuBar.emphasizesValues == true)
+    }
+
     @Test("round-trips without loss")
     func roundTrip() throws {
         var original = Settings()

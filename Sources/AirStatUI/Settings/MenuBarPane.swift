@@ -39,6 +39,7 @@ struct MenuBarPane: View {
             Section {
                 Toggle("Combine into one menu bar item",
                        isOn: settings.binding(\.menuBar.usesCombinedItem))
+                Toggle("Bold numbers", isOn: settings.binding(\.menuBar.emphasizesValues))
             } header: {
                 Text("Layout")
             } footer: {
