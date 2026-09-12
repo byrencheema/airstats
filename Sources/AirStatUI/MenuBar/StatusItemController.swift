@@ -11,8 +11,7 @@ enum MenuBarItemLayout: Equatable {
     case combined
     case separate([UUID])
     /// The user has taken the app out of the menu bar. Nothing is installed, and the
-    /// bar reports as invisible so sampling throttles the same way it does when the
-    /// items are pushed off by crowding.
+    /// controller reports that explicit absence to its visibility callback.
     case hidden
 
     init(settings: MenuBarSettings) {
@@ -66,7 +65,6 @@ public final class StatusItemController {
         let readout: UUID?
         let item: NSStatusItem
         let content: MenuBarContentView
-        let visibility: NSKeyValueObservation
     }
 
     public init(engine: MetricsEngine, settings: SettingsStore) {
@@ -171,16 +169,13 @@ public final class StatusItemController {
             content.bottomAnchor.constraint(equalTo: button.bottomAnchor),
         ])
 
-        return Hosted(readout: readout, item: item, content: content,
-                      visibility: observeVisibility(of: item))
+        return Hosted(readout: readout, item: item, content: content)
     }
 
-    /// Every item goes, observations first: a `removeStatusItem` fires the visibility
-    /// observer on the way out, and reporting a bar that is only half torn down as
-    /// invisible would throttle sampling for the moment it takes to build the new one.
+    /// Every item goes before the replacement set is reported. This avoids exposing a
+    /// transient empty set while a layout rebuild is in progress.
     private func tearDownItems() {
         for entry in hosted {
-            entry.visibility.invalidate()
             NSStatusBar.system.removeStatusItem(entry.item)
         }
         hosted.removeAll()
@@ -217,19 +212,12 @@ public final class StatusItemController {
 
     // MARK: Visibility
 
-    /// `NSStatusItem.isVisible` goes false when the item is pushed off the menu bar
-    /// (too many items, or hidden behind the notch). That is the strongest signal we
-    /// have that nobody can see our readouts, so it drives sampling throttling.
-    private func observeVisibility(of item: NSStatusItem) -> NSKeyValueObservation {
-        item.observe(\.isVisible, options: [.initial, .new]) { [weak self] _, _ in
-            Task { @MainActor [weak self] in self?.reportVisibility() }
-        }
-    }
-
-    /// Separate items are hidden one at a time, so one readout falling off the bar says
-    /// nothing about the rest: sampling only throttles once every item is gone.
+    /// `NSStatusItem.isVisible` is not a crowding signal: AppKit documents that it can
+    /// remain true while the item is temporarily hidden for lack of menu bar space.
+    /// Report only whether AirStats has installed status items. That is reliable for the
+    /// explicit menu bar setting and avoids throttling from an unsupported inference.
     private func reportVisibility() {
-        let visible = hosted.contains { $0.item.isVisible }
+        let visible = !hosted.isEmpty
         guard lastReportedVisibility != visible else { return }
         lastReportedVisibility = visible
         onVisibilityChange?(visible)
