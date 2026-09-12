@@ -1,3 +1,4 @@
+import DiskArbitration
 import Foundation
 import IOKit
 import IOKit.storage
@@ -41,10 +42,11 @@ public final class DiskCollector: MetricSource {
     private var lastVolumeScan: ContinuousClock.Instant?
 
     /// Purgeable bytes per volume path. Kept separately from `volumes` because it is
-    /// refreshed on a much slower cadence — see `refreshPurgeable`.
+    /// refreshed on a much slower cadence and outlives `stop()` — see `refreshPurgeable`.
     private var purgeable: [String: UInt64] = [:]
     private var lastPurgeableScan: ContinuousClock.Instant?
     private var purgeableCursor = 0
+    private lazy var arbitration = DASessionCreate(kCFAllocatorDefault)
 
     /// Capacity moves slowly and enumerating volumes is not free (a resource-value
     /// fetch and a `statfs` per mount, and a stalled network mount can block for
@@ -76,12 +78,11 @@ public final class DiskCollector: MetricSource {
         refreshDrives()
     }
 
+    /// `purgeable` survives so a resume does not start from plain free space.
     public func stop() {
         releaseDrives()
         volumes = []
-        purgeable = [:]
         lastVolumeScan = nil
-        lastPurgeableScan = nil
         needsDriveRefresh = false
     }
 
@@ -165,11 +166,17 @@ extension DiskCollector {
             return
         }
 
-        refreshPurgeable(urls)
+        // Mounted disk images are installers and app payloads, not storage.
+        let mounts = urls.compactMap { url -> (url: URL, device: (bsdName: String?, fileSystem: String?))? in
+            let device = deviceInfo(for: url.path)
+            if let bsdName = device.bsdName, isDiskImage(bsdName) { return nil }
+            return (url, device)
+        }
+        refreshPurgeable(mounts.map(\.url))
 
         var found: [VolumeInfo] = []
-        found.reserveCapacity(urls.count)
-        for url in urls {
+        found.reserveCapacity(mounts.count)
+        for (url, device) in mounts {
             // Throws for volumes that vanished between enumeration and this call, and
             // for network mounts the user cannot stat. Both mean "not a volume we can
             // report", never "report zeroes".
@@ -200,7 +207,6 @@ extension DiskCollector {
             // agree with System Settings; `usedBytes` is deliberately the stricter view.
             let free = UInt64(max(0, available))
             let slack = purgeable[url.path] ?? 0
-            let device = deviceInfo(for: url.path)
 
             let removable = values.volumeIsRemovable ?? false
             let ejectable = values.volumeIsEjectable ?? false
@@ -232,6 +238,9 @@ extension DiskCollector {
     /// available total — purgeable space is the slow-moving half of that sum (caches
     /// and snapshots), while free space moves every second, so `free + purgeable`
     /// tracks reality between refreshes and is exact at each one.
+    ///
+    /// A volume with no figure yet is measured on the next scan, startup disk first,
+    /// so a restart never leaves the menu bar on plain free space.
     private func refreshPurgeable(_ urls: [URL]) {
         guard !urls.isEmpty else {
             purgeable.removeAll()
@@ -241,12 +250,17 @@ extension DiskCollector {
         // reused by the next thing mounted there.
         purgeable = purgeable.filter { entry in urls.contains { $0.path == entry.key } }
 
-        let due = lastPurgeableScan.map { Monotonic.seconds(since: $0) >= purgeableScanInterval } ?? true
-        guard due else { return }
-        lastPurgeableScan = Monotonic.now
-
-        let url = urls[purgeableCursor % urls.count]
-        purgeableCursor = (purgeableCursor + 1) % urls.count
+        let url: URL
+        let unmeasured = urls.filter { purgeable[$0.path] == nil }
+        if let fresh = unmeasured.first(where: { $0.path == "/" }) ?? unmeasured.first {
+            url = fresh
+        } else {
+            let due = lastPurgeableScan.map { Monotonic.seconds(since: $0) >= purgeableScanInterval } ?? true
+            guard due else { return }
+            lastPurgeableScan = Monotonic.now
+            url = urls[purgeableCursor % urls.count]
+            purgeableCursor = (purgeableCursor + 1) % urls.count
+        }
         // Both figures come from one call so the subtraction cannot straddle a change
         // in free space. 0 is what volumes that do not implement the key report
         // (non-APFS, network mounts, disk images): nothing purgeable to add back.
@@ -255,7 +269,16 @@ extension DiskCollector {
            let important = values.volumeAvailableCapacityForImportantUsage,
            let available = values.volumeAvailableCapacity.map(Int64.init) {
             purgeable[url.path] = important > available ? UInt64(important - available) : 0
+        } else {
+            purgeable[url.path] = 0
         }
+    }
+
+    private func isDiskImage(_ bsdName: String) -> Bool {
+        guard let session = arbitration,
+              let disk = DADiskCreateFromBSDName(kCFAllocatorDefault, session, bsdName),
+              let description = DADiskCopyDescription(disk) as? [String: Any] else { return false }
+        return description[kDADiskDescriptionDeviceModelKey as String] as? String == "Disk Image"
     }
 
     /// BSD device name and filesystem type, which the URL resource keys do not expose.

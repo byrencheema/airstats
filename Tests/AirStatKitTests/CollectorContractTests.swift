@@ -133,6 +133,21 @@ struct CollectorContractTests {
         }
     }
 
+    @Test("the startup disk's purgeable figure does not vanish across restarts")
+    func rootPurgeableSurvivesRestart() {
+        let collector = DiskCollector()
+        var figures: [UInt64] = []
+        for _ in 0..<4 {
+            guard let root = sample(collector, times: 2).last?.value?.rootVolume else { return }
+            figures.append(root.purgeableBytes)
+        }
+        guard let first = figures.first else { return }
+        for figure in figures.dropFirst() {
+            #expect(abs(Int64(figure) - Int64(first)) < 1_000_000_000,
+                    "purgeable figure drifted across restarts: \(figures)")
+        }
+    }
+
     @Test("battery health agrees with the capacities reported beside it")
     func batteryHealthIsConsistent() {
         let states = sample(PowerCollector(), times: 2)
