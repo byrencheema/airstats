@@ -83,6 +83,11 @@ run in a windowless process.
 [CONTRIBUTING.md](CONTRIBUTING.md) has the checks to run before a pull request and the
 house rules.
 
+## Contact
+
+Bugs and feature requests go on the [issue tracker](https://github.com/byrencheema/airstats/issues).
+For anything private, email [hello@airstats.app](mailto:hello@airstats.app).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
