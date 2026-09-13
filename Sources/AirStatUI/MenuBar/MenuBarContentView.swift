@@ -94,6 +94,15 @@ public final class MenuBarContentView: NSView {
         static let batteryBoltHeight: CGFloat = 10
         static let batteryBoltWidth: CGFloat = 6.5
         static let batteryBoltGap: CGFloat = 1.5
+        /// The network status lights: two dots stacked, download over upload. Five
+        /// points each with three between puts the pair at 13, which sits inside the
+        /// bar with the same air the stacked type gets, and a five-point dot is still
+        /// a disc at 1x rather than a smudge.
+        static let statusDotDiameter: CGFloat = 5
+        static let statusDotGap: CGFloat = 3
+        /// An idle light is drawn, not hidden: a missing dot and a dark dot are not
+        /// the same thing, and the pair is what makes the shape legible.
+        static let statusDotIdleAlpha: CGFloat = 0.3
         /// The bolt, in a unit box with y running up as this view's coordinates do.
         ///
         /// Traced off `bolt.fill` rather than invented: the symbol was rasterised at 200
@@ -200,6 +209,7 @@ public final class MenuBarContentView: NSView {
         var symbol: CGFloat = 0
         var battery: CGFloat = 0
         var caption: CGFloat = 0
+        var statusDot: CGFloat = 0
         var graph: CGFloat = 0
         var primaryGlyph: CGFloat = 0
         var primaryValue: CGFloat = 0
@@ -222,6 +232,7 @@ public final class MenuBarContentView: NSView {
             append(symbol, after: Layout.partGap)
             append(battery, after: Layout.partGap)
             append(caption, after: Layout.partGap)
+            append(statusDot, after: Layout.partGap)
             append(graph, after: Layout.partGap)
             append(stack, after: Layout.partGap)
             append(primaryGlyph, after: Layout.partGap)
@@ -268,6 +279,12 @@ public final class MenuBarContentView: NSView {
         if item.style == .battery {
             geometry.battery = Layout.batteryBoltWidth + Layout.batteryBoltGap
                 + Layout.batteryBodyWidth + Layout.batteryNubGap + Layout.batteryNubWidth
+            return geometry
+        }
+
+        // The two lights are the whole reading, and nothing else is drawn.
+        if item.style == .statusDot {
+            geometry.statusDot = Layout.statusDotDiameter
             return geometry
         }
 
@@ -393,6 +410,12 @@ public final class MenuBarContentView: NSView {
             drawText(caption, role: .caption, x: x, baseline: centeredBaseline(for: .caption),
                      color: colors.caption, scale: scale, context: context)
             x += geometry.caption
+        }
+
+        if geometry.statusDot > 0 {
+            gap(Layout.partGap)
+            drawStatusDot(item, x: x, colors: colors, scale: scale, context: context)
+            x += geometry.statusDot
         }
 
         if geometry.graph > 0 {
@@ -577,6 +600,43 @@ public final class MenuBarContentView: NSView {
             // orange, then red as the number climbed was saying what the number
             // already said, in the one place on screen with no room to say anything.
             return item.tint.map(NSColor.init(themeColor:))
+        }
+    }
+
+    // MARK: Status dots
+
+    /// Two lights stacked, download above upload. Green while that direction is
+    /// moving, the bar's own ink sat back while it is idle, and both red when the
+    /// machine has no route out.
+    ///
+    /// The second place this view colours itself without being asked, and the same
+    /// defence as the low battery: green for traffic and red for no link is not a
+    /// convention this app invented, it is what the lights on every router mean, and
+    /// a dot in the bar's own grey would be an indicator that indicates nothing. The
+    /// lights keep the item's alpha so they dim with everything else when the sample
+    /// is stale.
+    private func drawStatusDot(_ item: MenuBarItemRender, x: CGFloat, colors: ItemColors,
+                               scale: CGFloat, context: CGContext) {
+        let diameter = Layout.statusDotDiameter
+        let pairHeight = diameter * 2 + Layout.statusDotGap
+        let top = bounds.midY + pairHeight / 2 - diameter
+        let bottom = bounds.midY - pairHeight / 2
+        let status = item.networkStatus
+
+        func ink(_ lit: Bool) -> CGColor {
+            let alpha = colors.mark.alphaComponent
+            guard status?.isOnline ?? false else {
+                return NSColor.systemRed.withAlphaComponent(alpha).cgColor
+            }
+            return lit
+                ? NSColor.systemGreen.withAlphaComponent(alpha).cgColor
+                : colors.mark.withAlphaComponent(alpha * Layout.statusDotIdleAlpha).cgColor
+        }
+
+        for (y, lit) in [(top, status?.isReceiving ?? false), (bottom, status?.isSending ?? false)] {
+            let rect = snapped(CGRect(x: x, y: y, width: diameter, height: diameter), scale: scale)
+            context.setFillColor(ink(lit))
+            context.fillEllipse(in: rect)
         }
     }
 
@@ -1035,7 +1095,7 @@ private extension MenuBarDisplayStyle {
     var drawsValue: Bool {
         switch self {
         case .text, .textAndGraph, .iconAndText: return true
-        case .graph, .battery: return false
+        case .graph, .battery, .statusDot: return false
         }
     }
 }
