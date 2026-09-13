@@ -72,6 +72,39 @@ public struct MenuBarItemRender: Equatable, Sendable {
     /// as text rather than derived from `batteryCharge` in the view for the usual
     /// reason: the view does no interpretation, and rounding is interpretation.
     public var batteryValueText: String?
+    /// What the `.statusDot` style draws. Nil on every readout but the up-and-down
+    /// network one, and carried here for the reason the battery fields are: the view
+    /// draws what it is handed, and nothing it fetches for itself.
+    public var networkStatus: NetworkStatus?
+
+    /// Two lights, download over upload.
+    public struct NetworkStatus: Equatable, Sendable {
+        /// The machine has a primary interface with a route out. False turns both
+        /// lights red whatever the counters say.
+        public var isOnline: Bool
+        public var isReceiving: Bool
+        public var isSending: Bool
+
+        /// A direction counts as moving above this. The background chatter of an idle
+        /// Mac (mDNS, keepalives, a mail check) sits well under it, and anything a
+        /// person would call a transfer sits well over it, so the lights show what
+        /// the person is doing rather than what the machine is muttering.
+        public static let activityThresholdBytesPerSecond: Double = 10_000
+
+        /// How long a light stays on after the last sample over the threshold.
+        ///
+        /// Traffic is bursty at the sample rate: a page load is one busy sample and
+        /// three quiet ones, and a light that tracked that would blink through every
+        /// transfer. Holding it for this long turns a burst into a steady light and
+        /// still lets it go out soon after the transfer does.
+        public static let holdSeconds: TimeInterval = 8
+
+        public init(isOnline: Bool, isReceiving: Bool = false, isSending: Bool = false) {
+            self.isOnline = isOnline
+            self.isReceiving = isReceiving
+            self.isSending = isSending
+        }
+    }
 
     /// Where the indicator turns red. 20% is where macOS itself first warns.
     public static let lowBatteryFraction = 0.20
@@ -84,7 +117,8 @@ public struct MenuBarItemRender: Equatable, Sendable {
                 batteryCharge: Double? = nil,
                 isBatteryCharging: Bool = false,
                 isBatteryLow: Bool = false,
-                batteryValueText: String? = nil) {
+                batteryValueText: String? = nil,
+                networkStatus: NetworkStatus? = nil) {
         self.id = id
         self.style = style
         self.tint = tint
@@ -98,6 +132,7 @@ public struct MenuBarItemRender: Equatable, Sendable {
         self.isBatteryCharging = isBatteryCharging
         self.isBatteryLow = isBatteryLow
         self.batteryValueText = batteryValueText
+        self.networkStatus = networkStatus
     }
 
 }
@@ -214,12 +249,24 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             // both still carry the units in full.
             let rateWidest = MenuBarRenderModel.widestCompactNetworkRate(formatter)
             var uploadText = dash
+            // The two lights, for the `.statusDot` style. Up means a primary
+            // interface with a route out, the same test the panel's connection row
+            // uses, and a direction is lit while it is moving or was within the hold.
+            var networkStatus: MenuBarItemRender.NetworkStatus?
             if let net = snapshot.network.value {
                 valueText = formatter.networkRate(net.downloadBytesPerSecond, compact: true)
                 uploadText = formatter.networkRate(net.uploadBytesPerSecond, compact: true)
                 unavailable = false
                 accessibilityValue = "Network down \(formatter.networkRate(net.downloadBytesPerSecond)), "
                     + "up \(formatter.networkRate(net.uploadBytesPerSecond))"
+                let online = net.connectionType != .none
+                networkStatus = .init(
+                    isOnline: online,
+                    isReceiving: online && recentlyActive(net.downloadBytesPerSecond,
+                                                          history, .networkDownload),
+                    isSending: online && recentlyActive(net.uploadBytesPerSecond,
+                                                        history, .networkUpload))
+                if !online { accessibilityValue = "Network offline" }
             }
             // Down and up share one scale so the two stacked graphs are comparable;
             // normalising each to its own peak would make a trickle of upload look
@@ -232,7 +279,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                                widestText: rateWidest, series: pair.0),
                           secondary: secondary,
                           unavailable: unavailable, accessibility: accessibilityValue,
-                          settings: settings)
+                          settings: settings, networkStatus: networkStatus)
 
         case .networkUpload:
             if let net = snapshot.network.value {
@@ -359,7 +406,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                unavailable: Bool,
                                accessibility: String,
                                settings: Settings,
-                               battery: BatteryState? = nil) -> MenuBarItemRender {
+                               battery: BatteryState? = nil,
+                               networkStatus: MenuBarItemRender.NetworkStatus? = nil) -> MenuBarItemRender {
         MenuBarItemRender(
             id: config.id,
             style: config.style,
@@ -377,7 +425,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             batteryCharge: battery?.charge,
             isBatteryCharging: battery?.isCharging ?? false,
             isBatteryLow: battery?.isLow ?? false,
-            batteryValueText: battery?.valueText
+            batteryValueText: battery?.valueText,
+            networkStatus: networkStatus
         )
     }
 
@@ -414,6 +463,24 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .fanSpeed: return "FAN"
         case .uptime: return "UP"
         }
+    }
+
+    /// Whether a direction is over the activity threshold now, or was within the last
+    /// `holdSeconds` of samples. The hold is read off the history rather than kept as
+    /// state here, so this stays a pure function of what the engine already records.
+    private static func recentlyActive(_ current: Double, _ history: MetricHistory,
+                                       _ key: SeriesKey) -> Bool {
+        let threshold = MenuBarItemRender.NetworkStatus.activityThresholdBytesPerSecond
+        if current >= threshold { return true }
+        let ring = history[key]
+        let lookback = Int((MenuBarItemRender.NetworkStatus.holdSeconds
+                            / max(history.sampleInterval, 0.1)).rounded(.up))
+        guard ring.count > 0, lookback > 0 else { return false }
+        for index in stride(from: ring.count - 1, through: max(0, ring.count - lookback), by: -1)
+        where ring[index] >= Float(threshold) {
+            return true
+        }
+        return false
     }
 
     /// Graph series normalised to 0...1. Unbounded metrics (throughput) scale to
