@@ -56,7 +56,10 @@ extension PanelModuleView {
         @ViewBuilder content: @escaping (V) -> C
     ) -> some View {
         if isExpanded {
+            // The transition lives here, on the view that is actually inserted and
+            // removed. On the container in `PanelModuleView` it applied to nothing.
             MetricContent(state) { content($0) }
+                .transition(.disclosure)
         } else if let failure = state.failure {
             UnavailableNote(failure)
         }

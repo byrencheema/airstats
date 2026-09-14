@@ -39,6 +39,10 @@ public final class MetricsEngine {
     public var staleOverride: Bool?
 
     private let settingsStore: SettingsStore
+    private let dayHistoryFile: MinuteHistoryFile
+    /// The newest minute the day was last written at, so the hourly save is a
+    /// subtraction per sample and not a timer.
+    private var dayHistorySavedMinute: Int?
     private var core: SamplingCore?
     private var isPanelVisible = false
     private var isDesktopWidgetVisible = false
@@ -67,12 +71,18 @@ public final class MetricsEngine {
         let s = settingsStore.settings
         self.history = MetricHistory(capacity: s.historyCapacity,
                                      sampleInterval: s.general.updateInterval)
+        self.dayHistoryFile = MinuteHistoryFile(
+            directory: settingsStore.settingsFileURL.deletingLastPathComponent())
     }
 
     // MARK: Lifecycle
 
     public func start() {
         guard core == nil else { return }
+        if dayHistory.isEmpty, let saved = dayHistoryFile.load(capacity: dayHistory.capacity) {
+            dayHistory = saved
+            dayHistorySavedMinute = saved.newestMinute
+        }
         let core = SamplingCore { [weak self] snapshot in
             self?.ingest(snapshot)
         }
@@ -91,6 +101,10 @@ public final class MetricsEngine {
     public var isObservingPowerState: Bool { powerStateObserver != nil }
 
     public func stop() {
+        // Synchronous: this runs from the app's termination path, where a detached
+        // write would not get to finish.
+        dayHistoryFile.save(dayHistory)
+        dayHistorySavedMinute = dayHistory.newestMinute
         observationTask?.cancel()
         observationTask = nil
         settingsApplyTask?.cancel()
@@ -195,6 +209,7 @@ public final class MetricsEngine {
         guard oldReasons != suspensionReasons else { return }
 
         if !suspensionReasons.isEmpty {
+            if oldReasons.isEmpty { saveDayHistory() }
             updateActivity()
             return
         }
@@ -337,9 +352,21 @@ public final class MetricsEngine {
 
     /// Fold a snapshot into history. Only series whose metric is actually available
     /// are appended — a missing sensor leaves a gap rather than a fabricated zero.
+    /// Writes the day off the main actor. The tier is a value, so the copy handed
+    /// to the task is the snapshot being saved and later samples cannot race it.
+    private func saveDayHistory() {
+        let snapshot = dayHistory
+        let file = dayHistoryFile
+        dayHistorySavedMinute = snapshot.newestMinute
+        Task.detached(priority: .utility) { file.save(snapshot) }
+    }
+
     private func record(_ s: SystemSnapshot) {
         history.markSampleDate(s.capturedAt)
         dayHistory.advance(to: s.capturedAt)
+        if let newest = dayHistory.newestMinute, newest - (dayHistorySavedMinute ?? newest) >= 60 {
+            saveDayHistory()
+        }
 
         if let cpu = s.cpu.value {
             fold(.cpuTotal, cpu.total.busy)

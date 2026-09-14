@@ -261,3 +261,96 @@ public struct MinuteSeries: Sendable, Equatable {
         return Double(count - first) * bucketDuration
     }
 }
+
+extension MinuteHistory {
+    /// The file format: a fixed header, then the four arrays in declaration order,
+    /// little-endian. About 350 KB at the default capacity. Read back only when
+    /// every field of the header matches what this build would write, so a file
+    /// from a different capacity or series set is treated as absent, never as data.
+    private static let magic: UInt32 = 0x4149_5248
+    private static let formatVersion: UInt32 = 1
+
+    public func encoded() -> Data {
+        var data = Data()
+        data.reserveCapacity(32 + minima.count * 14)
+        func append<T>(_ value: T) { withUnsafeBytes(of: value) { data.append(contentsOf: $0) } }
+        append(Self.magic.littleEndian)
+        append(Self.formatVersion.littleEndian)
+        append(UInt32(capacity).littleEndian)
+        append(UInt32(Self.seriesCount).littleEndian)
+        append(Int64(newestMinute ?? -1).littleEndian)
+        minima.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        maxima.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        sums.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        counts.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        return data
+    }
+
+    /// Nil for anything that is not exactly a file this build wrote.
+    public init?(encoded data: Data, capacity expected: Int = MinuteHistory.defaultCapacity) {
+        var offset = 0
+        func read<T: FixedWidthInteger>(_: T.Type) -> T? {
+            let size = MemoryLayout<T>.size
+            guard offset + size <= data.count else { return nil }
+            var value: T = 0
+            _ = withUnsafeMutableBytes(of: &value) { data.copyBytes(to: $0, from: offset..<(offset + size)) }
+            offset += size
+            return T(littleEndian: value)
+        }
+        guard read(UInt32.self) == Self.magic,
+              read(UInt32.self) == Self.formatVersion,
+              let capacity = read(UInt32.self).map(Int.init), capacity == expected,
+              let series = read(UInt32.self).map(Int.init), series == Self.seriesCount,
+              let newest = read(Int64.self) else { return nil }
+        let cells = series * capacity
+        let floats = cells * MemoryLayout<Float>.size
+        let shorts = cells * MemoryLayout<UInt16>.size
+        guard data.count == offset + floats * 3 + shorts else { return nil }
+        func floatArray() -> [Float] {
+            defer { offset += floats }
+            return data[offset..<(offset + floats)].withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
+        }
+        self.capacity = capacity
+        minima = floatArray()
+        maxima = floatArray()
+        sums = floatArray()
+        counts = data[offset..<(offset + shorts)].withUnsafeBytes { Array($0.bindMemory(to: UInt16.self)) }
+        newestMinute = newest >= 0 ? Int(newest) : nil
+    }
+
+    /// Seconds between the oldest sampled bucket of one series and the end of the
+    /// window, without allocating the series.
+    public func collectedSpan(of key: SeriesKey) -> TimeInterval {
+        guard let newest = newestMinute else { return 0 }
+        let oldest = newest - capacity + 1
+        for (position, minute) in (oldest...newest).enumerated()
+        where counts[index(of: key, slot: slot(of: minute))] > 0 {
+            return Double(capacity - position) * Self.bucketDuration
+        }
+        return 0
+    }
+}
+
+/// Where the day lives between launches.
+///
+/// Written at quit, on the way into sleep, and once an hour, so a relaunch or an
+/// update opens on the day it had rather than on an empty axis. Restoring is safe
+/// because buckets are anchored to wall-clock minutes: the first sample after
+/// launch advances the tier and the time the app was not running becomes the gap
+/// it was.
+public struct MinuteHistoryFile: Sendable {
+    public let url: URL
+
+    public init(directory: URL) {
+        url = directory.appendingPathComponent("history.bin")
+    }
+
+    public func save(_ history: MinuteHistory) {
+        try? history.encoded().write(to: url, options: .atomic)
+    }
+
+    public func load(capacity: Int = MinuteHistory.defaultCapacity) -> MinuteHistory? {
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        return MinuteHistory(encoded: data, capacity: capacity)
+    }
+}

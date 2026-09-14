@@ -21,7 +21,9 @@ public struct HistoryChart: View {
     private let bandTint: Color
     private let domain: ClosedRange<Double>?
     private let height: CGFloat
-    @Binding private var range: HistoryRange
+    /// Nil until the user picks: the chart opens on the day once there is an hour
+    /// of it, and on the live span before that, so it never opens on a lone dot.
+    @Binding private var range: HistoryRange?
 
     @State private var scrub: Scrub?
     @Environment(\.metricFormatter) private var formatter
@@ -34,7 +36,7 @@ public struct HistoryChart: View {
                 band: Color,
                 domain: ClosedRange<Double>? = nil,
                 height: CGFloat = Design.Chart.detailHeight,
-                range: Binding<HistoryRange>) {
+                range: Binding<HistoryRange?>) {
         self.key = key
         self.history = history
         self.day = day
@@ -145,9 +147,16 @@ public struct HistoryChart: View {
         }
     }
 
+    /// The day once it can show one, otherwise whatever the live ring holds.
+    public static let dayDefaultThreshold: TimeInterval = 3_600
+
+    private var resolvedRange: HistoryRange {
+        range ?? (day.collectedSpan(of: key) >= Self.dayDefaultThreshold ? .day : .recent)
+    }
+
     private var window: Window {
         let recent = ChartSeries(key, from: history, tint: lineTint, domain: domain)
-        switch range {
+        switch resolvedRange {
         case .recent:
             return Window(recent: recent, end: history.lastSampleDate ?? Date(), domain: domain)
         case .day:
@@ -290,7 +299,7 @@ public struct HistoryChart: View {
 
     private func footer(_ window: Window) -> some View {
         HStack(spacing: Design.Space.m) {
-            HistoryRangePicker(range: $range,
+            HistoryRangePicker(range: Binding(get: { resolvedRange }, set: { range = $0 }),
                                recentLabel: HistoryRange.label(forSpan: settings.historyDuration))
             Spacer(minLength: Design.Space.xs)
             ViewThatFits(in: .horizontal) {

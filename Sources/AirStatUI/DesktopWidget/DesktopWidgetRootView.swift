@@ -124,21 +124,19 @@ private struct DesktopWidgetModuleView: View {
 
     /// The last 24 hours under the rows, in the metric's own colour.
     ///
-    /// Drawn only once the day has a sample in it. The widget reserves space for
-    /// rows that are about to arrive, but a chart that is about to arrive has no
-    /// honest height: an empty baseline under a live number reads as a broken
-    /// chart, not a pending one, and the first bucket lands within a minute.
+    /// Drawn only once the day has an hour in it. This is a row, not a chart surface
+    /// with axes to frame an empty plot, and a row that appears once is better than
+    /// a dashed line with a dot on it for sixty minutes. With the day saved across
+    /// launches that wait happens once, after install.
     @ViewBuilder
     private func history(tint: Color) -> some View {
-        if showsHistory, let series = module.historySeries {
-            let silhouette = HistorySilhouette(series.key, day: engine.dayHistory, tint: tint,
-                                               style: chartStyle, domain: series.domain,
-                                               height: Self.historyHeight)
-            if !silhouette.isEmpty {
-                silhouette
-                    .padding(.leading, Self.indent)
-                    .padding(.top, Design.Space.xxs)
-            }
+        if showsHistory, let series = module.historySeries,
+           engine.dayHistory.collectedSpan(of: series.key) >= HistoryChart.dayDefaultThreshold {
+            HistorySilhouette(series.key, day: engine.dayHistory, tint: tint,
+                              style: chartStyle, domain: series.domain,
+                              height: Self.historyHeight)
+                .padding(.leading, Self.indent)
+                .padding(.top, Design.Space.xxs)
         }
     }
 

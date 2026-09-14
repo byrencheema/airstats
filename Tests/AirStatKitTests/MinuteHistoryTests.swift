@@ -200,3 +200,73 @@ struct HistoryChartSettingsTests {
         #expect(decodedWidget.showsHistoryChart == true)
     }
 }
+
+@Suite("Minute history file")
+struct MinuteHistoryFileTests {
+
+    private func filled() -> MinuteHistory {
+        var day = MinuteHistory(capacity: 8)
+        for minute in 0..<6 {
+            day.advance(to: Date(timeIntervalSince1970: Double(minute) * 60))
+            day.record(.cpuTotal, Double(minute) / 10)
+            day.record(.networkDownload, Double(minute) * 1000)
+        }
+        return day
+    }
+
+    @Test("a day round trips through its file byte for byte")
+    func roundTrip() {
+        let day = filled()
+        let decoded = MinuteHistory(encoded: day.encoded(), capacity: 8)
+        #expect(decoded == day)
+        #expect(decoded?.series(.cpuTotal) == day.series(.cpuTotal))
+        #expect(decoded?.newestMinute == 5)
+    }
+
+    @Test("a file from another capacity, a truncated one, or garbage is absent, not data")
+    func rejectsForeignFiles() {
+        let day = filled()
+        #expect(MinuteHistory(encoded: day.encoded(), capacity: 1440) == nil)
+        #expect(MinuteHistory(encoded: day.encoded().dropLast(), capacity: 8) == nil)
+        #expect(MinuteHistory(encoded: Data("not a day".utf8), capacity: 8) == nil)
+        #expect(MinuteHistory(encoded: Data(), capacity: 8) == nil)
+    }
+
+    @Test("an empty day encodes and decodes as empty")
+    func emptyDay() {
+        let decoded = MinuteHistory(encoded: MinuteHistory(capacity: 4).encoded(), capacity: 4)
+        #expect(decoded?.isEmpty == true)
+        #expect(decoded?.newestMinute == nil)
+    }
+
+    @Test("the store writes and reads the file, and a restored day resumes with a gap")
+    func storeAndResume() {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AirStatTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = MinuteHistoryFile(directory: dir)
+        #expect(file.load(capacity: 8) == nil)
+        file.save(filled())
+        var restored = file.load(capacity: 8)!
+        #expect(restored.collectedSpan(of: .cpuTotal) == 6 * 60)
+        // Relaunched three minutes later: the newest bucket moves on and the two
+        // minutes nobody was sampling are gaps.
+        restored.advance(to: Date(timeIntervalSince1970: 8 * 60))
+        restored.record(.cpuTotal, 0.9)
+        #expect(restored.series(.cpuTotal).counts.map { Int($0) } == [1, 1, 1, 1, 1, 0, 0, 1])
+    }
+
+    @Test("collected span is measured from the oldest sampled bucket of that series")
+    func collectedSpan() {
+        var day = MinuteHistory(capacity: 10)
+        day.advance(to: Date(timeIntervalSince1970: 0))
+        day.record(.cpuTotal, 1)
+        day.advance(to: Date(timeIntervalSince1970: 4 * 60))
+        day.record(.cpuTotal, 1)
+        day.record(.gpuTemperature, 1)
+        #expect(day.collectedSpan(of: .cpuTotal) == 5 * 60)
+        #expect(day.collectedSpan(of: .gpuTemperature) == 60)
+        #expect(day.collectedSpan(of: .fanRPM) == 0)
+        #expect(MinuteHistory(capacity: 10).collectedSpan(of: .cpuTotal) == 0)
+    }
+}

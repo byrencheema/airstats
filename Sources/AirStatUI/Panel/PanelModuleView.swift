@@ -35,9 +35,10 @@ struct PanelModuleView: View {
     var captionColumnWidth: CGFloat
 
     @State private var isHovering = false
-    /// Which window the module's history chart shows. View state rather than a
-    /// setting: it is a glance choice, and it resets with the panel.
-    @State var historyRange: HistoryRange = .day
+    /// Which window the module's history chart shows, once the user has picked one.
+    /// View state rather than a setting: it is a glance choice, and it resets with
+    /// the panel. Nil lets the chart choose by how much of the day exists.
+    @State var historyRange: HistoryRange?
 
     /// Derived from the store rather than read from the environment so a module is
     /// correct wherever it is hosted, and injected below so the primitives it draws
@@ -104,8 +105,6 @@ struct PanelModuleView: View {
             detail
                 .padding(.horizontal, Design.Space.panelInset)
                 .padding(.top, Design.Space.xxs)
-                .clipped()
-                .transition(.opacity)
         }
         .padding(.vertical, Design.Space.xxs)
         .environment(\.metricFormatter, formatter)

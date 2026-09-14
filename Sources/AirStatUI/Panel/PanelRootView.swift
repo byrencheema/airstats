@@ -80,16 +80,25 @@ public struct PanelRootView: View {
             // case that it reaches the ceiling below.
             .scrollIndicators(.never)
             .defaultScrollAnchor(.top)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxHeight: Self.maximumModuleHeight)
             PanelSeparator()
             PanelFooterView()
         }
-        // Pinned to the top of whatever the window is at this instant. The window's
-        // frame and this hierarchy's height animate as two systems, and for the frames
-        // where they disagree a centred root would move every row by half the
-        // difference, up while the content leads and down again as the window catches
-        // up. Top-aligned, the disagreement is a few points of bottom edge instead.
+        // The list takes whatever height the window has, and the rows sit at its top.
+        //
+        // The window's frame and this hierarchy's height animate as two systems, and
+        // for the frames where they disagree something has to give. It used to be the
+        // list: sized to its content and capped by a `frame(maxHeight:)`, it was
+        // centred in the room the window offered, so every row slid down by half the
+        // difference while the window led and back up as the content caught up. The
+        // header being clicked moved under the pointer. Letting the scroll view fill
+        // the window instead keeps every row where it is; the disagreement lands on
+        // the footer, which rides the window's bottom edge, and on a few points of
+        // list clipped behind it while the content leads.
+        //
+        // Sizing: the window is measured from this hierarchy's ideal height, which for
+        // a scroll view is its content, so below the screen's ceiling nothing scrolls.
+        // Past it the controller caps the window and the list scrolls under a footer
+        // that stays on screen.
         .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: PanelSettings.width)
         .environment(\.metricFormatter, MetricFormatter(settings: settings.settings.general))
@@ -122,17 +131,6 @@ public struct PanelRootView: View {
         return !collapsed.contains(previous) || !collapsed.contains(current)
     }
 
-    /// A ceiling the module list refuses to grow past.
-    ///
-    /// The footer sits outside the scroll region, so Settings and Quit stay on screen
-    /// no matter how many modules are enabled or how long the process list gets — the
-    /// positioning code has no answer for a window taller than `visibleFrame` beyond
-    /// pinning it and letting the bottom fall away. Below the ceiling `fixedSize` still
-    /// sizes the window to its content, so nothing scrolls in the ordinary case.
-    private static var maximumModuleHeight: CGFloat {
-        guard let visible = NSScreen.main?.visibleFrame.height else { return .infinity }
-        return max(visible - Design.Space.xxl * 3, 240)
-    }
 }
 
 /// Inset rule between modules. macOS insets its separators to the content margin so
