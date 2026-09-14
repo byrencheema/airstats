@@ -361,13 +361,19 @@ public enum SnapshotFixtures {
     /// day has: quiet overnight, a working-hours plateau, one spike, and two hours
     /// with no samples at all where the machine slept. Two samples a minute, spread
     /// around the curve, so every bucket has a band and not just a line.
-    public static func dayHistory(capacity: Int = MinuteHistory.defaultCapacity) -> MinuteHistory {
+    ///
+    /// `collectedMinutes` keeps only the newest that many minutes, which is what a
+    /// day looks like on a machine that launched the app that long ago.
+    public static func dayHistory(capacity: Int = MinuteHistory.defaultCapacity,
+                                  collectedMinutes: Int? = nil) -> MinuteHistory {
         var day = MinuteHistory(capacity: capacity)
         let end = referenceDate
+        let firstCollected = collectedMinutes.map { max(0, capacity - $0) } ?? 0
         for index in 0..<capacity {
             let t = Double(index) / Double(capacity)
             let date = end.addingTimeInterval(-Double(capacity - index) * MinuteHistory.bucketDuration)
             day.advance(to: date)
+            if index < firstCollected { continue }
             // Asleep from roughly 3 to 5 in the morning of a 24 hour window that ends
             // mid afternoon.
             if t > 0.50 && t < 0.585 { continue }

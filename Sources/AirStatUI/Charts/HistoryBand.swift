@@ -182,20 +182,26 @@ struct BandPlot {
         return path
     }
 
-    /// The mean through every run. A run of one column gets a short dash at its level
-    /// so a single sampled minute is still visible.
+    /// The mean through every run of two or more columns. A run of one column has
+    /// no direction to draw and is left to `dotPath`.
     func linePath() -> Path {
         var path = Path()
-        for run in runs {
+        for run in runs where run.count > 1 {
             let first = run.lowerBound
-            if run.count == 1 {
-                let level = y(columns[first]!.mean)
-                path.move(to: CGPoint(x: x(first) - 1, y: level))
-                path.addLine(to: CGPoint(x: x(first) + 1, y: level))
-                continue
-            }
             path.move(to: CGPoint(x: x(first), y: y(columns[first]!.mean)))
             for i in run.dropFirst() { path.addLine(to: CGPoint(x: x(i), y: y(columns[i]!.mean))) }
+        }
+        return path
+    }
+
+    /// A dot for every run of exactly one column: a single sampled minute between
+    /// gaps, or the first minute of a day. A dot says "measured here" and nothing
+    /// about what happened either side, which is all that is known.
+    func dotPath() -> Path {
+        var path = Path()
+        for run in runs where run.count == 1 {
+            let i = run.lowerBound
+            path.addPath(ChartLayout.marker(at: CGPoint(x: x(i), y: y(columns[i]!.mean))))
         }
         return path
     }

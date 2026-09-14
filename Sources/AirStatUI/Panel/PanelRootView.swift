@@ -85,6 +85,12 @@ public struct PanelRootView: View {
             PanelSeparator()
             PanelFooterView()
         }
+        // Pinned to the top of whatever the window is at this instant. The window's
+        // frame and this hierarchy's height animate as two systems, and for the frames
+        // where they disagree a centred root would move every row by half the
+        // difference, up while the content leads and down again as the window catches
+        // up. Top-aligned, the disagreement is a few points of bottom edge instead.
+        .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: PanelSettings.width)
         .environment(\.metricFormatter, MetricFormatter(settings: settings.settings.general))
     }

@@ -12,6 +12,7 @@ enum RenderCLI {
         var scales: [CGFloat] = []
         var appearances: [Bool] = []
         var outputDirectory = URL(fileURLWithPath: "render", isDirectory: true)
+        var collectedMinutes: Int?
         var settings = AirStatKit.Settings()
 
         var index = 0
@@ -56,6 +57,14 @@ enum RenderCLI {
             // module can grow.
             case "--history":
                 settings.desktopWidget.showsHistoryChart = true
+            // A day still being collected is the state every launch starts in.
+            case "--collected":
+                index += 1
+                guard let minutes = Int(arguments[safe: index] ?? ""), minutes >= 0 else {
+                    FileHandle.standardError.write(Data("--collected wants a number of minutes\n".utf8))
+                    exit(2)
+                }
+                collectedMinutes = minutes
             case "--modules":
                 index += 1
                 let names = (arguments[safe: index] ?? "").split(separator: ",")
@@ -118,7 +127,8 @@ enum RenderCLI {
                         for scale in scales {
                             let request = OffscreenRenderer.Request(
                                 surface: surface, scenario: scenario,
-                                isDark: isDark, scale: scale, settings: settings)
+                                isDark: isDark, scale: scale, settings: settings,
+                                collectedMinutes: collectedMinutes)
                             do {
                                 let url = try OffscreenRenderer.render(request, to: outputDirectory)
                                 print(url.path)

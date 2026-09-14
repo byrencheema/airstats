@@ -190,10 +190,11 @@ public struct HistoryChart: View {
                                     lineWidth: Design.Space.hairline)
                     }
                     BandLayer(plot: plot, size: size, lineTint: lineTint, bandTint: bandTint,
-                              style: settings.style)
+                              style: settings.style, levelsWhenSparse: window.range == .recent)
                     if let scrub {
                         crosshair(plot, at: scrub.fraction)
-                    } else if plot.supportsTrend, let last = window.last,
+                    } else if let last = window.last,
+                              plot.supportsTrend || window.range == .day,
                               let newest = plot.columns.lastIndex(where: { $0 != nil }) {
                         PlotShape(ChartLayout.marker(at: CGPoint(x: plot.x(newest), y: plot.y(last))))
                             .fill(lineTint)
@@ -321,7 +322,10 @@ public struct HistoryChart: View {
         }
         let prefix = lead.isEmpty ? "" : lead.joined() + "  ·  "
         guard window.supportsTrend else {
-            let peak = window.scale.isDerived ? "peak \(window.string(window.scale.peak, using: formatter))" : ""
+            // Too few points for a trend: the peak alone on a derived scale, since it
+            // is what says how tall the plot is, and otherwise just the lead.
+            guard window.scale.isDerived else { return [lead.joined()] }
+            let peak = "peak \(window.string(window.scale.peak, using: formatter))"
             return [prefix + peak, lead.joined()]
         }
         let minimum = "min \(window.string(window.minimum, using: formatter))"
@@ -398,10 +402,15 @@ struct BandLayer: View {
     let lineTint: Color
     let bandTint: Color
     let style: ChartStyle
+    /// Whether too few points draw as a dashed level across the whole plot, the way
+    /// the sparkline does. Right for a short window, where the level is the reading.
+    /// Wrong for a day: a dashed line across 24 hours of axis claims a value for
+    /// hours that have not happened, so a day draws only the minutes it has.
+    var levelsWhenSparse = true
 
     var body: some View {
         if !plot.isEmpty {
-            if plot.supportsTrend {
+            if plot.supportsTrend || !levelsWhenSparse {
                 trend
             } else {
                 level
@@ -431,9 +440,12 @@ struct BandLayer: View {
     }
 
     private var line: some View {
-        PlotShape(plot.linePath())
-            .stroke(lineTint, style: StrokeStyle(lineWidth: Design.Chart.lineWidth,
-                                                 lineCap: .round, lineJoin: .round))
+        ZStack {
+            PlotShape(plot.linePath())
+                .stroke(lineTint, style: StrokeStyle(lineWidth: Design.Chart.lineWidth,
+                                                     lineCap: .round, lineJoin: .round))
+            PlotShape(plot.dotPath()).fill(lineTint)
+        }
     }
 
     private var areaGradient: LinearGradient {
@@ -474,13 +486,21 @@ public struct HistorySilhouette: View {
         GeometryReader { proxy in
             let rect = ChartLayout.plotRect(in: proxy.size)
             if rect.width > 1, rect.height > 1 {
-                if minutes.isEmpty {
-                    EmptyBaseline(rect: rect)
-                } else {
-                    BandLayer(plot: BandPlot(rect: rect, scale: scale, minutes: minutes),
-                              size: proxy.size, lineTint: tint,
+                // The baseline is the axis, drawn whether or not the day has filled:
+                // without it a first minute of data is a dot floating in blank space,
+                // and the blank has no frame to read as "the rest of the day". The
+                // panel gets the same frame from its gridlines and time labels.
+                EmptyBaseline(rect: rect)
+                if !minutes.isEmpty {
+                    let plot = BandPlot(rect: rect, scale: scale, minutes: minutes)
+                    BandLayer(plot: plot, size: proxy.size, lineTint: tint,
                               bandTint: tint.opacity(Design.Chart.fillOpacity * 1.5),
-                              style: style)
+                              style: style, levelsWhenSparse: false)
+                    if let newest = plot.columns.lastIndex(where: { $0 != nil }),
+                       let value = plot.columns[newest] {
+                        PlotShape(ChartLayout.marker(at: CGPoint(x: plot.x(newest), y: plot.y(value.mean))))
+                            .fill(tint)
+                    }
                 }
             }
         }

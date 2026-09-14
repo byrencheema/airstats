@@ -44,8 +44,9 @@ public enum OffscreenRenderer {
             self == .pending ? MetricHistory() : SnapshotFixtures.history()
         }
 
-        public var dayHistory: MinuteHistory {
-            self == .pending ? MinuteHistory() : SnapshotFixtures.dayHistory()
+        public func dayHistory(collectedMinutes: Int? = nil) -> MinuteHistory {
+            self == .pending ? MinuteHistory()
+                             : SnapshotFixtures.dayHistory(collectedMinutes: collectedMinutes)
         }
     }
 
@@ -55,14 +56,18 @@ public enum OffscreenRenderer {
         public var isDark: Bool
         public var scale: CGFloat
         public var settings: AirStatKit.Settings
+        /// Minutes of the 24 hour tier to fill, newest first; nil for the whole day.
+        public var collectedMinutes: Int?
 
         public init(surface: Surface, scenario: Scenario = .nominal, isDark: Bool = false,
-                    scale: CGFloat = 2, settings: AirStatKit.Settings = AirStatKit.Settings()) {
+                    scale: CGFloat = 2, settings: AirStatKit.Settings = AirStatKit.Settings(),
+                    collectedMinutes: Int? = nil) {
             self.surface = surface
             self.scenario = scenario
             self.isDark = isDark
             self.scale = scale
             self.settings = settings
+            self.collectedMinutes = collectedMinutes
         }
 
         public var fileName: String {
@@ -322,12 +327,12 @@ enum PreviewEngine {
         if let existing = engineCache[key] { return existing }
         let engine = MetricsEngine(settingsStore: store(request))
         engine.loadFixture(snapshot: request.scenario.snapshot, history: request.scenario.history,
-                           dayHistory: request.scenario.dayHistory)
+                           dayHistory: request.scenario.dayHistory(collectedMinutes: request.collectedMinutes))
         engineCache[key] = engine
         return engine
     }
 
     private static func cacheKey(_ request: OffscreenRenderer.Request) -> String {
-        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)"
+        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)-\(request.collectedMinutes ?? -1)"
     }
 }
