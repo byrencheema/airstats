@@ -180,7 +180,7 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
         case .iconAndText: return "Icon & Text"
         case .battery: return "Battery Indicator"
         case .statusDot: return "Status Dot"
-        case .bar: return "Bar"
+        case .bar: return "Compact Bar"
         }
     }
 

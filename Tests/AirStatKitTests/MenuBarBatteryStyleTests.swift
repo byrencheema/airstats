@@ -226,19 +226,22 @@ struct BatteryDrawingTests {
     /// The one thing a menu bar must never do is move, and the charge changes every
     /// sample. The shell is a fixed size and only its fill moves inside it.
     ///
-    /// Charging is in here deliberately. The bolt is drawn outside the shell, so its
-    /// width is reserved whether or not there is a bolt in it — otherwise plugging in a
-    /// charger would resize the item and drag every readout to its left along with it.
-    @Test("the item is the same width empty, full and charging")
+    /// Charging is the one thing allowed to change the width. The bolt is drawn outside
+    /// the shell and its slot exists only while there is a bolt in it: a plug is a
+    /// rare event, and eight points of empty air before the shell all day was the
+    /// price of never moving for it.
+    @Test("the item is the same width at every charge, and wider only while charging")
     func widthIsFixed() {
         let full = width(percent: 100)
         #expect(width(percent: 0) == full)
         #expect(width(percent: 8) == full)
         #expect(width(percent: 51) == full)
-        #expect(width(percent: 64, charging: true) == full)
-        #expect(width(percent: 100, charging: true) == full)
         // One and three digits are the widest and narrowest numbers it can hold.
         #expect(width(percent: 7) == full)
+        let charging = width(percent: 64, charging: true)
+        #expect(charging > full)
+        #expect(width(percent: 100, charging: true) == charging)
+        #expect(width(percent: 3, charging: true) == charging)
     }
 
     /// Exercises the real drawing path, including the bolt's cleared gap, at both

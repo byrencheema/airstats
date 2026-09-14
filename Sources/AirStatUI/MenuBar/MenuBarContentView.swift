@@ -295,13 +295,16 @@ public final class MenuBarContentView: NSView {
         // The indicator is the whole readout: its number is inside it, and nothing else
         // is drawn beside it.
         //
-        // The bolt's slot is part of the width whether or not there is a bolt in it.
-        // Plugging in a charger would otherwise resize the item and drag every readout
-        // to its left along with it, and a few points of air before the shell is a
-        // cheaper thing to look at than a menu bar that jumps.
+        // The bolt's slot is only there while there is a bolt in it. Reserving it
+        // empty kept the item from moving when a charger went in, but it put eight
+        // points of air before the shell for the whole of every day spent on battery,
+        // and that read as a margin nobody asked for. A plug is a rare event, not a
+        // per-sample one, and the item moving once for it is the cheaper thing.
         if item.style == .battery {
-            geometry.battery = Layout.batteryBoltWidth + Layout.batteryBoltGap
-                + Layout.batteryBodyWidth + Layout.batteryNubGap + Layout.batteryNubWidth
+            geometry.battery = Layout.batteryBodyWidth + Layout.batteryNubGap + Layout.batteryNubWidth
+            if item.isBatteryCharging {
+                geometry.battery += Layout.batteryBoltWidth + Layout.batteryBoltGap
+            }
             return geometry
         }
 
@@ -773,26 +776,29 @@ public final class MenuBarContentView: NSView {
     /// charge fetched at draw time would sit at whatever it was when some *other*
     /// readout last moved, and a battery that is wrong is worse than no battery.
     ///
-    /// Laid out left to right as bolt slot, shell, terminal. The bolt sits outside the
-    /// shell now that the number is inside it: two things cannot share those 20 points,
-    /// and between a bolt drawn over the digits and a bolt beside them, the number is the
-    /// one the user asked to always be able to read.
+    /// Laid out left to right as bolt, shell, terminal, with the bolt present only
+    /// while charging. The bolt sits outside the shell now that the number is inside
+    /// it: two things cannot share those 20 points, and between a bolt drawn over the
+    /// digits and a bolt beside them, the number is the one the user asked to always
+    /// be able to read.
     private func drawBattery(_ item: MenuBarItemRender, x: CGFloat, colors: ItemColors,
                              scale: CGFloat, context: CGContext) {
         let pixel = 1 / scale
         let line = max(Layout.batteryStroke, pixel)
         let ink = colors.batteryInk
 
+        var x = x
         if item.isBatteryCharging {
             let slot = CGRect(x: x, y: bounds.midY - Layout.batteryBoltHeight / 2,
                               width: Layout.batteryBoltWidth,
                               height: Layout.batteryBoltHeight)
             drawChargingBolt(in: slot, color: ink, scale: scale, context: context)
+            x += Layout.batteryBoltWidth + Layout.batteryBoltGap
         }
 
         // Snapped outer box, then everything measured off it, so the stroke lands on a
         // half-pixel at 1x and the fill's edges land on whole ones.
-        let outer = snapped(CGRect(x: x + Layout.batteryBoltWidth + Layout.batteryBoltGap,
+        let outer = snapped(CGRect(x: x,
                                    y: bounds.midY - Layout.batteryBodyHeight / 2,
                                    width: Layout.batteryBodyWidth,
                                    height: Layout.batteryBodyHeight), scale: scale)
