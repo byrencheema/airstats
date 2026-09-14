@@ -161,8 +161,7 @@ struct MenuBarPane: View {
 
             if item.style.supportsCaption {
                 Divider()
-                Toggle("Show \"\(caption(for: item.metric))\" above the value",
-                       isOn: captionBinding(for: item))
+                Toggle(captionToggleTitle(for: item), isOn: captionBinding(for: item))
             }
         }
     }
@@ -197,10 +196,16 @@ struct MenuBarPane: View {
         }
     }
 
-    /// The label the menu bar would draw for this metric, quoted back so the toggle
-    /// says what it will actually put on screen.
-    private func caption(for metric: MenuBarMetric) -> String {
-        MenuBarRenderModel.captionText(for: metric) ?? metric.label
+    /// The label the menu bar would draw for this readout, quoted back so the toggle
+    /// says what it will actually put on screen, and where: a bar stacks its caption
+    /// beside it, the rest put it above the number.
+    private func captionToggleTitle(for item: MenuBarItemConfig) -> String {
+        if item.style == .bar {
+            let label = MenuBarRenderModel.sideCaptionText(for: item.metric) ?? item.metric.label
+            return "Show \"\(label)\" beside the bar"
+        }
+        let label = MenuBarRenderModel.captionText(for: item.metric) ?? item.metric.label
+        return "Show \"\(label)\" above the value"
     }
 
     // MARK: Model access

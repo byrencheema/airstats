@@ -103,6 +103,21 @@ public final class MenuBarContentView: NSView {
         /// An idle light is drawn, not hidden: a missing dot and a dark dot are not
         /// the same thing, and the pair is what makes the shape legible.
         static let statusDotIdleAlpha: CGFloat = 0.3
+        /// The level bar: a pill as tall as its three stacked caption letters, filled
+        /// from the bottom. Nine wide is the narrowest that leaves a five-point fill
+        /// inside the shell, which is still a column at 1x rather than a line, and
+        /// three of them sit in less room than one stacked number. The height is not
+        /// here because it comes off the caption font: see `barHeight`.
+        static let barWidth: CGFloat = 9
+        /// Between one stacked caption letter and the next, cap-height box to cap-height
+        /// box. Two rather than one because round letters overshoot their cap height at
+        /// both ends, and a one-point gap between a P and a U was a P touching a U.
+        static let sideLabelRowGap: CGFloat = 2
+        static let barCornerRadius: CGFloat = 3
+        static let barStroke: CGFloat = 1
+        static let barFillInset: CGFloat = 2
+        static let barFillRadius: CGFloat = 1.5
+        static let barMinimumFill: CGFloat = 2
         /// The bolt, in a unit box with y running up as this view's coordinates do.
         ///
         /// Traced off `bolt.fill` rather than invented: the symbol was rasterised at 200
@@ -178,7 +193,13 @@ public final class MenuBarContentView: NSView {
 
         var content: CGFloat = 0
         for (index, item) in model.items.enumerated() {
-            if index > 0 { content += CGFloat(model.spacing) }
+            // Bars pack. Two bars a whole readout apart read as two readouts, and the
+            // point of the shape is that three of them read as one group, so a bar that
+            // follows a bar gets the gap between the parts of one readout instead.
+            if index > 0 {
+                let packed = item.style == .bar && model.items[index - 1].style == .bar
+                content += packed ? Layout.partGap : CGFloat(model.spacing)
+            }
             let symbol = symbol(for: item)
             let geometry = geometry(for: item, symbol: symbol, model: model)
             placements.append(Placement(item: item, x: content, geometry: geometry,
@@ -209,6 +230,7 @@ public final class MenuBarContentView: NSView {
         var symbol: CGFloat = 0
         var battery: CGFloat = 0
         var caption: CGFloat = 0
+        var bar: CGFloat = 0
         var statusDot: CGFloat = 0
         var graph: CGFloat = 0
         var primaryGlyph: CGFloat = 0
@@ -232,6 +254,7 @@ public final class MenuBarContentView: NSView {
             append(symbol, after: Layout.partGap)
             append(battery, after: Layout.partGap)
             append(caption, after: Layout.partGap)
+            append(bar, after: Layout.partGap)
             append(statusDot, after: Layout.partGap)
             append(graph, after: Layout.partGap)
             append(stack, after: Layout.partGap)
@@ -256,7 +279,7 @@ public final class MenuBarContentView: NSView {
     private func geometry(for item: MenuBarItemRender, symbol: SymbolAsset?,
                           model: MenuBarRenderModel) -> Geometry {
         var geometry = Geometry()
-        if let caption = item.caption, !isStacked(item) {
+        if let caption = item.caption, !isStacked(item), item.style != .bar {
             geometry.caption = width(caption, role: .caption)
         }
 
@@ -285,6 +308,17 @@ public final class MenuBarContentView: NSView {
         // The two lights are the whole reading, and nothing else is drawn.
         if item.style == .statusDot {
             geometry.statusDot = Layout.statusDotDiameter
+            return geometry
+        }
+
+        // The fill is the whole reading, with its caption stacked beside it when there
+        // is one. Its width never moves, which is the property every other part of
+        // this layout has to reserve for.
+        if item.style == .bar {
+            geometry.bar = Layout.barWidth
+            if let caption = item.caption {
+                geometry.bar += sideLabelWidth(caption) + Layout.glyphGap
+            }
             return geometry
         }
 
@@ -410,6 +444,12 @@ public final class MenuBarContentView: NSView {
             drawText(caption, role: .caption, x: x, baseline: centeredBaseline(for: .caption),
                      color: colors.caption, scale: scale, context: context)
             x += geometry.caption
+        }
+
+        if geometry.bar > 0 {
+            gap(Layout.partGap)
+            drawBar(item, x: x, colors: colors, scale: scale, context: context)
+            x += geometry.bar
         }
 
         if geometry.statusDot > 0 {
@@ -637,6 +677,89 @@ public final class MenuBarContentView: NSView {
             let rect = snapped(CGRect(x: x, y: y, width: diameter, height: diameter), scale: scale)
             context.setFillColor(ink(lit))
             context.fillEllipse(in: rect)
+        }
+    }
+
+    // MARK: Bar
+
+    /// Draws the level bar: a rounded shell as tall as its stacked caption, filled
+    /// from the bottom in proportion to the value.
+    ///
+    /// The same construction as the battery, and on purpose: the shell sits back at
+    /// the same alpha, the fill is the item's own ink, and the corner and inset
+    /// proportions match, so the two read as one family of container on a bar that
+    /// may well show both. A value too small to draw still gets a sliver, because an
+    /// empty shell and a shell at 2% are not the same thing.
+    private func drawBar(_ item: MenuBarItemRender, x: CGFloat, colors: ItemColors,
+                         scale: CGFloat, context: CGContext) {
+        let pixel = 1 / scale
+        let line = max(Layout.barStroke, pixel)
+        var x = x
+
+        if let caption = item.caption {
+            drawSideLabel(caption, x: x, color: colors.caption, scale: scale, context: context)
+            x += sideLabelWidth(caption) + Layout.glyphGap
+        }
+
+        let outer = snapped(CGRect(x: x, y: bounds.midY - barHeight / 2,
+                                   width: Layout.barWidth, height: barHeight),
+                            scale: scale)
+        let shellColor = colors.mark.withAlphaComponent(
+            colors.mark.alphaComponent * Layout.batteryShellAlpha)
+        let shell = outer.insetBy(dx: line / 2, dy: line / 2)
+        let shellRadius = max(Layout.barCornerRadius - line / 2, 0)
+        context.addPath(CGPath(roundedRect: shell, cornerWidth: shellRadius,
+                               cornerHeight: shellRadius, transform: nil))
+        context.setStrokeColor(shellColor.cgColor)
+        context.setLineWidth(line)
+        context.strokePath()
+
+        let track = outer.insetBy(dx: Layout.barFillInset, dy: Layout.barFillInset)
+        let level = min(max(item.level ?? 0, 0), 1)
+        guard level > 0, track.height > 0 else { return }
+        // Snapped to whole pixels: a top edge that lands mid-pixel is a grey row that
+        // reads as a lower level than the one it is drawing.
+        let fill = snapped(CGRect(x: track.minX, y: track.minY, width: track.width,
+                                  height: max(track.height * level, Layout.barMinimumFill)),
+                           scale: scale)
+        let radius = min(Layout.barFillRadius, fill.width / 2, fill.height / 2)
+        context.addPath(CGPath(roundedRect: fill, cornerWidth: radius,
+                               cornerHeight: radius, transform: nil))
+        context.setFillColor(colors.mark.cgColor)
+        context.fillPath()
+    }
+
+    /// The bar is exactly as tall as three stacked caption letters, so a labelled bar
+    /// and its label are one shape with one top and one bottom. An unlabelled bar is
+    /// the same height, so a group of bars lines up whether or not each has a label.
+    /// Three letters is also the ceiling for the label: the item is 22 points tall
+    /// and a fourth row would leave nothing above or below.
+    private var barHeight: CGFloat {
+        ceil(3 * fonts[.sideLabel].capHeight + 2 * Layout.sideLabelRowGap)
+    }
+
+    /// The column a stacked label takes: its widest letter.
+    private func sideLabelWidth(_ text: String) -> CGFloat {
+        text.map { width(String($0), role: .sideLabel) }.max() ?? 0
+    }
+
+    /// The caption stacked beside a bar, one letter to a row, reading top to bottom
+    /// and each letter centred in the column. Stacked rather than rotated because the
+    /// letters then read the way everything else on the bar does, upright and left to
+    /// right, and the stack is the bar's own height so the two sit as one shape.
+    private func drawSideLabel(_ text: String, x: CGFloat, color: CGColor,
+                               scale: CGFloat, context: CGContext) {
+        let cap = fonts[.sideLabel].capHeight
+        let column = sideLabelWidth(text)
+        let pitch = cap + Layout.sideLabelRowGap
+        let top = bounds.midY + barHeight / 2
+        for (row, letter) in text.enumerated() {
+            let glyph = String(letter)
+            let glyphWidth = width(glyph, role: .sideLabel)
+            drawText(glyph, role: .sideLabel,
+                     x: x + (column - glyphWidth) / 2,
+                     baseline: top - cap - CGFloat(row) * pitch,
+                     color: color, scale: scale, context: context)
         }
     }
 
@@ -1037,6 +1160,8 @@ public final class MenuBarContentView: NSView {
         /// number instead of beside it.
         case stackedValue
         case stackedCaption
+        /// One letter to a row beside a bar.
+        case sideLabel
         /// The digits inside the battery shell. Always monospaced and always medium,
         /// whatever the rest of the bar is set in: this number is knocked out of solid
         /// ink at nine points, and a regular weight does not survive that at 1x.
@@ -1048,6 +1173,7 @@ public final class MenuBarContentView: NSView {
         let caption: NSFont
         let stackedValue: NSFont
         let stackedCaption: NSFont
+        let sideLabel: NSFont
         let batteryValue: NSFont
 
         init(monospacedDigits: Bool) {
@@ -1064,6 +1190,7 @@ public final class MenuBarContentView: NSView {
                 : .systemFont(ofSize: stacked, weight: .regular)
             stackedCaption = .systemFont(ofSize: Design.MenuBar.stackedCaptionFontSize,
                                          weight: .medium)
+            sideLabel = .systemFont(ofSize: Design.MenuBar.sideLabelFontSize, weight: .medium)
         }
 
         subscript(role: FontRole) -> NSFont {
@@ -1072,6 +1199,7 @@ public final class MenuBarContentView: NSView {
             case .caption: return caption
             case .stackedValue: return stackedValue
             case .stackedCaption: return stackedCaption
+            case .sideLabel: return sideLabel
             case .batteryValue: return batteryValue
             }
         }
@@ -1095,7 +1223,7 @@ private extension MenuBarDisplayStyle {
     var drawsValue: Bool {
         switch self {
         case .text, .textAndGraph, .iconAndText: return true
-        case .graph, .battery, .statusDot: return false
+        case .graph, .battery, .statusDot, .bar: return false
         }
     }
 }
