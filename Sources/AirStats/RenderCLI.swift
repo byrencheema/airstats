@@ -52,6 +52,10 @@ enum RenderCLI {
             // expanded) is exactly the one worth looking at.
             case "--expanded":
                 settings.desktopWidget.isCompact = false
+            // Off by default, and the day silhouette is the tallest thing a widget
+            // module can grow.
+            case "--history":
+                settings.desktopWidget.showsHistoryChart = true
             case "--modules":
                 index += 1
                 let names = (arguments[safe: index] ?? "").split(separator: ",")

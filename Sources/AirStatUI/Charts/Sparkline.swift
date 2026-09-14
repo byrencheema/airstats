@@ -92,7 +92,7 @@ public struct Sparkline: View {
                     // derived scale "half of the window peak" is not a fact about the
                     // machine.
                     if ChartSettings.showsGrid && !scale.isDerived {
-                        GridLayer(plot: plot, divisions: 2, interiorOnly: true)
+                        GridLayer(rect: rect, divisions: 2, interiorOnly: true)
                     }
                     SeriesLayer(plot: plot, size: size, tint: series.tint,
                                 style: settings.style, smoothed: ChartSettings.smoothsCurves)

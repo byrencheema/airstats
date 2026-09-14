@@ -138,7 +138,7 @@ struct ChartPlot {
 
     /// Horizontal gridlines. `interiorOnly` omits the lines on the frame itself,
     /// which at sparkline height would draw a box around 28 points of chart.
-    func gridPath(divisions: Int = 4, interiorOnly: Bool = false) -> Path {
+    static func gridPath(in rect: CGRect, divisions: Int = 4, interiorOnly: Bool = false) -> Path {
         var path = Path()
         guard divisions > 0 else { return path }
         let steps = interiorOnly ? Array(1..<divisions) : Array(0...divisions)
@@ -301,12 +301,12 @@ struct SeriesLayer: View {
 
 /// Horizontal gridlines for a plot.
 struct GridLayer: View {
-    let plot: ChartPlot
+    let rect: CGRect
     var divisions: Int = 4
     var interiorOnly: Bool = false
 
     var body: some View {
-        PlotShape(plot.gridPath(divisions: divisions, interiorOnly: interiorOnly))
+        PlotShape(ChartPlot.gridPath(in: rect, divisions: divisions, interiorOnly: interiorOnly))
             .stroke(Design.Palette.primaryText.opacity(Design.Chart.gridOpacity),
                     lineWidth: Design.Space.hairline)
     }

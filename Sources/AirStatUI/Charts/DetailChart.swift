@@ -138,8 +138,8 @@ public struct DetailChart: View {
                 let scale = self.scale
                 let plots = series.map { ChartPlot(rect: rect, scale: scale, samples: $0.samples) }
                 ZStack {
-                    if ChartSettings.showsGrid, let first = plots.first {
-                        GridLayer(plot: first)
+                    if ChartSettings.showsGrid {
+                        GridLayer(rect: rect)
                     }
                     // Drawn back to front so the first series — the one the module is
                     // really about — ends up on top of any companion series.

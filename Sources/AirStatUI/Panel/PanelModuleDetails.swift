@@ -22,6 +22,29 @@ extension PanelModuleView {
         }
     }
 
+    /// The history chart under a module's rows, when the module has a series and the
+    /// user has not switched the charts off.
+    ///
+    /// Under the rows rather than over them: the rows are what the module is for, and
+    /// the chart is the same headline value the header already shows, spread over
+    /// time. `available` lets a module withhold the chart when the series behind it
+    /// cannot exist on this machine, a battery chart on a desktop being the case.
+    @ViewBuilder
+    func history(available: Bool = true) -> some View {
+        if available, settings.settings.panel.showsHistoryChart,
+           let series = module.historySeries {
+            HistoryChart(series.key,
+                         history: engine.history,
+                         day: engine.dayHistory,
+                         settings: settings.settings.charts,
+                         tint: traceTint,
+                         band: bandTint,
+                         domain: series.domain,
+                         range: $historyRange)
+                .padding(.top, Design.Space.s)
+        }
+    }
+
     /// Detail when the module is open, and the reason when the metric is unavailable.
     ///
     /// A failure is shown whether or not the module is collapsed: for a module that
@@ -49,6 +72,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Load", loadAverage(cpu.loadAverage)),
                     PanelDetailEntry("Threads", formatter.count(cpu.threadCount)),
                 ])
+                history()
             }
         }
     }
@@ -106,6 +130,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Total", formatter.memory(memory.totalBytes)),
                 ])
                 memoryProcesses
+                history()
             }
         }
     }
@@ -171,6 +196,7 @@ extension PanelModuleView {
                     }
                     let entries = gpuEntries(device)
                     if !entries.isEmpty { PanelDetailGrid(entries: entries) }
+                    history(available: device.utilization != nil)
                 }
             } else {
                 UnavailableNote(.failed("No graphics device reported"))
@@ -210,6 +236,7 @@ extension PanelModuleView {
                     PanelBarRow(label: wifi.ssid ?? "Signal", value: signalValue(wifi),
                                 fraction: quality, tint: tint)
                 }
+                history()
             }
         }
     }
@@ -264,6 +291,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Read", formatter.diskRate(disk.readBytesPerSecond)),
                     PanelDetailEntry("Write", formatter.diskRate(disk.writeBytesPerSecond)),
                 ])
+                history()
             }
         }
     }
@@ -318,6 +346,7 @@ extension PanelModuleView {
                 }
                 let entries = powerEntries(power)
                 if !entries.isEmpty { PanelDetailGrid(entries: entries) }
+                history(available: power.hasBattery && power.percentage != nil)
             }
         }
     }
@@ -365,6 +394,7 @@ extension PanelModuleView {
                 if let reason = thermal.sensorsUnavailableReason {
                     UnavailableNote(.unsupported(reason))
                 }
+                history(available: thermal.cpuCelsius != nil)
             }
         }
     }

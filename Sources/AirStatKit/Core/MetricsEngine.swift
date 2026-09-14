@@ -16,6 +16,10 @@ public final class MetricsEngine {
     /// Bounded ring buffers behind every chart.
     public private(set) var history: MetricHistory
 
+    /// The last 24 hours, one bucket per minute. Survives sleep and lock: see
+    /// `setSuspensionReason`.
+    public private(set) var dayHistory = MinuteHistory()
+
     public private(set) var activity: SamplingActivity = .menuBar
 
     /// Wall-clock time of the last snapshot, for the "updated Xs ago" affordance.
@@ -197,7 +201,10 @@ public final class MetricsEngine {
         if !oldReasons.isEmpty {
             core?.noteWakeFromSleep()
             // Rates spanning any sleep/lock interval are meaningless; drop the
-            // discontinuity only when every suspension reason has cleared.
+            // discontinuity only when every suspension reason has cleared. The raw
+            // tier only: the minute tier is anchored to wall-clock minutes, so the
+            // sleep shows up there as the gap it was, and a day of buckets is not
+            // thrown away because the lid closed.
             history.clear()
         }
         updateActivity()
@@ -332,44 +339,51 @@ public final class MetricsEngine {
     /// are appended — a missing sensor leaves a gap rather than a fabricated zero.
     private func record(_ s: SystemSnapshot) {
         history.markSampleDate(s.capturedAt)
+        dayHistory.advance(to: s.capturedAt)
 
         if let cpu = s.cpu.value {
-            history.record(.cpuTotal, cpu.total.busy)
-            history.record(.cpuUser, cpu.total.user)
-            history.record(.cpuSystem, cpu.total.system)
-            if let p = cpu.performanceBusy { history.record(.cpuPerformance, p) }
-            if let e = cpu.efficiencyBusy { history.record(.cpuEfficiency, e) }
+            fold(.cpuTotal, cpu.total.busy)
+            fold(.cpuUser, cpu.total.user)
+            fold(.cpuSystem, cpu.total.system)
+            if let p = cpu.performanceBusy { fold(.cpuPerformance, p) }
+            if let e = cpu.efficiencyBusy { fold(.cpuEfficiency, e) }
         }
         if let mem = s.memory.value {
-            history.record(.memoryUsed, mem.usedFraction)
-            history.record(.memoryPressure, mem.pressureFraction)
-            history.record(.memorySwap, Double(mem.swapUsedBytes))
+            fold(.memoryUsed, mem.usedFraction)
+            fold(.memoryPressure, mem.pressureFraction)
+            fold(.memorySwap, Double(mem.swapUsedBytes))
         }
         if let gpu = s.gpu.value, let primary = gpu.primary {
-            if let util = primary.utilization { history.record(.gpuUtilization, util) }
+            if let util = primary.utilization { fold(.gpuUtilization, util) }
             if let used = primary.vramUsedBytes, let total = primary.vramTotalBytes, total > 0 {
-                history.record(.gpuVRAM, Double(used) / Double(total))
+                fold(.gpuVRAM, Double(used) / Double(total))
             }
         }
         if let net = s.network.value {
-            history.record(.networkUpload, net.uploadBytesPerSecond)
-            history.record(.networkDownload, net.downloadBytesPerSecond)
+            fold(.networkUpload, net.uploadBytesPerSecond)
+            fold(.networkDownload, net.downloadBytesPerSecond)
         }
         if let disk = s.disk.value {
-            history.record(.diskRead, disk.readBytesPerSecond)
-            history.record(.diskWrite, disk.writeBytesPerSecond)
-            if let root = disk.rootVolume { history.record(.diskUsed, root.usedFraction) }
+            fold(.diskRead, disk.readBytesPerSecond)
+            fold(.diskWrite, disk.writeBytesPerSecond)
+            if let root = disk.rootVolume { fold(.diskUsed, root.usedFraction) }
         }
         if let power = s.power.value {
-            if let pct = power.percentage { history.record(.batteryPercent, pct) }
-            if let w = power.batteryWatts { history.record(.batteryWatts, w) }
-            if let w = power.systemWatts { history.record(.systemWatts, w) }
+            if let pct = power.percentage { fold(.batteryPercent, pct) }
+            if let w = power.batteryWatts { fold(.batteryWatts, w) }
+            if let w = power.systemWatts { fold(.systemWatts, w) }
         }
         if let thermal = s.thermal.value {
-            if let c = thermal.cpuCelsius { history.record(.cpuTemperature, c) }
-            if let g = thermal.gpuCelsius { history.record(.gpuTemperature, g) }
-            if let fan = thermal.fans.first { history.record(.fanRPM, fan.currentRPM) }
+            if let c = thermal.cpuCelsius { fold(.cpuTemperature, c) }
+            if let g = thermal.gpuCelsius { fold(.gpuTemperature, g) }
+            if let fan = thermal.fans.first { fold(.fanRPM, fan.currentRPM) }
         }
+    }
+
+    /// One sample into both tiers.
+    private func fold(_ key: SeriesKey, _ value: Double) {
+        history.record(key, value)
+        dayHistory.record(key, value)
     }
 
     /// Injects fixture data for offscreen rendering and previews.
@@ -377,9 +391,11 @@ public final class MetricsEngine {
     /// Deliberately not gated behind `#if DEBUG`: the render CLI ships in the same
     /// binary and is how the UI gets reviewed, and a fixture path that only exists in
     /// debug builds cannot verify what release builds actually draw.
-    public func loadFixture(snapshot: SystemSnapshot, history: MetricHistory) {
+    public func loadFixture(snapshot: SystemSnapshot, history: MetricHistory,
+                            dayHistory: MinuteHistory = MinuteHistory()) {
         self.snapshot = snapshot
         self.history = history
+        self.dayHistory = dayHistory
         self.lastUpdate = snapshot.capturedAt
     }
 

@@ -43,6 +43,10 @@ public enum OffscreenRenderer {
         public var history: MetricHistory {
             self == .pending ? MetricHistory() : SnapshotFixtures.history()
         }
+
+        public var dayHistory: MinuteHistory {
+            self == .pending ? MinuteHistory() : SnapshotFixtures.dayHistory()
+        }
     }
 
     public struct Request: Sendable {
@@ -317,7 +321,8 @@ enum PreviewEngine {
         let key = cacheKey(request)
         if let existing = engineCache[key] { return existing }
         let engine = MetricsEngine(settingsStore: store(request))
-        engine.loadFixture(snapshot: request.scenario.snapshot, history: request.scenario.history)
+        engine.loadFixture(snapshot: request.scenario.snapshot, history: request.scenario.history,
+                           dayHistory: request.scenario.dayHistory)
         engineCache[key] = engine
         return engine
     }

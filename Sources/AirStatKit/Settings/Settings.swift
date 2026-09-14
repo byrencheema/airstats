@@ -371,6 +371,8 @@ public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Has
 public struct PanelSettings: Sendable, Codable, Equatable {
     /// Modules the user has collapsed to just their summary row.
     public var collapsedModules: Set<PanelModule>
+    /// Draw the history chart under an expanded module's rows.
+    public var showsHistoryChart: Bool
 
     /// Fixed layout, previously the `width` setting. 340pt fits the widest module
     /// summary without wrapping and leaves the panel narrower than the narrowest
@@ -385,8 +387,10 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     /// is what a menu bar popover does and what clicking outside one means.
     public static let staysOpenOnFocusLoss = false
 
-    public init(collapsedModules: Set<PanelModule> = PanelSettings.defaultCollapsed) {
+    public init(collapsedModules: Set<PanelModule> = PanelSettings.defaultCollapsed,
+                showsHistoryChart: Bool = true) {
         self.collapsedModules = collapsedModules
+        self.showsHistoryChart = showsHistoryChart
     }
 
     /// Every module starts collapsed.
@@ -412,7 +416,7 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     public var visibleModules: [PanelModule] { PanelModule.allCases }
 
     private enum CodingKeys: String, CodingKey {
-        case collapsedModules
+        case collapsedModules, showsHistoryChart
     }
 
     /// Decoded leniently, and settings files written before the panel pane was removed
@@ -421,6 +425,7 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         collapsedModules = c.value(.collapsedModules, or: PanelSettings.defaultCollapsed)
+        showsHistoryChart = c.value(.showsHistoryChart, or: true)
     }
 }
 
@@ -549,6 +554,8 @@ public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
     public var dimsWhenInactive: Bool
     public var inactiveOpacity: Double
     public var isCompact: Bool
+    /// A 24 hour silhouette under each module that has a series to draw.
+    public var showsHistoryChart: Bool
 
     public init(isEnabled: Bool = false,
                 modules: [PanelModule] = [.cpu, .memory, .network],
@@ -562,7 +569,8 @@ public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
                 showsOnAllSpaces: Bool = true,
                 dimsWhenInactive: Bool = true,
                 inactiveOpacity: Double = 0.55,
-                isCompact: Bool = true) {
+                isCompact: Bool = true,
+                showsHistoryChart: Bool = false) {
         self.isEnabled = isEnabled
         self.modules = modules
         self.corner = corner
@@ -576,12 +584,13 @@ public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
         self.dimsWhenInactive = dimsWhenInactive
         self.inactiveOpacity = inactiveOpacity
         self.isCompact = isCompact
+        self.showsHistoryChart = showsHistoryChart
     }
 
     private enum CodingKeys: String, CodingKey {
         case isEnabled, modules, corner, originX, originY, width, opacity
         case isClickThrough, depth, showsOnAllSpaces
-        case dimsWhenInactive, inactiveOpacity, isCompact
+        case dimsWhenInactive, inactiveOpacity, isCompact, showsHistoryChart
     }
 
     /// Keys this type still reads but no longer writes. Kept out of `CodingKeys` so
@@ -622,6 +631,7 @@ public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
         dimsWhenInactive = c.value(.dimsWhenInactive, or: true)
         inactiveOpacity = min(max(c.value(.inactiveOpacity, or: 0.55), 0.15), 1)
         isCompact = c.value(.isCompact, or: true)
+        showsHistoryChart = c.value(.showsHistoryChart, or: false)
     }
 }
 

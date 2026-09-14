@@ -35,6 +35,9 @@ struct PanelModuleView: View {
     var captionColumnWidth: CGFloat
 
     @State private var isHovering = false
+    /// Which window the module's history chart shows. View state rather than a
+    /// setting: it is a glance choice, and it resets with the panel.
+    @State var historyRange: HistoryRange = .day
 
     /// Derived from the store rather than read from the environment so a module is
     /// correct wherever it is hosted, and injected below so the primitives it draws
@@ -62,6 +65,10 @@ struct PanelModuleView: View {
     /// than the bars: a stroked line reads at secondary weight where a filled bar does
     /// not.
     var traceTint: Color { Design.Palette.secondaryText }
+
+    /// The low-to-high band of the history chart, under its mean line. Fainter than
+    /// a bar's fill: it is context for the line, not a reading of its own.
+    var bandTint: Color { Design.Palette.primaryText.opacity(0.10) }
 
     /// A module glyph is a thin shape beside a heading it does not compete with, so it
     /// sits at secondary weight — nine icons at full strength is a wall.
