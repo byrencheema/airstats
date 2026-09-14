@@ -76,6 +76,10 @@ public struct MenuBarItemRender: Equatable, Sendable {
     /// network one, and carried here for the reason the battery fields are: the view
     /// draws what it is handed, and nothing it fetches for itself.
     public var networkStatus: NetworkStatus?
+    /// The fraction the `.bar` style fills to, 0...1. Set only on the readouts that
+    /// are a fraction of a known ceiling, and carried for the reason the battery
+    /// charge is: the view draws what it is handed.
+    public var level: Double?
 
     /// Two lights, download over upload.
     public struct NetworkStatus: Equatable, Sendable {
@@ -118,7 +122,8 @@ public struct MenuBarItemRender: Equatable, Sendable {
                 isBatteryCharging: Bool = false,
                 isBatteryLow: Bool = false,
                 batteryValueText: String? = nil,
-                networkStatus: NetworkStatus? = nil) {
+                networkStatus: NetworkStatus? = nil,
+                level: Double? = nil) {
         self.id = id
         self.style = style
         self.tint = tint
@@ -133,6 +138,7 @@ public struct MenuBarItemRender: Equatable, Sendable {
         self.isBatteryLow = isBatteryLow
         self.batteryValueText = batteryValueText
         self.networkStatus = networkStatus
+        self.level = level
     }
 
 }
@@ -195,6 +201,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         // Set only by the battery metric, whose indicator style draws the charge as a
         // shape instead of as digits.
         var battery: BatteryState?
+        // Set only by the fraction metrics, whose bar style draws the value as a fill.
+        var level: Double?
 
         switch metric {
         case .cpuUsage:
@@ -202,6 +210,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 let busy = cpu.total.busy
                 valueText = formatter.percent(busy)
                 unavailable = false
+                level = busy
                 accessibilityValue = "CPU \(valueText)"
             }
             seriesKey = .cpuTotal
@@ -222,6 +231,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let mem = snapshot.memory.value {
                 valueText = formatter.percent(mem.usedFraction)
                 unavailable = false
+                level = mem.usedFraction
                 accessibilityValue = "Memory \(valueText)"
             }
             seriesKey = .memoryUsed
@@ -230,6 +240,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let mem = snapshot.memory.value {
                 valueText = formatter.percent(mem.pressureFraction)
                 unavailable = false
+                level = mem.pressureFraction
                 accessibilityValue = "Memory pressure \(valueText)"
             }
             seriesKey = .memoryPressure
@@ -238,6 +249,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let util = snapshot.gpu.value?.primary?.utilization {
                 valueText = formatter.percent(util)
                 unavailable = false
+                level = util
                 accessibilityValue = "GPU \(valueText)"
             }
             seriesKey = .gpuUtilization
@@ -387,7 +399,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                            series: series),
                       secondary: nil,
                       unavailable: unavailable, accessibility: accessibilityValue,
-                      settings: settings, battery: battery)
+                      settings: settings, battery: battery,
+                      level: level.map { min(max($0, 0), 1) })
     }
 
     /// What the battery indicator draws, gathered in one place so the three fields can
@@ -407,7 +420,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                accessibility: String,
                                settings: Settings,
                                battery: BatteryState? = nil,
-                               networkStatus: MenuBarItemRender.NetworkStatus? = nil) -> MenuBarItemRender {
+                               networkStatus: MenuBarItemRender.NetworkStatus? = nil,
+                               level: Double? = nil) -> MenuBarItemRender {
         MenuBarItemRender(
             id: config.id,
             style: config.style,
@@ -426,7 +440,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             isBatteryCharging: battery?.isCharging ?? false,
             isBatteryLow: battery?.isLow ?? false,
             batteryValueText: battery?.valueText,
-            networkStatus: networkStatus
+            networkStatus: networkStatus,
+            level: level
         )
     }
 
@@ -439,7 +454,17 @@ public struct MenuBarRenderModel: Equatable, Sendable {
     /// indicator says it to the one audience on earth that did not need telling.
     private static func caption(for config: MenuBarItemConfig) -> String? {
         guard config.style.supportsCaption, config.showsCaption else { return nil }
+        if config.style == .bar { return sideCaptionText(for: config.metric) }
         return captionText(for: config.metric)
+    }
+
+    /// The caption stacked beside a bar, one letter to a row. Three rows is all a
+    /// 22-point item has room for, so "PRESS" does not fit.
+    public static func sideCaptionText(for metric: MenuBarMetric) -> String? {
+        switch metric {
+        case .memoryPressure: return "PRS"
+        default: return captionText(for: metric)
+        }
     }
 
     /// The short label a metric is captioned with. Public so the settings pane can

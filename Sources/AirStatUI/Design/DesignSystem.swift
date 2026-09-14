@@ -195,6 +195,11 @@ public enum Design {
         /// edges; at these, 12.6pt, which sits comfortably.
         public static let stackedValueFontSize: CGFloat = 10
         public static let stackedCaptionFontSize: CGFloat = 8
+        /// The letters stacked beside a bar, one to a row. One size below the stacked
+        /// caption because three rows of it plus the air between them have to fit a
+        /// 22-point item: at 8 the rows touched, and the only room to make was in the
+        /// letters.
+        public static let sideLabelFontSize: CGFloat = 7
         /// Vertical gap between the two rows, between their cap-height boxes rather
         /// than their line boxes.
         public static let stackedRowGap: CGFloat = 1

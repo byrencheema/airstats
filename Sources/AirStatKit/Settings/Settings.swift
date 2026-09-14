@@ -142,6 +142,10 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
             // The one readout that is already two directions, so it is the one the
             // two lights can stand in for.
             return MenuBarDisplayStyle.general + [.statusDot]
+        case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure:
+            // The readouts that are a fraction of a known ceiling, which is the only
+            // thing a fill level can honestly draw.
+            return MenuBarDisplayStyle.general + [.bar]
         default:
             return MenuBarDisplayStyle.general
         }
@@ -150,27 +154,11 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
 
 /// How one readout draws.
 ///
-/// Four general styles, where there were seven. Bar and Ring drew the same fraction a
-/// graph draws, smaller and without the history, and neither said what the fraction was
-/// of — a 5pt bar beside a 5pt bar is two anonymous slivers. Icon-alone was worse: a
-/// stats app whose readout is an icon is showing a picture of a metric instead of the
-/// metric. What is left is the number, the number's history, and the number with a mark
-/// saying which metric it is.
-///
-/// `.battery` is a fifth style and it is not a counter-example to any of that. The
-/// objection to icon-alone was that the drawing does not move when the metric does: a
-/// chip glyph looks the same at 3% and 97%, so it is a picture of CPU rather than a
-/// reading of it. The system battery indicator is the opposite. Its fill length *is*
-/// the charge, it reddens when the charge is low and it carries a bolt while power is
-/// going in, so nothing is lost by taking the digits away — and this is the one shape
-/// macOS has spent twenty years teaching every user to read at a glance. It is offered
-/// for `.battery` alone, because it is the only metric it can honestly draw.
-///
-/// `.statusDot` passes the same test. Two dots, download over upload, each lit while
-/// its direction is moving and both red when the machine has no route out: the
-/// activity lights on a router, which is the one shape everyone already reads for
-/// this. It is offered to the up-and-down network readout alone: a dot beside CPU
-/// would be back to a picture that never moves.
+/// The general styles are the number, the number's history, and the number with a mark
+/// saying which metric it is. The rest each draw one shape for the metrics that shape
+/// can honestly stand for: the system battery indicator for the charge, two activity
+/// lights for the up-and-down network readout, and a fill level for the readouts that
+/// are a fraction of a known ceiling.
 public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
     case text
     case graph
@@ -178,9 +166,10 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
     case iconAndText
     case battery
     case statusDot
+    case bar
 
-    /// The styles any numeric readout can take. The two indicator styles are left
-    /// out because each draws one specific metric and nothing else.
+    /// The styles any numeric readout can take. The indicator styles are left out
+    /// because each draws one kind of metric and nothing else.
     public static let general: [MenuBarDisplayStyle] = [.text, .graph, .textAndGraph, .iconAndText]
 
     public var label: String {
@@ -191,15 +180,17 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
         case .iconAndText: return "Icon & Text"
         case .battery: return "Battery Indicator"
         case .statusDot: return "Status Dot"
+        case .bar: return "Bar"
         }
     }
 
-    /// Whether a caption above the value would add anything. It would not for the two
-    /// styles that already name their metric with a glyph, and the status dots are
-    /// meant to be the smallest thing on the bar, so they carry no text at all.
+    /// Whether a caption would add anything. It would not for the two styles that
+    /// already name their metric with a glyph, and the status dots are meant to be
+    /// the smallest thing on the bar, so they carry no text at all. A bar is an
+    /// anonymous shape, so the caption is what says which fraction it is.
     public var supportsCaption: Bool {
         switch self {
-        case .text, .graph, .textAndGraph: return true
+        case .text, .graph, .textAndGraph, .bar: return true
         case .iconAndText, .battery, .statusDot: return false
         }
     }
