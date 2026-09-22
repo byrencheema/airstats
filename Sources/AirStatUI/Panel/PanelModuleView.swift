@@ -18,9 +18,6 @@ struct PanelSummary {
     var icon: String?
     var symbol: String?
     var emphasis: Emphasis = .measurement
-    /// The history the header trace draws. `ChartScale` decides the domain from the
-    /// key, so a module never picks its own axis.
-    var series: SeriesKey?
 }
 
 /// One module of the panel: a header that carries the headline value, and detail
@@ -62,10 +59,9 @@ struct PanelModuleView: View {
 
     var tint: Color { Self.barTint }
 
-    /// Charts sit in the header beside the headline number, so they stay a step quieter
-    /// than the bars: a stroked line reads at secondary weight where a filled bar does
-    /// not.
-    var traceTint: Color { Design.Palette.secondaryText }
+    /// The history chart stays a step quieter than the bars: a stroked line reads at
+    /// secondary weight where a filled bar does not.
+    var chartTint: Color { Design.Palette.secondaryText }
 
     /// The low-to-high band of the history chart, under its mean line. Fainter than
     /// a bar's fill: it is context for the line, not a reading of its own.
@@ -74,25 +70,6 @@ struct PanelModuleView: View {
     /// A module glyph is a thin shape beside a heading it does not compete with, so it
     /// sits at secondary weight — nine icons at full strength is a wall.
     private var iconColor: Color { Design.Palette.secondaryText }
-
-    /// Width of the header trace. Set by `Sparkline`'s peak caption rather than by the
-    /// line: on a data-derived scale that caption is the axis, and a trace too narrow
-    /// to print "peak 4.4 MB/s" is a picture with no units.
-    private static let traceWidth: CGFloat = 68
-
-    /// Kept at or under the height of the headline text beside it, so the trace never
-    /// becomes the thing that decides how tall a module is.
-    private static let traceHeight = Design.Chart.sparklineHeight - Design.Space.xs
-
-    /// The trace's left edge is set by whatever the headline number happens to be wide,
-    /// so the sparklines on two expanded modules can sit a few points out of step.
-    ///
-    /// Left alone deliberately. Reserving a column for the number as well fixes it, but
-    /// at 340pt the header has no budget for a fourth reserved column: measured, a 76pt
-    /// value column truncated "Memory" to "Mem…" and a network rate to "2.4…". A number
-    /// you cannot read is a worse trade than two traces a few points apart, and the
-    /// numbers themselves — the thing being scanned — already share a right edge via
-    /// `captionColumnWidth`.
 
     /// Reserved width for the process list's value column, sized for the widest
     /// reading it can hold ("412.6%", "4.3 GB") so the column never reflows as
@@ -129,7 +106,6 @@ struct PanelModuleView: View {
                     .foregroundStyle(Design.Palette.secondaryText)
                     .lineLimit(1)
                 Spacer(minLength: Design.Space.s)
-                trace
                 headlineValue
                     // The number outranks the gap in front of it: without this the
                     // `HStack` splits any shortfall between the `Spacer` and the value,
@@ -161,25 +137,6 @@ struct PanelModuleView: View {
             .fill(isHovering && layout?.isDisclosureTransitionActive != true
                   ? Design.Palette.track : .clear)
             .padding(.horizontal, Design.Space.s)
-    }
-
-    /// The header trace, drawn only while the module is expanded.
-    ///
-    /// Collapsed modules form a list, and a list only reads as one if its rows share a
-    /// shape. Only some metrics have a chartable series, so drawing traces in the
-    /// collapsed state gave GPU and Network a squiggle (and Network a "peak" caption)
-    /// while Disk, Battery and Temperature had none — a ragged column that made the
-    /// summary harder to scan than the numbers alone. Expanded, the trace has room and
-    /// context, so it stays there.
-    @ViewBuilder
-    private var trace: some View {
-        if isExpanded, let key = summary.series {
-            let series = ChartSeries(key, from: engine.history, tint: traceTint)
-            if series.stats.supportsTrend {
-                Sparkline(series, settings: settings.settings.charts, height: Self.traceHeight)
-                    .frame(width: Self.traceWidth)
-            }
-        }
     }
 
     @ViewBuilder
@@ -223,11 +180,7 @@ struct PanelModuleView: View {
         }
         withAnimation(Design.Motion.respectingAccessibility(Design.Motion.disclosure)) {
             settings.update { s in
-                if s.panel.collapsedModules.contains(module) {
-                    s.panel.collapsedModules.remove(module)
-                } else {
-                    s.panel.collapsedModules.insert(module)
-                }
+                s.panel.collapsedModules = s.panel.collapsedModules(toggling: module)
             }
         }
     }
@@ -248,13 +201,11 @@ extension PanelSummary {
         switch module {
         case .cpu:
             guard let cpu = engine.cpu.value else { return PanelSummary() }
-            return PanelSummary(value: formatter.percent(cpu.total.busy),
-                                series: .cpuTotal)
+            return PanelSummary(value: formatter.percent(cpu.total.busy))
         case .memory:
             guard let memory = engine.memory.value else { return PanelSummary() }
             return PanelSummary(value: formatter.memory(memory.usedBytes),
-                                caption: "used",
-                                series: .memoryUsed)
+                                caption: "used")
         case .gpu:
             guard let gpu = engine.gpu.value, let device = gpu.primary else { return PanelSummary() }
             guard let utilization = device.utilization else {
@@ -263,16 +214,14 @@ extension PanelSummary {
             return PanelSummary(value: formatter.percent(utilization),
                                 // Device identity belongs in the expanded detail: it is
                                 // the only caption long enough to break the column.
-                                caption: nil,
-                                series: .gpuUtilization)
+                                caption: nil)
         case .network:
             guard let network = engine.network.value else { return PanelSummary() }
             // The Wi-Fi row below already names the connection; the caption is only
             // needed when there is no signal row to carry it.
             return PanelSummary(value: formatter.networkRate(network.downloadBytesPerSecond),
                                 caption: network.wifi == nil ? network.connectionType.label : nil,
-                                symbol: "arrow.down",
-                                series: .networkDownload)
+                                symbol: "arrow.down")
         case .disk:
             guard let disk = engine.disk.value, let root = disk.rootVolume else { return PanelSummary() }
             return PanelSummary(value: formatter.storage(root.availableBytes),
@@ -292,9 +241,6 @@ extension PanelSummary {
                 return PanelSummary(value: thermal.pressure.label,
                                     emphasis: .state)
             }
-            // No trace: charts here are drawn from a zero baseline, and on that axis a
-            // die swinging 44–58 °C is a flat line four fifths of the way up. The
-            // caption would be the only thing saying anything.
             return PanelSummary(value: formatter.temperature(celsius))
         case .processes:
             guard let processes = engine.processes.value else { return PanelSummary() }

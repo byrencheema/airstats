@@ -60,6 +60,28 @@ struct SettingsDecodingTests {
         }
     }
 
+    /// Opening a module closes the one that was open, and closing the open module
+    /// leaves the list fully collapsed.
+    @Test("the panel keeps one module open at a time")
+    func panelIsAnAccordion() {
+        var panel = PanelSettings()
+        panel.collapsedModules = panel.collapsedModules(toggling: .cpu)
+        #expect(panel.collapsedModules == Set(PanelModule.allCases).subtracting([.cpu]))
+        panel.collapsedModules = panel.collapsedModules(toggling: .memory)
+        #expect(panel.collapsedModules == Set(PanelModule.allCases).subtracting([.memory]))
+        panel.collapsedModules = panel.collapsedModules(toggling: .memory)
+        #expect(panel.collapsedModules == Set(PanelModule.allCases))
+    }
+
+    /// A file saved before the accordion can hold several open modules. The first in
+    /// panel order stays open rather than all of them closing, so an upgrade does not
+    /// hand back a panel that has forgotten what the user was looking at.
+    @Test("a stored panel with several open modules keeps the first")
+    func panelCollapsesAllButTheFirstOpenModule() throws {
+        let settings = try decode(#"{"panel":{"collapsedModules":["cpu","gpu"]}}"#)
+        #expect(settings.panel.collapsedModules == Set(PanelModule.allCases).subtracting([.memory]))
+    }
+
     @Test("a fresh install opens at login, an existing one keeps its answer")
     func launchAtLoginDefault() throws {
         // The shipped default, which is what a Mac with no settings file gets.

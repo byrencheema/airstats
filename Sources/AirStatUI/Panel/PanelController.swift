@@ -204,12 +204,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
         guard !isDisclosureTransitionActive else { return }
 
         let current = settings.settings.panel.collapsedModules
-        var target = current
-        if target.contains(module) {
-            target.remove(module)
-        } else {
-            target.insert(module)
-        }
+        let target = settings.settings.panel.collapsedModules(toggling: module)
 
         guard let window, isVisible, let layout else {
             settings.update { $0.panel.collapsedModules = target }

@@ -37,7 +37,7 @@ extension PanelModuleView {
                          history: engine.history,
                          day: engine.dayHistory,
                          settings: settings.settings.charts,
-                         tint: traceTint,
+                         tint: chartTint,
                          band: bandTint,
                          range: $historyRange)
 

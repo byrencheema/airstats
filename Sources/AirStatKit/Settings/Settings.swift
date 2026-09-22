@@ -374,32 +374,54 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     /// Draw the history chart under an expanded module's rows.
     public var showsHistoryChart: Bool
 
-    /// Fixed layout, previously the `width` setting. 340pt fits the widest module
-    /// summary without wrapping and leaves the panel narrower than the narrowest
-    /// MacBook screen at any status item position.
-    public static let width: Double = 340
+    /// Fixed layout, previously the `width` setting. 380pt gives a detail grid three
+    /// columns and a process name room beside its icon, and still leaves the panel
+    /// narrower than the narrowest MacBook screen at any status item position.
+    public static let width: Double = 380
     /// Previously `processRowCount` and `processSortKey`.
     public static let processRowCount = 5
     public static let processSortKey: ProcessSortKey = .cpu
-    /// Previously `showsSparklines`; an expanded module always draws its series now.
-    public static let showsSparklines = true
+    /// Previously `showsSparklines`. The header trace is gone; a module's series is
+    /// drawn once, as the history chart under its rows.
+    public static let showsSparklines = false
     /// Previously `staysOpenOnFocusLoss`. The panel closes when it loses focus, which
     /// is what a menu bar popover does and what clicking outside one means.
     public static let staysOpenOnFocusLoss = false
 
     public init(collapsedModules: Set<PanelModule> = PanelSettings.defaultCollapsed,
                 showsHistoryChart: Bool = true) {
-        self.collapsedModules = collapsedModules
+        self.collapsedModules = Self.accordion(collapsedModules)
         self.showsHistoryChart = showsHistoryChart
+    }
+
+    /// The collapsed set after a click on `module`'s header.
+    ///
+    /// One module open at a time. Opening a second one used to stack its detail under
+    /// the first, and with charts under every module the panel ran off a 13-inch
+    /// screen by the third click. Opening a module now closes whichever one was open,
+    /// so the panel is never taller than the list plus one detail.
+    public func collapsedModules(toggling module: PanelModule) -> Set<PanelModule> {
+        if collapsedModules.contains(module) {
+            return Set(PanelModule.allCases).subtracting([module])
+        }
+        return Set(PanelModule.allCases)
+    }
+
+    /// At most one module open. A settings file written before the accordion may hold
+    /// several; the first in panel order keeps its place and the rest close.
+    static func accordion(_ collapsed: Set<PanelModule>) -> Set<PanelModule> {
+        guard let open = PanelModule.allCases.first(where: { !collapsed.contains($0) }) else {
+            return collapsed
+        }
+        return Set(PanelModule.allCases).subtracting([open])
     }
 
     /// Every module starts collapsed.
     ///
     /// A collapsed module still shows its heading and its headline value, so nothing
-    /// glanceable is lost — only the detail rows are hidden. With all nine expanded the
-    /// panel is ~736pt, about 80% of the usable height on a 14-inch MacBook, and every
-    /// module competes at equal weight. Collapsed it reads as a summary you can scan,
-    /// and the detail is one click away where the user actually wants it.
+    /// glanceable is lost — only the detail rows are hidden. Collapsed it reads as a
+    /// summary you can scan, and the detail is one click away where the user actually
+    /// wants it.
     ///
     /// CPU and Memory used to be left open, on the reasoning that a panel opening to
     /// nothing but headings looks inert. It reads as an inconsistency instead: two
@@ -424,7 +446,7 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     /// read, and an unknown key has never been an error here.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        collapsedModules = c.value(.collapsedModules, or: PanelSettings.defaultCollapsed)
+        collapsedModules = Self.accordion(c.value(.collapsedModules, or: PanelSettings.defaultCollapsed))
         showsHistoryChart = c.value(.showsHistoryChart, or: true)
     }
 }
