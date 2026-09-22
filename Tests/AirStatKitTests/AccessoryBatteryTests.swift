@@ -69,7 +69,12 @@ struct AccessoryBatteryTests {
             ["Name": "", "Current Capacity": 50],
             ["Current Capacity": 50],
             ["Name": "Nameless charge"],
+            ["Name": "InternalBattery-0", "Current Capacity": 91, "Max Capacity": 100,
+             "Type": "InternalBattery"],
+            ["Name": "InternalBattery-0", "Current Capacity": 91, "Max Capacity": 100],
+            ["Name": "Back-UPS", "Current Capacity": 80, "Max Capacity": 100, "Type": "UPS"],
         ]
+
         #expect(PowerCollector.accessories(from: sources).isEmpty)
         #expect(PowerCollector.accessories(from: []).isEmpty)
     }

@@ -272,7 +272,24 @@ struct BandPlot {
         return path
     }
 
+    /// Baseline to each column's high, one closed subpath per run: the band and the
+    /// area under it as one shape, which is what the filled style is here. A day of
+    /// battery at 95% drawn as a band alone is a sliver along the ceiling that reads
+    /// as clipped; filled to the floor it reads as full, which it is.
+    func filledBandPath() -> Path {
+        var path = Path()
+        for run in runs where run.count > 1 {
+            let first = run.lowerBound, last = run.upperBound - 1
+            path.move(to: CGPoint(x: x(first), y: rect.maxY))
+            for i in run { path.addLine(to: CGPoint(x: x(i), y: y(columns[i]!.high))) }
+            path.addLine(to: CGPoint(x: x(last), y: rect.maxY))
+            path.closeSubpath()
+        }
+        return path
+    }
+
     /// The mean line closed down to the baseline, one subpath per run.
+
     func areaPath() -> Path {
         var path = Path()
         for run in runs where run.count > 1 {

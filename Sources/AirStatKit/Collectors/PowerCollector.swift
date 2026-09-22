@@ -149,7 +149,13 @@ public final class PowerCollector: MetricSource {
             let category: String?
         }
         let entries: [Entry] = sources.compactMap { source in
+            // The list can carry the Mac's own battery and a UPS alongside the
+            // accessories; both are typed, and neither is a thing on the desk.
+            if let type = source[kIOPSTypeKey] as? String,
+               type == kIOPSInternalBatteryType || type == kIOPSUPSType { return nil }
             guard let name = source["Name"] as? String, !name.isEmpty,
+                  !name.hasPrefix("InternalBattery"),
+
                   let capacity = (source["Current Capacity"] as? NSNumber)?.doubleValue else { return nil }
             let maximum = (source["Max Capacity"] as? NSNumber)?.doubleValue ?? 100
             let percent = maximum > 0 ? min(100, max(0, capacity / maximum * 100)) : capacity

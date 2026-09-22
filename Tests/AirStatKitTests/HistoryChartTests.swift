@@ -216,3 +216,25 @@ struct ShadingTests {
         #expect(plugged([0.2, 0.7]).straddles(0.5))
     }
 }
+
+@Suite("Filled band")
+struct FilledBandTests {
+    @Test("the filled style reaches the floor from every column's high")
+    func reachesFloor() {
+        let rect = CGRect(x: 0, y: 0, width: 10, height: 100)
+        let unit = ChartScale(upperBound: 1, isDerived: false, peak: 1)
+        var values: [Double?] = Array(repeating: 0.6, count: 10)
+        values[4] = nil
+        let series = MinuteSeries(key: .batteryPercent,
+                                  minima: values.map { Float($0 ?? 0) },
+                                  averages: values.map { Float($0 ?? 0) },
+                                  maxima: values.map { Float($0 ?? 0) },
+                                  counts: values.map { $0 == nil ? 0 : 1 },
+                                  end: Date(timeIntervalSince1970: 600))
+        let plot = BandPlot(rect: rect, scale: unit, minutes: series)
+        let filled = plot.filledBandPath().boundingRect
+        #expect(abs(filled.maxY - rect.maxY) < 0.001)
+        #expect(abs(filled.minY - 40) < 0.001)
+        #expect(abs(plot.bandPath().boundingRect.height) < 0.001)
+    }
+}

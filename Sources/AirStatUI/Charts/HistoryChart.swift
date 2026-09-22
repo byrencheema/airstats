@@ -529,11 +529,11 @@ struct HistoryRangePicker: View {
 /// The band and the mean, in the style the user chose.
 ///
 /// Bars keep their meaning from the sparkline, a bar to each column's high, with the
-/// now marker in the same fill. The two line styles both draw the low-to-high band
-/// with the mean through it: the wash the filled style adds under a sparkline is
-/// what the band already is here, and drawing it too was a layer for nothing. The
-/// stroke carries the line, the lone-minute dots and the marker, which sits on the
-/// newest column at rest and on the scrubbed one while the pointer is over the plot.
+/// now marker in the same fill. The line style draws the low-to-high band with the
+/// mean through it; the filled style fills from the floor to the high instead, one
+/// shape rather than a band and a wash, so it costs the same one layer. The stroke
+/// carries the line, the lone-minute dots and the marker, which sits on the newest
+/// column at rest and on the scrubbed one while the pointer is over the plot.
 struct BandLayer: View {
     let plot: BandPlot
     let lineTint: Color
@@ -571,8 +571,9 @@ struct BandLayer: View {
         case .bars:
             PlotShape(plot.barPath(newest: marked)).fill(lineTint)
         case .filledLine, .line:
-            PlotShape(plot.bandPath()).fill(bandTint)
+            PlotShape(style == .filledLine ? plot.filledBandPath() : plot.bandPath()).fill(bandTint)
             PlotShape(plot.strokeMarksPath(lineWidth: Design.Chart.lineWidth, newest: marked))
+
                 .stroke(lineTint, style: StrokeStyle(lineWidth: Design.Chart.lineWidth,
                                                      lineCap: .round, lineJoin: .round))
         }
