@@ -420,17 +420,31 @@ public final class MetricsEngine {
     /// The process at the top of a fresh list, against the minute it was seen in.
     /// The tier keeps the name from the highest machine-wide reading of the minute,
     /// so a list taken at the peak wins over one taken as it fell away.
+    ///
+    /// Only a process that accounts for a real share of the load is worth naming.
+    /// The list covers this user's processes, not root's or the kernel's, and on an
+    /// idle machine the top of it can be this app doing the scan: naming it would
+    /// explain a 16% peak with a process using 3% of one core, and blame the
+    /// observer for it. A name that does not carry a fifth of the load is left off,
+    /// and the peak stays unexplained, which is the truth.
+    static let noteShare = 0.2
+
     private func noteProcesses(_ processes: ProcessSnapshot, in s: SystemSnapshot) {
         let rows = processes.processes
         if let cpu = s.cpu.value,
-           let top = rows.max(by: { $0.cpuPercent < $1.cpuPercent }), top.cpuPercent > 0 {
-            dayHistory.note(.cpu, name: top.name, value: cpu.total.busy)
+           let top = rows.max(by: { $0.cpuPercent < $1.cpuPercent }) {
+            let cores = Double(max(cpu.perCore.count, 1))
+            if top.cpuPercent >= cpu.total.busy * cores * 100 * Self.noteShare, top.cpuPercent > 0 {
+                dayHistory.note(.cpu, name: top.name, value: cpu.total.busy)
+            }
         }
-        if let memory = s.memory.value,
-           let top = rows.max(by: { $0.memoryBytes < $1.memoryBytes }), top.memoryBytes > 0 {
+        if let memory = s.memory.value, memory.usedBytes > 0,
+           let top = rows.max(by: { $0.memoryBytes < $1.memoryBytes }),
+           Double(top.memoryBytes) >= Double(memory.usedBytes) * Self.noteShare {
             dayHistory.note(.memory, name: top.name, value: memory.usedFraction)
         }
     }
+
 
 
     /// Injects fixture data for offscreen rendering and previews.

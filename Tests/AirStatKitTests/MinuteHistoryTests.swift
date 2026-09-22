@@ -372,10 +372,11 @@ struct PeakNoteIngestTests {
         return MetricsEngine(settingsStore: SettingsStore(directory: dir))
     }
 
-    private func snapshot(fresh: Bool, at date: Date) -> SystemSnapshot {
-        SystemSnapshot(cpu: .value(SnapshotFixtures.cpu(busy: 0.4)),
+    private func snapshot(fresh: Bool, busy: Double = 0.1, topCPU: Double = 80,
+                          at date: Date) -> SystemSnapshot {
+        SystemSnapshot(cpu: .value(SnapshotFixtures.cpu(busy: busy)),
                        memory: .value(SnapshotFixtures.memory(usedFraction: 0.6, pressure: 0.3)),
-                       processes: .value(SnapshotFixtures.processes(topCPU: 80)),
+                       processes: .value(SnapshotFixtures.processes(topCPU: topCPU)),
                        processesSampled: fresh,
                        capturedAt: date)
     }
@@ -391,4 +392,19 @@ struct PeakNoteIngestTests {
         #expect(engine.dayHistory.note(.memory, at: t)?.name == "Xcode")
         #expect(engine.dayHistory.series(.cpuTotal).notes.values.contains("Xcode"))
     }
+
+    @Test("a top process that carries too little of the load is not offered as the explanation")
+    func smallShareIsNoExplanation() {
+        let engine = engine()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        // 40% of eleven cores is 440% of one; a process at 30% of one explains nothing.
+        engine.ingest(snapshot(fresh: true, busy: 0.4, topCPU: 30, at: t))
+        #expect(engine.dayHistory.note(.cpu, at: t) == nil)
+        // The fixture's largest process holds 4.3 GB of an 11 GB used total, so the
+        // memory note is unaffected by the CPU share.
+        #expect(engine.dayHistory.note(.memory, at: t)?.name == "Xcode")
+        engine.ingest(snapshot(fresh: true, busy: 0.4, topCPU: 200, at: t))
+        #expect(engine.dayHistory.note(.cpu, at: t)?.name == "Xcode")
+    }
+
 }
