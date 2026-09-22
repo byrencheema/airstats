@@ -360,3 +360,35 @@ struct MinuteNoteTests {
         #expect(!day.series(.memoryUsed).notes.isEmpty)
     }
 }
+
+@Suite("Peak notes from snapshots")
+@MainActor
+struct PeakNoteIngestTests {
+
+    private func engine() -> MetricsEngine {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AirStatTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return MetricsEngine(settingsStore: SettingsStore(directory: dir))
+    }
+
+    private func snapshot(fresh: Bool, at date: Date) -> SystemSnapshot {
+        SystemSnapshot(cpu: .value(SnapshotFixtures.cpu(busy: 0.4)),
+                       memory: .value(SnapshotFixtures.memory(usedFraction: 0.6, pressure: 0.3)),
+                       processes: .value(SnapshotFixtures.processes(topCPU: 80)),
+                       processesSampled: fresh,
+                       capturedAt: date)
+    }
+
+    @Test("a freshly read process list names the minute's peak, a carried-over one does not")
+    func freshListsOnly() {
+        let engine = engine()
+        let t = Date(timeIntervalSince1970: 1_000_000)
+        engine.ingest(snapshot(fresh: false, at: t))
+        #expect(engine.dayHistory.note(.cpu, at: t) == nil)
+        engine.ingest(snapshot(fresh: true, at: t))
+        #expect(engine.dayHistory.note(.cpu, at: t)?.name == "Xcode")
+        #expect(engine.dayHistory.note(.memory, at: t)?.name == "Xcode")
+        #expect(engine.dayHistory.series(.cpuTotal).notes.values.contains("Xcode"))
+    }
+}
