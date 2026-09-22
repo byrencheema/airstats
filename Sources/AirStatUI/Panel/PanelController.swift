@@ -22,6 +22,9 @@ public final class PanelController: NSObject, NSWindowDelegate {
     private var window: PanelWindow?
     private var layout: PanelLayoutState?
     private var isDisclosureTransitionActive = false
+    /// Animations still running in the current disclosure: SwiftUI's reveal and
+    /// AppKit's window resize. The transition ends when the last of them does.
+    private var disclosureAnimationsPending = 0
 
     /// Every `NSEvent` monitor and notification observer this controller owns, in one
     /// place. Two collections, one lifetime: they are installed together when the
@@ -266,18 +269,49 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // visible tree before the coordinated transition begins.
         settings.update { $0.panel.collapsedModules = target }
 
-        withAnimation(Design.Motion.disclosure) {
+        // The transition ends when the later of the two animations ends, not when
+        // AppKit's does.
+        //
+        // The two are given the same curve and the same duration, but SwiftUI's starts
+        // on its next render and AppKit's starts now, so the reveal is still a few
+        // frames from done when the window arrives. Finishing on the window alone
+        // measured the content while it was still short — 24pt short on a Memory open
+        // — snapped the window down to that, and then let the resize path walk it back
+        // up one intrinsic-size change at a time: seven visible steps after every
+        // open. Waiting for both, the window sits at its destination while the reveal
+        // catches up, and the one `position` at the end has nothing left to move.
+        disclosureAnimationsPending = 2
+        let animationDidEnd = { [weak self, weak window, weak layout] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.disclosureAnimationsPending -= 1
+                guard self.disclosureAnimationsPending == 0, let window, let layout else { return }
+                self.finishDisclosure(window: window, layout: layout)
+            }
+        }
+        withAnimation(Design.Motion.disclosure, completionCriteria: .logicallyComplete) {
             layout.collapsedModulesOverride = target
+        } completion: {
+            animationDidEnd()
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().setFrame(destination, display: true)
-        } completionHandler: { [weak self, weak window, weak layout] in
-            MainActor.assumeIsolated {
-                guard let self, let window, let layout else { return }
-                self.finishDisclosure(window: window, layout: layout)
-            }
+        } completionHandler: {
+            animationDidEnd()
+        }
+        // A completion that never comes would leave every click ignored and every
+        // resize dropped for the life of the window. Neither has been seen to fail,
+        // but the cost of being wrong is a dead panel, so the transition is ended by
+        // the clock if it is still open well after both animations should be over.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(Int(duration * 1000) + 250))
+            guard let self, self.isDisclosureTransitionActive,
+                  self.disclosureAnimationsPending > 0,
+                  let window = self.window, let layout = self.layout else { return }
+            self.disclosureAnimationsPending = 0
+            self.finishDisclosure(window: window, layout: layout)
         }
     }
 
@@ -334,8 +368,11 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // the modules nearest the bottom become unreachable.
         let available = anchor.map { ($0.minY - gap) - (visible.minY + margin) }
             ?? (visible.height - margin * 2)
+        // Whole points. A window cannot hold a half-point height, so a 568.5pt fit set
+        // a 569pt frame that never compared equal to the frame asked for, and every
+        // placement after it was a change that had to be applied again.
         let size = NSSize(width: fitting.width,
-                          height: min(fitting.height, max(available, 160)))
+                          height: ceil(min(fitting.height, max(available, 160))))
 
         var x: CGFloat
         var y: CGFloat
