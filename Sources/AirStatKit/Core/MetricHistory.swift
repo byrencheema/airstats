@@ -148,6 +148,9 @@ public enum SeriesKey: String, Sendable, Equatable, Hashable, CaseIterable, Coda
     case diskRead, diskWrite, diskUsed
     case batteryPercent, batteryWatts, systemWatts
     case cpuTemperature, gpuTemperature, fanRPM
+    /// 1 while the Mac is on external power, 0 on battery. Recorded so a day of
+    /// charge can say where the charger went in and came out.
+    case batteryPlugged
 
     public var label: String {
         switch self {
@@ -172,6 +175,7 @@ public enum SeriesKey: String, Sendable, Equatable, Hashable, CaseIterable, Coda
         case .cpuTemperature: return "CPU Temp"
         case .gpuTemperature: return "GPU Temp"
         case .fanRPM: return "Fan"
+        case .batteryPlugged: return "On Power"
         }
     }
 
@@ -179,8 +183,9 @@ public enum SeriesKey: String, Sendable, Equatable, Hashable, CaseIterable, Coda
     public var isNormalized: Bool {
         switch self {
         case .cpuTotal, .cpuUser, .cpuSystem, .cpuPerformance, .cpuEfficiency,
-             .memoryUsed, .memoryPressure, .gpuUtilization, .gpuVRAM, .diskUsed:
+             .memoryUsed, .memoryPressure, .gpuUtilization, .gpuVRAM, .diskUsed, .batteryPlugged:
             return true
+
         default:
             return false
         }

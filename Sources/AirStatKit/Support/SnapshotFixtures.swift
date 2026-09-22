@@ -222,7 +222,7 @@ public enum SnapshotFixtures {
     }
 
     public static func power(percent: Double, charging: Bool) -> PowerSnapshot {
-        PowerSnapshot(
+        var power = PowerSnapshot(
             hasBattery: true,
             percentage: percent,
             isCharging: charging,
@@ -246,7 +246,19 @@ public enum SnapshotFixtures {
             systemWatts: nil,
             isOptimizedChargingPaused: false
         )
+        power.accessories = [
+            AccessoryBattery(id: "airpods", name: "AirPods Pro", category: "Headphones",
+                             percent: 64, isCharging: false, parts: [
+                                .init(name: "Left", percent: 64, isCharging: false),
+                                .init(name: "Right", percent: 71, isCharging: false),
+                                .init(name: "Case", percent: 90, isCharging: false),
+                             ]),
+            AccessoryBattery(id: "mouse", name: "Magic Mouse", category: "Mouse",
+                             percent: 23, isCharging: charging),
+        ]
+        return power
     }
+
 
     public static func desktopPower() -> PowerSnapshot {
         PowerSnapshot(hasBattery: false, isPluggedIn: true, adapterWatts: 143,
@@ -397,10 +409,22 @@ public enum SnapshotFixtures {
                 day.record(.diskRead, max(0, (1_500_000 + 12_000_000 * spike + 3_000_000 * working * abs(sin(t * Double.pi * 23))) * jitter))
                 day.record(.diskWrite, max(0, (400_000 + 2_000_000 * working * abs(sin(t * Double.pi * 13))) * jitter))
                 day.record(.batteryPercent, max(8, min(100, t < 0.3 ? 100 - 20 * t / 0.3 : (t < 0.6 ? 80 + 50 * (t - 0.3) : 100 - 60 * (t - 0.6)))))
+                // On the charger for the middle stretch, which is the part of the
+                // curve that climbs.
+                day.record(.batteryPlugged, t >= 0.3 && t < 0.6 ? 1 : 0)
                 day.record(.cpuTemperature, 41 + 22 * sample)
                 day.record(.fanRPM, sample > 0.45 ? 1_400 + 3_200 * sample : 0)
             }
+            // The minutes a real day would have looked at: the spike, and the
+            // working-hours stretch where CPU clears the witness threshold.
+            if spike > 0 {
+                day.note(.cpu, name: "swift-frontend", value: cpu)
+            } else if cpu >= 0.10 {
+                day.note(.cpu, name: index % 7 == 0 ? "Google Chrome Helper (Renderer)" : "Xcode", value: cpu)
+            }
+            if t > 0.9 { day.note(.memory, name: "Xcode", value: 0.42 + 0.22 * t) }
         }
         return day
     }
+
 }

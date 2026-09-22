@@ -270,3 +270,93 @@ struct MinuteHistoryFileTests {
         #expect(MinuteHistory(capacity: 10).collectedSpan(of: .cpuTotal) == 0)
     }
 }
+
+@Suite("Minute notes")
+struct MinuteNoteTests {
+
+    private let start = Date(timeIntervalSince1970: 600)
+
+    @Test("a note keeps the name from the highest reading of its minute")
+    func highestReadingWins() {
+        var day = MinuteHistory(capacity: 10)
+        day.advance(to: start)
+        day.note(.cpu, name: "Xcode", value: 0.4)
+        day.note(.cpu, name: "Chrome", value: 0.3)
+        #expect(day.note(.cpu, at: start)?.name == "Xcode")
+        day.note(.cpu, name: "Final Cut Pro", value: 0.9)
+        #expect(day.note(.cpu, at: start)?.name == "Final Cut Pro")
+        #expect(day.note(.memory, at: start) == nil)
+        day.note(.memory, name: "", value: 0.9)
+        #expect(day.note(.memory, at: start) == nil)
+    }
+
+    @Test("notes expire with their minute and go with the day")
+    func expiry() {
+        var day = MinuteHistory(capacity: 4)
+        day.advance(to: start)
+        day.note(.cpu, name: "Xcode", value: 0.5)
+        day.advance(to: start.addingTimeInterval(3 * 60))
+        #expect(day.note(.cpu, at: start)?.name == "Xcode")
+        day.advance(to: start.addingTimeInterval(4 * 60))
+        #expect(day.note(.cpu, at: start) == nil)
+        day.note(.memory, name: "Safari", value: 0.7)
+        day.advance(to: start.addingTimeInterval(400 * 60))
+        #expect(day.note(.memory, at: start.addingTimeInterval(4 * 60)) == nil)
+    }
+
+    @Test("a series carries the notes of the kind that explains it, by position")
+    func seriesNotes() {
+        var day = MinuteHistory(capacity: 5)
+        day.advance(to: start)
+        day.record(.cpuTotal, 0.2)
+        day.record(.memoryUsed, 0.5)
+        day.note(.cpu, name: "Xcode", value: 0.2)
+        day.note(.memory, name: "Safari", value: 0.5)
+        day.advance(to: start.addingTimeInterval(2 * 60))
+        day.record(.cpuTotal, 0.3)
+        #expect(day.series(.cpuTotal).notes == [2: "Xcode"])
+        #expect(day.series(.memoryUsed).notes == [2: "Safari"])
+        #expect(day.series(.cpuUser).notes.isEmpty)
+        #expect(day.series(.networkDownload).notes.isEmpty)
+    }
+
+    @Test("notes round trip through the file, and a cut note block is refused")
+    func fileRoundTrip() {
+        var day = MinuteHistory(capacity: 6)
+        day.advance(to: start)
+        day.record(.cpuTotal, 0.4)
+        day.note(.cpu, name: "Google Chrome Helper (Renderer)", value: 0.4)
+        day.advance(to: start.addingTimeInterval(60))
+        day.note(.memory, name: "Sáfari", value: 0.7)
+        let data = day.encoded()
+        let decoded = MinuteHistory(encoded: data, capacity: 6)
+        #expect(decoded == day)
+        #expect(decoded?.note(.cpu, at: start)?.name == "Google Chrome Helper (Renderer)")
+        #expect(decoded?.note(.memory, at: start.addingTimeInterval(60))?.name == "Sáfari")
+        #expect(MinuteHistory(encoded: data.dropLast(3), capacity: 6) == nil)
+        #expect(MinuteHistory(encoded: data + Data([0]), capacity: 6) == nil)
+    }
+
+    @Test("a name longer than the file keeps is cut, not refused")
+    func longNames() {
+        var day = MinuteHistory(capacity: 2)
+        day.advance(to: start)
+        day.note(.cpu, name: String(repeating: "x", count: 300), value: 0.4)
+        let decoded = MinuteHistory(encoded: day.encoded(), capacity: 2)
+        #expect(decoded?.note(.cpu, at: start)?.name.count == 48)
+    }
+
+    @Test("the fixture day has a plugged stretch and notes on its peak")
+    func fixture() {
+        let day = SnapshotFixtures.dayHistory()
+        let plugged = day.series(.batteryPlugged)
+        #expect(plugged.minimum == 0 && plugged.maximum == 1)
+        let cpu = day.series(.cpuTotal)
+        var peak = 0
+        for index in cpu.counts.indices where cpu.counts[index] > 0 && cpu.maxima[index] > cpu.maxima[peak] {
+            peak = index
+        }
+        #expect(cpu.notes[peak] == "swift-frontend")
+        #expect(!day.series(.memoryUsed).notes.isEmpty)
+    }
+}

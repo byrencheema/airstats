@@ -423,6 +423,9 @@ public struct PowerSnapshot: Sendable, Equatable {
     public var systemWatts: Double?
     /// True when macOS is holding the charge at ~80% for battery longevity.
     public var isOptimizedChargingPaused: Bool
+    /// Batteries in things attached to the Mac: earbuds, a mouse, a keyboard.
+    /// Whatever the power source list reports for accessories, read once a minute.
+    public var accessories: [AccessoryBattery] = []
 
     public init(hasBattery: Bool = false, percentage: Double? = nil, isCharging: Bool = false,
                 isPluggedIn: Bool = false, isFullyCharged: Bool = false,
@@ -458,9 +461,52 @@ public struct PowerSnapshot: Sendable, Equatable {
     }
 }
 
+/// One accessory's battery, as the power source list reports it.
+///
+/// Earbuds arrive as several sources that share a group: a part for each bud, one
+/// for the case, and sometimes a combined figure. They are folded into one accessory
+/// here, with the parts kept, so the panel can show "L 80% R 78% Case 90%" on one
+/// row instead of three rows called AirPods.
+public struct AccessoryBattery: Sendable, Equatable, Identifiable {
+    public struct Part: Sendable, Equatable {
+        /// "Left", "Right", "Case", as reported.
+        public var name: String
+        /// 0...100.
+        public var percent: Double
+        public var isCharging: Bool
+
+        public init(name: String, percent: Double, isCharging: Bool) {
+            self.name = name
+            self.percent = percent
+            self.isCharging = isCharging
+        }
+    }
+
+    public var id: String
+    public var name: String
+    /// The reported category, "Headphones" or "Mouse", when there is one.
+    public var category: String?
+    /// The headline charge: the combined figure when one is reported, otherwise the
+    /// lowest part, since the accessory stops working when its emptiest part does.
+    public var percent: Double
+    public var isCharging: Bool
+    public var parts: [Part]
+
+    public init(id: String, name: String, category: String? = nil, percent: Double,
+                isCharging: Bool = false, parts: [Part] = []) {
+        self.id = id
+        self.name = name
+        self.category = category
+        self.percent = percent
+        self.isCharging = isCharging
+        self.parts = parts
+    }
+}
+
 // MARK: - Thermal
 
 public enum ThermalPressure: Int, Sendable, Equatable, Hashable, Codable, Comparable {
+
     case nominal = 0, fair = 1, serious = 2, critical = 3
     public static func < (a: Self, b: Self) -> Bool { a.rawValue < b.rawValue }
 
@@ -668,6 +714,11 @@ public struct SystemSnapshot: Sendable, Equatable {
     public var power: MetricState<PowerSnapshot>
     public var thermal: MetricState<ThermalSnapshot>
     public var processes: MetricState<ProcessSnapshot>
+    /// Whether `processes` was collected in this very sample. The process slot keeps
+    /// its last rows between runs, so a snapshot taken with the panel closed still
+    /// carries whatever was on screen when it shut; anything that reads the rows as
+    /// "what is running now" has to check this first.
+    public var processesSampled: Bool
     public var system: MetricState<SystemInfoSnapshot>
     public var capturedAt: Date
     /// Monotonic capture instant, used for staleness checks across sleep.
@@ -681,6 +732,7 @@ public struct SystemSnapshot: Sendable, Equatable {
                 power: MetricState<PowerSnapshot> = .pending,
                 thermal: MetricState<ThermalSnapshot> = .pending,
                 processes: MetricState<ProcessSnapshot> = .pending,
+                processesSampled: Bool = false,
                 system: MetricState<SystemInfoSnapshot> = .pending,
                 capturedAt: Date = Date(),
                 capturedInstant: ContinuousClock.Instant = Monotonic.now) {
@@ -692,6 +744,7 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.power = power
         self.thermal = thermal
         self.processes = processes
+        self.processesSampled = processesSampled
         self.system = system
         self.capturedAt = capturedAt
         self.capturedInstant = capturedInstant

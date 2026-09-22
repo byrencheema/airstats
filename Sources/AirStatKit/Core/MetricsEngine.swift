@@ -399,6 +399,10 @@ public final class MetricsEngine {
             if let pct = power.percentage { fold(.batteryPercent, pct) }
             if let w = power.batteryWatts { fold(.batteryWatts, w) }
             if let w = power.systemWatts { fold(.systemWatts, w) }
+            if power.hasBattery { fold(.batteryPlugged, power.isPluggedIn ? 1 : 0) }
+        }
+        if s.processesSampled, let processes = s.processes.value {
+            noteProcesses(processes, in: s)
         }
         if let thermal = s.thermal.value {
             if let c = thermal.cpuCelsius { fold(.cpuTemperature, c) }
@@ -412,6 +416,22 @@ public final class MetricsEngine {
         history.record(key, value)
         dayHistory.record(key, value)
     }
+
+    /// The process at the top of a fresh list, against the minute it was seen in.
+    /// The tier keeps the name from the highest machine-wide reading of the minute,
+    /// so a list taken at the peak wins over one taken as it fell away.
+    private func noteProcesses(_ processes: ProcessSnapshot, in s: SystemSnapshot) {
+        let rows = processes.processes
+        if let cpu = s.cpu.value,
+           let top = rows.max(by: { $0.cpuPercent < $1.cpuPercent }), top.cpuPercent > 0 {
+            dayHistory.note(.cpu, name: top.name, value: cpu.total.busy)
+        }
+        if let memory = s.memory.value,
+           let top = rows.max(by: { $0.memoryBytes < $1.memoryBytes }), top.memoryBytes > 0 {
+            dayHistory.note(.memory, name: top.name, value: memory.usedFraction)
+        }
+    }
+
 
     /// Injects fixture data for offscreen rendering and previews.
     ///

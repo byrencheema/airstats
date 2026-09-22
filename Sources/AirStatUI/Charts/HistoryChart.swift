@@ -1,6 +1,36 @@
 import SwiftUI
 import AirStatKit
 
+/// What a module charts over time.
+///
+/// The headline series is what the chart is about. A module that reports a pair,
+/// network and disk, names the other direction as `secondary`, and it is drawn as a
+/// thinner line in the same tint so a day of uploads leaves a trace in a chart that
+/// is mostly downloads. `shading` is a 0 or 1 series whose 1 stretches are washed
+/// behind the plot: for the battery, the hours on the charger, which is where every
+/// change of slope on a charge line comes from.
+public struct ModuleHistory: Equatable, Sendable {
+    public let key: SeriesKey
+    public let secondary: SeriesKey?
+    /// One character each, to tell the pair apart in a footer that has no room for
+    /// their names.
+    public let glyph: String
+    public let secondaryGlyph: String
+    public let domain: ClosedRange<Double>?
+    public let shading: SeriesKey?
+
+    public init(_ key: SeriesKey, secondary: SeriesKey? = nil,
+                glyphs: (String, String) = ("", ""),
+                domain: ClosedRange<Double>? = nil, shading: SeriesKey? = nil) {
+        self.key = key
+        self.secondary = secondary
+        self.glyph = glyphs.0
+        self.secondaryGlyph = glyphs.1
+        self.domain = domain
+        self.shading = shading
+    }
+}
+
 /// A module's history, at the span the user keeps and over the last day.
 ///
 /// The chart under an expanded module's rows. Two fixed ranges in the footer, where
@@ -12,14 +42,19 @@ import AirStatKit
 ///
 /// Monochrome by the panel's own policy, so the tints are the caller's: the panel
 /// passes its label colours, the desktop widget passes the metric's.
+///
+/// Drawn in as few layers as the picture allows. Every `PlotShape` is a Core
+/// Animation layer with its own 2x backing store, and four open charts of seven
+/// layers each were most of what the panel cost while open. At rest a chart is the
+/// grid, the band and one stroke that carries the line, the lone-minute dots and the
+/// now marker; a pair adds a stroke, the battery adds its shading.
 public struct HistoryChart: View {
-    private let key: SeriesKey
+    private let module: ModuleHistory
     private let history: MetricHistory
     private let day: MinuteHistory
     private let settings: ChartSettings
     private let lineTint: Color
     private let bandTint: Color
-    private let domain: ClosedRange<Double>?
     private let height: CGFloat
     /// Nil until the user picks: the chart opens on the day once there is an hour
     /// of it, and on the live span before that, so it never opens on a lone dot.
@@ -28,22 +63,20 @@ public struct HistoryChart: View {
     @State private var scrub: Scrub?
     @Environment(\.metricFormatter) private var formatter
 
-    public init(_ key: SeriesKey,
+    public init(_ module: ModuleHistory,
                 history: MetricHistory,
                 day: MinuteHistory,
                 settings: ChartSettings,
                 tint: Color,
                 band: Color,
-                domain: ClosedRange<Double>? = nil,
                 height: CGFloat = Design.Chart.detailHeight,
                 range: Binding<HistoryRange?>) {
-        self.key = key
+        self.module = module
         self.history = history
         self.day = day
         self.settings = settings
         self.lineTint = tint
         self.bandTint = band
-        self.domain = domain
         self.height = height
         self._range = range
     }
@@ -57,7 +90,7 @@ public struct HistoryChart: View {
                 .padding(.top, Design.Space.xxs)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(key.label) history")
+        .accessibilityLabel("\(module.key.label) history")
         .accessibilityValue(summary(window))
     }
 
@@ -65,6 +98,62 @@ public struct HistoryChart: View {
     private struct Scrub: Equatable {
         var fraction: Double
         var column: BandColumn?
+        var secondary: BandColumn?
+        var shade: BandColumn?
+    }
+
+    /// One series over one range, with the figures the footer states.
+    private struct Track {
+        let isEmpty: Bool
+        let supportsTrend: Bool
+        let minimum: Double
+        let average: Double
+        let maximum: Double
+        let last: Double?
+        /// How much of a day-long window has actually been collected.
+        let collectedSpan: TimeInterval
+        /// The process behind the window's high, when that minute was looked at.
+        let peakNote: String?
+        private let recent: ChartSeries
+        private let minutes: MinuteSeries?
+
+        init(recent: ChartSeries) {
+            self.recent = recent
+            minutes = nil
+            let stats = recent.stats
+            isEmpty = stats.isEmpty
+            supportsTrend = stats.supportsTrend
+            minimum = stats.minimum
+            average = stats.average
+            maximum = stats.maximum
+            last = stats.last
+            collectedSpan = recent.span
+            peakNote = nil
+        }
+
+        init(minutes: MinuteSeries, recent: ChartSeries) {
+            self.recent = recent
+            self.minutes = minutes
+            isEmpty = minutes.isEmpty
+            supportsTrend = minutes.sampledCount >= Design.Chart.minimumPoints
+            minimum = minutes.minimum
+            average = minutes.average
+            maximum = minutes.maximum
+            last = minutes.last
+            collectedSpan = minutes.collectedSpan
+            var peak: Int?
+            for index in minutes.counts.indices where minutes.counts[index] > 0 {
+                if peak == nil || minutes.maxima[index] > minutes.maxima[peak!] { peak = index }
+            }
+            peakNote = peak.flatMap { minutes.notes[$0] }
+        }
+
+        func plot(in rect: CGRect, scale: ChartScale) -> BandPlot {
+            if let minutes {
+                return BandPlot(rect: rect, scale: scale, minutes: minutes)
+            }
+            return BandPlot(rect: rect, scale: scale, samples: recent.samples)
+        }
     }
 
     /// Everything one range needs, resolved once per body.
@@ -74,61 +163,28 @@ public struct HistoryChart: View {
         let end: Date
         let scale: ChartScale
         let format: ChartValueFormat
-        let isEmpty: Bool
-        let supportsTrend: Bool
-        let minimum: Double
-        let average: Double
-        let maximum: Double
-        let last: Double?
-        /// How much of a day-long window has actually been collected.
-        let collectedSpan: TimeInterval
-        private let recent: ChartSeries
-        private let minutes: MinuteSeries?
+        let primary: Track
+        let secondary: Track?
+        let shade: Track?
 
-        init(recent: ChartSeries, end: Date, domain: ClosedRange<Double>?) {
-            range = .recent
-            self.recent = recent
-            minutes = nil
-            span = recent.span
+        var isEmpty: Bool { primary.isEmpty }
+        var supportsTrend: Bool { primary.supportsTrend }
+        var collectedSpan: TimeInterval { primary.collectedSpan }
+
+        init(range: HistoryRange, span: TimeInterval, end: Date, format: ChartValueFormat,
+             primary: Track, secondary: Track?, shade: Track?,
+             domain: ClosedRange<Double>?, naturalUpperBound: Double?) {
+            self.range = range
+            self.span = span
             self.end = end
-            format = recent.format
-            let stats = recent.stats
-            isEmpty = stats.isEmpty
-            supportsTrend = stats.supportsTrend
-            minimum = stats.minimum
-            average = stats.average
-            maximum = stats.maximum
-            last = stats.last
-            collectedSpan = recent.span
-            scale = ChartScale.resolve(peak: stats.maximum, domain: domain,
-                                       naturalUpperBound: recent.key.naturalUpperBound,
+            self.format = format
+            self.primary = primary
+            self.secondary = secondary
+            self.shade = shade
+            scale = ChartScale.resolve(peak: Swift.max(primary.maximum, secondary?.maximum ?? 0),
+                                       domain: domain,
+                                       naturalUpperBound: naturalUpperBound,
                                        adaptive: ChartSettings.usesAdaptiveScale)
-        }
-
-        init(minutes: MinuteSeries, recent: ChartSeries, domain: ClosedRange<Double>?) {
-            range = .day
-            self.recent = recent
-            self.minutes = minutes
-            span = minutes.span
-            end = minutes.end
-            format = recent.format
-            isEmpty = minutes.isEmpty
-            supportsTrend = minutes.sampledCount >= Design.Chart.minimumPoints
-            minimum = minutes.minimum
-            average = minutes.average
-            maximum = minutes.maximum
-            last = minutes.last
-            collectedSpan = minutes.collectedSpan
-            scale = ChartScale.resolve(peak: minutes.maximum, domain: domain,
-                                       naturalUpperBound: minutes.key.naturalUpperBound,
-                                       adaptive: ChartSettings.usesAdaptiveScale)
-        }
-
-        func plot(in rect: CGRect) -> BandPlot {
-            if let minutes {
-                return BandPlot(rect: rect, scale: scale, minutes: minutes)
-            }
-            return BandPlot(rect: rect, scale: scale, samples: recent.samples)
         }
 
         func string(_ value: Double, using formatter: MetricFormatter) -> String {
@@ -149,18 +205,33 @@ public struct HistoryChart: View {
 
     /// The day once it can show one, otherwise whatever the live ring holds.
     public static let dayDefaultThreshold: TimeInterval = 3_600
+    /// The shading series is 0 or 1 per sample; a column is shaded when more of its
+    /// minute was spent at 1.
+    static let shadeThreshold = 0.5
 
     private var resolvedRange: HistoryRange {
-        range ?? (day.collectedSpan(of: key) >= Self.dayDefaultThreshold ? .day : .recent)
+        range ?? (day.collectedSpan(of: module.key) >= Self.dayDefaultThreshold ? .day : .recent)
     }
 
     private var window: Window {
-        let recent = ChartSeries(key, from: history, tint: lineTint, domain: domain)
+        let recent = ChartSeries(module.key, from: history, tint: lineTint, domain: module.domain)
+        let secondary = module.secondary.map { ChartSeries($0, from: history, tint: lineTint) }
+        let shade = module.shading.map { ChartSeries($0, from: history, tint: lineTint) }
         switch resolvedRange {
         case .recent:
-            return Window(recent: recent, end: history.lastSampleDate ?? Date(), domain: domain)
+            return Window(range: .recent, span: recent.span,
+                          end: history.lastSampleDate ?? Date(), format: recent.format,
+                          primary: Track(recent: recent),
+                          secondary: secondary.map { Track(recent: $0) },
+                          shade: shade.map { Track(recent: $0) },
+                          domain: module.domain, naturalUpperBound: module.key.naturalUpperBound)
         case .day:
-            return Window(minutes: day.series(key), recent: recent, domain: domain)
+            let minutes = day.series(module.key)
+            return Window(range: .day, span: minutes.span, end: minutes.end, format: recent.format,
+                          primary: Track(minutes: minutes, recent: recent),
+                          secondary: secondary.map { Track(minutes: day.series($0.key), recent: $0) },
+                          shade: shade.map { Track(minutes: day.series($0.key), recent: $0) },
+                          domain: module.domain, naturalUpperBound: module.key.naturalUpperBound)
         }
     }
 
@@ -182,7 +253,7 @@ public struct HistoryChart: View {
     }
 
     /// One layer per mark rather than one drawing pass. See `PlotShape` for why this
-    /// is not a `Canvas`.
+    /// is not a `Canvas`, and the type comment for why there are so few of them.
     @ViewBuilder
     private func marks(_ window: Window, in size: CGSize) -> some View {
         let rect = ChartLayout.plotRect(in: size)
@@ -190,23 +261,26 @@ public struct HistoryChart: View {
             if window.isEmpty {
                 EmptyBaseline(rect: rect)
             } else {
-                let plot = window.plot(in: rect)
+                let plot = window.primary.plot(in: rect, scale: window.scale)
+                let secondary = window.secondary.map { $0.plot(in: rect, scale: window.scale) }
+                let shade = window.shade.map { $0.plot(in: rect, scale: Self.unitScale) }
                 ZStack {
+                    if let shade {
+                        ShadeLayer(plot: shade)
+                    }
                     if ChartSettings.showsGrid {
-                        GridLayer(rect: rect)
-                        PlotShape(plot.timeGridPath(marks: HistoryAxis.marks))
+                        PlotShape(plot.gridPath(marks: HistoryAxis.marks))
                             .stroke(Design.Palette.primaryText.opacity(Design.Chart.gridOpacity),
                                     lineWidth: Design.Space.hairline)
                     }
-                    BandLayer(plot: plot, size: size, lineTint: lineTint, bandTint: bandTint,
-                              style: settings.style, levelsWhenSparse: window.range == .recent)
+                    if let secondary {
+                        SecondaryLayer(plot: secondary, tint: lineTint)
+                    }
+                    BandLayer(plot: plot, lineTint: lineTint, bandTint: bandTint,
+                              style: settings.style, levelsWhenSparse: window.range == .recent,
+                              scrubbed: scrub.map { plot.column(at: rect.minX + rect.width * CGFloat($0.fraction)) })
                     if let scrub {
                         crosshair(plot, at: scrub.fraction)
-                    } else if let last = window.last,
-                              plot.supportsTrend || window.range == .day,
-                              let newest = plot.columns.lastIndex(where: { $0 != nil }) {
-                        PlotShape(ChartLayout.marker(at: CGPoint(x: plot.x(newest), y: plot.y(last))))
-                            .fill(lineTint)
                     }
                 }
                 .contentShape(Rectangle())
@@ -214,7 +288,8 @@ public struct HistoryChart: View {
                     switch phase {
                     case .active(let point):
                         let column = plot.column(at: point.x)
-                        scrub = Scrub(fraction: plot.fraction(of: column), column: plot.columns[column])
+                        scrub = Scrub(fraction: plot.fraction(of: column), column: plot.columns[column],
+                                      secondary: secondary?.columns[column], shade: shade?.columns[column])
                     case .ended:
                         scrub = nil
                     }
@@ -223,21 +298,19 @@ public struct HistoryChart: View {
         }
     }
 
-    /// A hairline at the scrubbed column and a marker on its mean. A gap column gets
-    /// the hairline alone: there is no value to mark, and the footer says so.
-    @ViewBuilder
+    private static let unitScale = ChartScale(upperBound: 1, isDerived: false, peak: 1)
+
+    /// A hairline at the scrubbed column. The marker on its mean is part of the
+    /// line's own stroke, see `BandLayer`; a gap column gets the hairline alone,
+    /// since there is no value to mark and the footer says so.
     private func crosshair(_ plot: BandPlot, at fraction: Double) -> some View {
         let column = plot.column(at: plot.rect.minX + plot.rect.width * CGFloat(fraction))
         let x = plot.x(column)
         var hairline = Path()
-        let _ = hairline.move(to: CGPoint(x: x, y: plot.rect.minY))
-        let _ = hairline.addLine(to: CGPoint(x: x, y: plot.rect.maxY))
-        PlotShape(hairline)
+        hairline.move(to: CGPoint(x: x, y: plot.rect.minY))
+        hairline.addLine(to: CGPoint(x: x, y: plot.rect.maxY))
+        return PlotShape(hairline)
             .stroke(Design.Palette.secondaryText.opacity(0.5), lineWidth: Design.Space.hairline)
-        if let value = plot.columns[column] {
-            PlotShape(ChartLayout.marker(at: CGPoint(x: x, y: plot.y(value.mean)), radius: 2.5))
-                .fill(lineTint)
-        }
     }
 
     /// The top of a fixed vertical axis, stated in place; a derived one is reported
@@ -319,17 +392,19 @@ public struct HistoryChart: View {
     /// and the statistics are what gets shed; otherwise the maximum is the last to go,
     /// since on a derived scale it is the only number that says how tall the plot is.
     /// A day still being collected says since when, because a plot that occupies the
-    /// right third of its axis has to explain the empty two thirds.
+    /// right third of its axis has to explain the empty two thirds. A pair labels
+    /// its figures with the glyphs and drops the minimum, which for a rate is zero
+    /// and says nothing. The process behind a high follows the figure it explains.
     private func statisticsTiers(_ window: Window) -> [String] {
         guard !window.isEmpty else { return [""] }
+        let separator = "  ·  "
         var lead: [String] = []
         if let scrub {
-            let value = scrub.column.map { window.string($0.mean, using: formatter) } ?? "no samples"
-            lead.append("\(window.timeLabel(at: scrub.fraction))  \(value)")
+            lead.append(scrubReadout(scrub, in: window))
         } else if window.range == .day, window.collectedSpan < window.span - 3_600 {
             lead.append("since \(HistoryAxis.clock(window.end.addingTimeInterval(-window.collectedSpan)))")
         }
-        let prefix = lead.isEmpty ? "" : lead.joined() + "  ·  "
+        let prefix = lead.isEmpty ? "" : lead.joined() + separator
         guard window.supportsTrend else {
             // Too few points for a trend: the peak alone on a derived scale, since it
             // is what says how tall the plot is, and otherwise just the lead.
@@ -337,27 +412,72 @@ public struct HistoryChart: View {
             let peak = "peak \(window.string(window.scale.peak, using: formatter))"
             return [prefix + peak, lead.joined()]
         }
-        let minimum = "min \(window.string(window.minimum, using: formatter))"
-        let average = "avg \(window.string(window.average, using: formatter))"
-        let maximum = "max \(window.string(window.maximum, using: formatter))"
-        var tiers = [
-            "\(prefix)\(minimum)  \(average)  \(maximum)",
-            "\(prefix)\(average)  \(maximum)",
-            "\(prefix)\(maximum)",
-        ]
+        let primary = window.primary
+        let average = "avg \(window.string(primary.average, using: formatter))"
+        let maximum = "max \(window.string(primary.maximum, using: formatter))"
+        let explained = primary.peakNote.map { "\(maximum) \($0)" } ?? maximum
+        var tiers: [String]
+        if let secondary = window.secondary {
+            let other = "\(module.secondaryGlyph) avg \(window.string(secondary.average, using: formatter))"
+                + "  max \(window.string(secondary.maximum, using: formatter))"
+            let otherMax = "\(module.secondaryGlyph) max \(window.string(secondary.maximum, using: formatter))"
+            tiers = [
+                "\(prefix)\(module.glyph) \(average)  \(maximum)   \(other)",
+                "\(prefix)\(module.glyph) \(maximum)   \(otherMax)",
+                "\(prefix)\(maximum)",
+            ]
+        } else {
+            let minimum = "min \(window.string(primary.minimum, using: formatter))"
+            tiers = [
+                "\(prefix)\(minimum)  \(average)  \(explained)",
+                "\(prefix)\(average)  \(explained)",
+                "\(prefix)\(maximum)",
+            ]
+        }
         if !lead.isEmpty { tiers.append(lead.joined()) }
         return tiers
+    }
+
+    /// The time under the pointer and what was measured there: both directions of
+    /// a pair, the charger state under a charge, and the process behind a high.
+    private func scrubReadout(_ scrub: Scrub, in window: Window) -> String {
+        var parts = [window.timeLabel(at: scrub.fraction)]
+        guard let column = scrub.column else {
+            parts.append("no samples")
+            return parts.joined(separator: "  ")
+        }
+        if window.secondary != nil {
+            parts.append("\(module.glyph) \(window.string(column.mean, using: formatter))")
+            if let other = scrub.secondary {
+                parts.append("\(module.secondaryGlyph) \(window.string(other.mean, using: formatter))")
+            }
+        } else {
+            parts.append(window.string(column.mean, using: formatter))
+        }
+        if window.shade != nil, let shade = scrub.shade {
+            parts.append(shade.mean >= Self.shadeThreshold ? "on power" : "on battery")
+        }
+        if let note = column.note { parts.append(note) }
+        return parts.joined(separator: "  ")
     }
 
     private func summary(_ window: Window) -> String {
         let over = window.range == .day ? "the last 24 hours" : ChartCaption.window(window.span)
         guard !window.isEmpty else { return "No history yet over \(over)." }
-        var text = "\(key.label) over \(over)"
-        if let last = window.last { text += ": now \(window.string(last, using: formatter))" }
-        if window.supportsTrend {
-            text += ", average \(window.string(window.average, using: formatter))"
-            text += ", range \(window.string(window.minimum, using: formatter))"
-            text += " to \(window.string(window.maximum, using: formatter))"
+        func sentence(_ label: String, _ track: Track) -> String {
+            var text = label
+            if let last = track.last { text += ": now \(window.string(last, using: formatter))" }
+            if track.supportsTrend {
+                text += ", average \(window.string(track.average, using: formatter))"
+                text += ", range \(window.string(track.minimum, using: formatter))"
+                text += " to \(window.string(track.maximum, using: formatter))"
+            }
+            if let note = track.peakNote { text += ", highest while \(note) led" }
+            return text
+        }
+        var text = sentence("\(module.key.label) over \(over)", window.primary)
+        if let secondary = module.secondary, let track = window.secondary {
+            text += ". " + sentence(secondary.label, track)
         }
         return text + "."
     }
@@ -401,13 +521,14 @@ struct HistoryRangePicker: View {
 
 /// The band and the mean, in the style the user chose.
 ///
-/// Bars keep their meaning from the sparkline, a bar to each column's high. The two
-/// line styles draw the low-to-high band with the mean through it; the filled one
-/// also washes the area under the mean, which is the difference between them
-/// everywhere else in the app.
+/// Bars keep their meaning from the sparkline, a bar to each column's high, with the
+/// now marker in the same fill. The two line styles both draw the low-to-high band
+/// with the mean through it: the wash the filled style adds under a sparkline is
+/// what the band already is here, and drawing it too was a layer for nothing. The
+/// stroke carries the line, the lone-minute dots and the marker, which sits on the
+/// newest column at rest and on the scrubbed one while the pointer is over the plot.
 struct BandLayer: View {
     let plot: BandPlot
-    let size: CGSize
     let lineTint: Color
     let bandTint: Color
     let style: ChartStyle
@@ -416,6 +537,8 @@ struct BandLayer: View {
     /// Wrong for a day: a dashed line across 24 hours of axis claims a value for
     /// hours that have not happened, so a day draws only the minutes it has.
     var levelsWhenSparse = true
+    /// The column under the pointer, which takes the marker from the newest one.
+    var scrubbed: Int? = nil
 
     var body: some View {
         if !plot.isEmpty {
@@ -433,36 +556,47 @@ struct BandLayer: View {
                     style: StrokeStyle(lineWidth: Design.Chart.lineWidth, lineCap: .butt, dash: [2, 3]))
     }
 
+    private var marked: Int? { scrubbed ?? plot.newestSampled }
+
     @ViewBuilder
     private var trend: some View {
         switch style {
         case .bars:
-            PlotShape(plot.barPath()).fill(lineTint)
-        case .filledLine:
-            PlotShape(plot.areaPath()).fill(areaGradient)
+            PlotShape(plot.barPath(newest: marked)).fill(lineTint)
+        case .filledLine, .line:
             PlotShape(plot.bandPath()).fill(bandTint)
-            line
-        case .line:
-            PlotShape(plot.bandPath()).fill(bandTint)
-            line
-        }
-    }
-
-    private var line: some View {
-        ZStack {
-            PlotShape(plot.linePath())
+            PlotShape(plot.strokeMarksPath(lineWidth: Design.Chart.lineWidth, newest: marked))
                 .stroke(lineTint, style: StrokeStyle(lineWidth: Design.Chart.lineWidth,
                                                      lineCap: .round, lineJoin: .round))
-            PlotShape(plot.dotPath()).fill(lineTint)
         }
     }
+}
 
-    private var areaGradient: LinearGradient {
-        let height = max(size.height, 1)
-        return LinearGradient(
-            gradient: Gradient(colors: [lineTint.opacity(Design.Chart.fillOpacity), lineTint.opacity(0)]),
-            startPoint: UnitPoint(x: 0.5, y: plot.rect.minY / height),
-            endPoint: UnitPoint(x: 0.5, y: plot.rect.maxY / height))
+/// The other half of a pair: the mean alone, thinner and quieter than the headline
+/// series, with the same dots for lone minutes. No band, since two bands in one tint
+/// are a muddle, and no marker, since the footer already reads both directions.
+struct SecondaryLayer: View {
+    let plot: BandPlot
+    let tint: Color
+
+    static let lineWidth: CGFloat = 1
+
+    var body: some View {
+        if !plot.isEmpty {
+            PlotShape(plot.strokeMarksPath(lineWidth: Self.lineWidth))
+                .stroke(tint.opacity(0.55), style: StrokeStyle(lineWidth: Self.lineWidth,
+                                                              lineCap: .round, lineJoin: .round))
+        }
+    }
+}
+
+/// The stretches of the window a 0 or 1 series spent at 1, washed behind the plot.
+struct ShadeLayer: View {
+    let plot: BandPlot
+
+    var body: some View {
+        PlotShape(plot.spanPath { $0.mean >= HistoryChart.shadeThreshold })
+            .fill(Design.Palette.primaryText.opacity(Design.Chart.gridOpacity * 0.75))
     }
 }
 
@@ -472,20 +606,24 @@ struct BandLayer: View {
 /// the pointer when it is click-through. It answers "was it busy today" at a glance
 /// and leaves the reading to the panel.
 public struct HistorySilhouette: View {
+    private let module: ModuleHistory
     private let minutes: MinuteSeries
+    private let secondary: MinuteSeries?
+    private let shade: MinuteSeries?
     private let tint: Color
     private let style: ChartStyle
-    private let domain: ClosedRange<Double>?
     private let height: CGFloat
 
     @Environment(\.metricFormatter) private var formatter
 
-    public init(_ key: SeriesKey, day: MinuteHistory, tint: Color, style: ChartStyle,
-                domain: ClosedRange<Double>? = nil, height: CGFloat) {
-        self.minutes = day.series(key)
+    public init(_ module: ModuleHistory, day: MinuteHistory, tint: Color, style: ChartStyle,
+                height: CGFloat) {
+        self.module = module
+        self.minutes = day.series(module.key)
+        self.secondary = module.secondary.map { day.series($0) }
+        self.shade = module.shading.map { day.series($0) }
         self.tint = tint
         self.style = style
-        self.domain = domain
         self.height = height
     }
 
@@ -501,15 +639,18 @@ public struct HistorySilhouette: View {
                 // panel gets the same frame from its gridlines and time labels.
                 EmptyBaseline(rect: rect)
                 if !minutes.isEmpty {
-                    let plot = BandPlot(rect: rect, scale: scale, minutes: minutes)
-                    BandLayer(plot: plot, size: proxy.size, lineTint: tint,
+                    let scale = self.scale
+                    if let shade {
+                        ShadeLayer(plot: BandPlot(rect: rect, scale: scale, minutes: shade))
+                    }
+                    if let secondary {
+                        SecondaryLayer(plot: BandPlot(rect: rect, scale: scale, minutes: secondary),
+                                       tint: tint)
+                    }
+                    BandLayer(plot: BandPlot(rect: rect, scale: scale, minutes: minutes),
+                              lineTint: tint,
                               bandTint: tint.opacity(Design.Chart.fillOpacity * 1.5),
                               style: style, levelsWhenSparse: false)
-                    if let newest = plot.columns.lastIndex(where: { $0 != nil }),
-                       let value = plot.columns[newest] {
-                        PlotShape(ChartLayout.marker(at: CGPoint(x: plot.x(newest), y: plot.y(value.mean))))
-                            .fill(tint)
-                    }
                 }
             }
         }
@@ -520,8 +661,9 @@ public struct HistorySilhouette: View {
     }
 
     private var scale: ChartScale {
-        ChartScale.resolve(peak: minutes.maximum, domain: domain,
-                           naturalUpperBound: minutes.key.naturalUpperBound,
+        ChartScale.resolve(peak: Swift.max(minutes.maximum, secondary?.maximum ?? 0),
+                           domain: module.domain,
+                           naturalUpperBound: module.key.naturalUpperBound,
                            adaptive: ChartSettings.usesAdaptiveScale)
     }
 
@@ -547,20 +689,22 @@ extension SeriesKey {
 }
 
 extension PanelModule {
-    /// The series a module's history chart draws, with the fixed band it plots
-    /// against when it has one. Nil for modules with nothing to chart over time.
+    /// What a module's history chart draws. Nil for modules with nothing to chart
+    /// over time.
     ///
     /// Temperature gets a stated band: a die swinging 44 to 58 degrees against a
-    /// zero baseline is a flat line four fifths of the way up the plot.
-    public var historySeries: (key: SeriesKey, domain: ClosedRange<Double>?)? {
+    /// zero baseline is a flat line four fifths of the way up the plot. Network and
+    /// disk are pairs, labelled the way the menu bar labels them. The battery is
+    /// shaded where the Mac was on the charger.
+    public var historySeries: ModuleHistory? {
         switch self {
-        case .cpu: return (.cpuTotal, nil)
-        case .memory: return (.memoryUsed, nil)
-        case .gpu: return (.gpuUtilization, nil)
-        case .network: return (.networkDownload, nil)
-        case .disk: return (.diskRead, nil)
-        case .battery: return (.batteryPercent, nil)
-        case .thermal: return (.cpuTemperature, 30...100)
+        case .cpu: return ModuleHistory(.cpuTotal)
+        case .memory: return ModuleHistory(.memoryUsed)
+        case .gpu: return ModuleHistory(.gpuUtilization)
+        case .network: return ModuleHistory(.networkDownload, secondary: .networkUpload, glyphs: ("↓", "↑"))
+        case .disk: return ModuleHistory(.diskRead, secondary: .diskWrite, glyphs: ("R", "W"))
+        case .battery: return ModuleHistory(.batteryPercent, shading: .batteryPlugged)
+        case .thermal: return ModuleHistory(.cpuTemperature, domain: 30...100)
         case .processes, .system: return nil
         }
     }

@@ -132,9 +132,9 @@ private struct DesktopWidgetModuleView: View {
     private func history(tint: Color) -> some View {
         if showsHistory, let series = module.historySeries,
            engine.dayHistory.collectedSpan(of: series.key) >= HistoryChart.dayDefaultThreshold {
-            HistorySilhouette(series.key, day: engine.dayHistory, tint: tint,
-                              style: chartStyle, domain: series.domain,
-                              height: Self.historyHeight)
+            HistorySilhouette(series, day: engine.dayHistory, tint: tint,
+                              style: chartStyle, height: Self.historyHeight)
+
                 .padding(.leading, Self.indent)
                 .padding(.top, Design.Space.xxs)
         }

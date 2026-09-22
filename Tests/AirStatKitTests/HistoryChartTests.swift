@@ -10,13 +10,64 @@ struct BandPlotTests {
     private let rect = CGRect(x: 0, y: 0, width: 10, height: 100)
     private let unit = ChartScale(upperBound: 1, isDerived: false, peak: 1)
 
-    private func minutes(_ values: [Double?]) -> MinuteSeries {
+    private func minutes(_ values: [Double?], notes: [Int: String] = [:]) -> MinuteSeries {
         MinuteSeries(key: .cpuTotal,
                      minima: values.map { Float(($0 ?? 0) * 0.5) },
                      averages: values.map { Float($0 ?? 0) },
                      maxima: values.map { Float(($0 ?? 0) * 1.5) },
                      counts: values.map { $0 == nil ? 0 : 2 },
+                     notes: notes,
                      end: Date(timeIntervalSince1970: 86_400))
+    }
+
+    /// Subpaths, which is rectangles for a span path and runs plus dots for a stroke.
+    private func subpaths(_ path: Path) -> Int {
+        var moves = 0
+        path.forEach { if case .move = $0 { moves += 1 } }
+        return moves
+    }
+
+    @Test("a column's note is the one from the minute that set its high")
+    func columnNotes() {
+        // Two buckets per column. Column 0 gets its high from bucket 1, which is
+        // the noted one; column 1 gets its high from bucket 2, which is not.
+        let values: [Double?] = [0.1, 0.4, 0.5, 0.2] + Array(repeating: 0.1, count: 16)
+        let plot = BandPlot(rect: rect, scale: unit,
+                            minutes: minutes(values, notes: [1: "Xcode", 3: "Music"]))
+        #expect(plot.columns[0]?.note == "Xcode")
+        #expect(plot.columns[1]?.note == nil)
+        #expect(plot.columns[2]?.note == nil)
+    }
+
+    @Test("the stroke carries the line, a dot per lone column and the marker")
+    func strokeMarks() {
+        var values: [Double?] = Array(repeating: 0.5, count: 10)
+        values[3] = nil; values[5] = nil
+        let plot = BandPlot(rect: rect, scale: unit, minutes: minutes(values))
+        // Runs 0..<3, 4..<5 (a lone column) and 6..<10: two lines and one dot, then
+        // the marker on the newest column.
+        #expect(subpaths(plot.strokeMarksPath(lineWidth: 1.5)) == 3)
+        #expect(subpaths(plot.strokeMarksPath(lineWidth: 1.5, newest: plot.newestSampled)) == 4)
+        #expect(plot.newestSampled == 9)
+        #expect(subpaths(plot.strokeMarksPath(lineWidth: 1.5, newest: 3)) == 3)
+    }
+
+    @Test("shaded spans cover the runs of columns at one, edge to edge")
+    func spans() {
+        let values: [Double?] = [0, 0, 1, 1, 1, 0, nil, 1, 1, 1]
+        let plot = BandPlot(rect: rect, scale: unit, minutes: minutes(values))
+        let path = plot.spanPath { $0.mean >= 0.5 }
+        #expect(subpaths(path) == 2)
+        #expect(abs(path.boundingRect.maxX - rect.maxX) < 0.001)
+        #expect(abs(path.boundingRect.height - rect.height) < 0.001)
+        #expect(plot.spanPath { _ in false }.isEmpty)
+        #expect(subpaths(plot.spanPath { _ in true }) == 2)
+    }
+
+    @Test("the grid is one path of rules and marks")
+    func grid() {
+        let plot = BandPlot(rect: rect, scale: unit, minutes: minutes(Array(repeating: 0.5, count: 10)))
+        #expect(subpaths(plot.gridPath(marks: HistoryAxis.marks)) == 5 + 2)
     }
 
     @Test("buckets reduce to per-column extremes and a weighted mean, and gaps stay gaps")

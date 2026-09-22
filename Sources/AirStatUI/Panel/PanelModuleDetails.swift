@@ -33,14 +33,14 @@ extension PanelModuleView {
     func history(available: Bool = true) -> some View {
         if available, settings.settings.panel.showsHistoryChart,
            let series = module.historySeries {
-            HistoryChart(series.key,
+            HistoryChart(series,
                          history: engine.history,
                          day: engine.dayHistory,
                          settings: settings.settings.charts,
                          tint: traceTint,
                          band: bandTint,
-                         domain: series.domain,
                          range: $historyRange)
+
                 .padding(.top, Design.Space.s)
         }
     }
@@ -349,12 +349,59 @@ extension PanelModuleView {
                 }
                 let entries = powerEntries(power)
                 if !entries.isEmpty { PanelDetailGrid(entries: entries) }
+                ForEach(power.accessories) { accessory in
+                    accessoryRow(accessory)
+                }
                 history(available: power.hasBattery && power.percentage != nil)
             }
         }
     }
 
+    /// Laid out like a disk volume, name over its bar, rather than as a bar row:
+    /// a bar row keeps 58 points for the label, and "AirPods Pro" with three part
+    /// figures beside it needs the whole width.
+    private func accessoryRow(_ accessory: AccessoryBattery) -> some View {
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.xs) {
+                Text(accessory.name)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: Design.Space.m)
+                Text(accessoryValue(accessory))
+                    .font(Design.Text.caption.monospacedDigit())
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .lineLimit(1)
+            }
+            CapacityBar(fraction: accessory.percent / 100, tint: PanelModuleView.barTint)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "64%", or for earbuds each part in turn, "L 64%  R 71%  Case 90%", with
+    /// "charging" after whatever is on power. The parts are what the user needs to
+    /// know, since one flat bud is the one that gets swapped into the case.
+    private func accessoryValue(_ accessory: AccessoryBattery) -> String {
+
+        guard !accessory.parts.isEmpty else {
+            let charge = formatter.percentValue(accessory.percent)
+            return accessory.isCharging ? "\(charge) · charging" : charge
+        }
+        return accessory.parts.map { part in
+            let label: String
+            switch part.name.lowercased() {
+            case "left": label = "L"
+            case "right": label = "R"
+            default: label = part.name
+            }
+            let charge = formatter.percentValue(part.percent)
+            return part.isCharging ? "\(label) \(charge)⚡︎" : "\(label) \(charge)"
+        }.joined(separator: "  ")
+    }
+
     private func adapterSummary(_ power: PowerSnapshot) -> String? {
+
         if let name = power.adapterName { return name }
         if let watts = power.adapterWatts { return formatter.count(watts) + " W" }
         return nil

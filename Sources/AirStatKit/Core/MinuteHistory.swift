@@ -27,6 +27,10 @@ public struct MinuteHistory: Sendable, Equatable {
     private var maxima: [Float]
     private var sums: [Float]
     private var counts: [UInt16]
+    /// The process at the top of the list in minutes that earned a look, one per
+    /// kind per bucket. Only the sample that was highest in the minute keeps its
+    /// name, so a bucket's note is the process behind its high, not its last.
+    private var notes: [MinuteNote?]
     /// Whole minutes since 1970 of the newest bucket, nil until the first sample.
     public private(set) var newestMinute: Int?
 
@@ -40,6 +44,7 @@ public struct MinuteHistory: Sendable, Equatable {
         maxima = [Float](repeating: -.greatestFiniteMagnitude, count: cells)
         sums = [Float](repeating: 0, count: cells)
         counts = [UInt16](repeating: 0, count: cells)
+        notes = [MinuteNote?](repeating: nil, count: NoteKind.allCases.count * cap)
     }
 
     public static func minute(of date: Date) -> Int {
@@ -87,6 +92,26 @@ public struct MinuteHistory: Sendable, Equatable {
         if counts[cell] < .max { counts[cell] += 1 }
     }
 
+    /// Names the process behind the newest bucket's high for `kind`, where `value`
+    /// is the machine-wide reading the process list was taken at. A later, higher
+    /// sample in the same minute replaces the name; a lower one leaves it.
+    public mutating func note(_ kind: NoteKind, name: String, value: Double) {
+        guard let newest = newestMinute, !name.isEmpty else { return }
+        let sample = Float(value)
+        guard sample.isFinite else { return }
+        let cell = kind.rawValue * capacity + slot(of: newest)
+        if let existing = notes[cell], existing.value >= sample { return }
+        notes[cell] = MinuteNote(name: name, value: sample)
+    }
+
+    /// The note for `kind` in the bucket holding `date`, if that minute earned one.
+    public func note(_ kind: NoteKind, at date: Date) -> MinuteNote? {
+        guard let newest = newestMinute else { return nil }
+        let minute = Self.minute(of: date)
+        guard minute <= newest, minute > newest - capacity else { return nil }
+        return notes[kind.rawValue * capacity + slot(of: minute)]
+    }
+
     /// The last `capacity` minutes of one series, oldest first, ending at the newest
     /// bucket. Allocates four arrays; call once per render, not per point.
     public func series(_ key: SeriesKey) -> MinuteSeries {
@@ -97,18 +122,24 @@ public struct MinuteHistory: Sendable, Equatable {
         var means = [Float](repeating: 0, count: capacity)
         var highs = [Float](repeating: 0, count: capacity)
         var samples = [UInt16](repeating: 0, count: capacity)
+        var named: [Int: String] = [:]
+        let kind = NoteKind(explaining: key)
         let oldest = newest - capacity + 1
         for (position, minute) in (oldest...newest).enumerated() {
-            let cell = index(of: key, slot: slot(of: minute))
+            let slot = slot(of: minute)
+            let cell = index(of: key, slot: slot)
             let count = counts[cell]
             guard count > 0 else { continue }
             samples[position] = count
             lows[position] = minima[cell]
             highs[position] = maxima[cell]
             means[position] = sums[cell] / Float(count)
+            if let kind, let note = notes[kind.rawValue * capacity + slot] {
+                named[position] = note.name
+            }
         }
         return MinuteSeries(key: key, minima: lows, averages: means, maxima: highs,
-                            counts: samples,
+                            counts: samples, notes: named,
                             end: Self.date(ofMinute: newest + 1))
     }
 
@@ -132,6 +163,7 @@ public struct MinuteHistory: Sendable, Equatable {
             sums[cell] = 0
             counts[cell] = 0
         }
+        for kind in NoteKind.allCases { notes[kind.rawValue * capacity + slot] = nil }
     }
 
     private mutating func clearAll() {
@@ -141,6 +173,7 @@ public struct MinuteHistory: Sendable, Equatable {
             sums[cell] = 0
             counts[cell] = 0
         }
+        for cell in notes.indices { notes[cell] = nil }
     }
 }
 
@@ -169,7 +202,33 @@ extension SeriesKey {
         case .cpuTemperature: return 18
         case .gpuTemperature: return 19
         case .fanRPM: return 20
+        case .batteryPlugged: return 21
         }
+    }
+}
+
+/// Which process list a minute's note came from.
+public enum NoteKind: Int, CaseIterable, Sendable {
+    case cpu, memory
+
+    /// The kind that explains a series' peaks, for the two series that have one.
+    public init?(explaining key: SeriesKey) {
+        switch key {
+        case .cpuTotal: self = .cpu
+        case .memoryUsed: self = .memory
+        default: return nil
+        }
+    }
+}
+
+/// The process behind one minute's high, and the machine-wide reading it was seen at.
+public struct MinuteNote: Sendable, Equatable {
+    public let name: String
+    public let value: Float
+
+    public init(name: String, value: Float) {
+        self.name = name
+        self.value = value
     }
 }
 
@@ -185,6 +244,8 @@ public struct MinuteSeries: Sendable, Equatable {
     public let averages: [Float]
     public let maxima: [Float]
     public let counts: [UInt16]
+    /// The process behind the high of the buckets that were looked at, by position.
+    public let notes: [Int: String]
     /// End of the newest bucket.
     public let end: Date
     public let bucketDuration: TimeInterval = MinuteHistory.bucketDuration
@@ -201,7 +262,7 @@ public struct MinuteSeries: Sendable, Equatable {
     public let last: Double?
 
     public init(key: SeriesKey, minima: [Float], averages: [Float], maxima: [Float],
-                counts: [UInt16], end: Date) {
+                counts: [UInt16], notes: [Int: String] = [:], end: Date) {
         precondition(minima.count == counts.count && averages.count == counts.count
                      && maxima.count == counts.count, "MinuteSeries arrays disagree")
         self.key = key
@@ -209,7 +270,9 @@ public struct MinuteSeries: Sendable, Equatable {
         self.averages = averages
         self.maxima = maxima
         self.counts = counts
+        self.notes = notes
         self.end = end
+
         var lo = Float.greatestFiniteMagnitude
         var hi = -Float.greatestFiniteMagnitude
         var sum = 0.0
@@ -263,12 +326,17 @@ public struct MinuteSeries: Sendable, Equatable {
 }
 
 extension MinuteHistory {
-    /// The file format: a fixed header, then the four arrays in declaration order,
-    /// little-endian. About 350 KB at the default capacity. Read back only when
-    /// every field of the header matches what this build would write, so a file
-    /// from a different capacity or series set is treated as absent, never as data.
+    /// The file format: a fixed header, the four arrays in declaration order, then
+    /// the notes as a count and a run of (cell, value, length, UTF-8) entries, all
+    /// little-endian. About 350 KB at the default capacity plus a few bytes per
+    /// note. Read back only when every field of the header matches what this build
+    /// would write, so a file from a different capacity or series set is treated as
+    /// absent, never as data.
     private static let magic: UInt32 = 0x4149_5248
-    private static let formatVersion: UInt32 = 1
+    private static let formatVersion: UInt32 = 2
+    /// Bytes of name a note keeps on disk. Longer names are cut, not refused: a
+    /// process name is a label, and 48 bytes of it identifies the process.
+    private static let noteNameLimit = 48
 
     public func encoded() -> Data {
         var data = Data()
@@ -283,6 +351,16 @@ extension MinuteHistory {
         maxima.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
         sums.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
         counts.withUnsafeBufferPointer { data.append(Data(buffer: $0)) }
+        let kept = notes.indices.filter { notes[$0] != nil }
+        append(UInt32(kept.count).littleEndian)
+        for cell in kept {
+            let note = notes[cell]!
+            let name = Data(note.name.utf8.prefix(Self.noteNameLimit))
+            append(UInt32(cell).littleEndian)
+            append(note.value.bitPattern.littleEndian)
+            append(UInt8(name.count))
+            data.append(name)
+        }
         return data
     }
 
@@ -305,7 +383,7 @@ extension MinuteHistory {
         let cells = series * capacity
         let floats = cells * MemoryLayout<Float>.size
         let shorts = cells * MemoryLayout<UInt16>.size
-        guard data.count == offset + floats * 3 + shorts else { return nil }
+        guard data.count >= offset + floats * 3 + shorts + 4 else { return nil }
         func floatArray() -> [Float] {
             defer { offset += floats }
             return data[offset..<(offset + floats)].withUnsafeBytes { Array($0.bindMemory(to: Float.self)) }
@@ -315,8 +393,24 @@ extension MinuteHistory {
         maxima = floatArray()
         sums = floatArray()
         counts = data[offset..<(offset + shorts)].withUnsafeBytes { Array($0.bindMemory(to: UInt16.self)) }
+        offset += shorts
+        let noteCells = NoteKind.allCases.count * capacity
+        var restored = [MinuteNote?](repeating: nil, count: noteCells)
+        guard let noteCount = read(UInt32.self) else { return nil }
+        for _ in 0..<Int(noteCount) {
+            guard let cell = read(UInt32.self).map(Int.init), cell < noteCells,
+                  let bits = read(UInt32.self), let length = read(UInt8.self),
+                  offset + Int(length) <= data.count,
+                  let name = String(data: data[offset..<(offset + Int(length))], encoding: .utf8)
+            else { return nil }
+            offset += Int(length)
+            restored[cell] = MinuteNote(name: name, value: Float(bitPattern: bits))
+        }
+        guard offset == data.count else { return nil }
+        notes = restored
         newestMinute = newest >= 0 ? Int(newest) : nil
     }
+
 
     /// Seconds between the oldest sampled bucket of one series and the end of the
     /// window, without allocating the series.

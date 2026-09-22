@@ -97,6 +97,9 @@ final class SourceSlot<Source: MetricSource> {
     /// Force the next tick to treat its counters as a fresh baseline.
     func invalidateBaseline() { lastSampled = nil }
 
+    /// Whether the last collection happened at `instant`.
+    func sampled(at instant: ContinuousClock.Instant) -> Bool { lastSampled == instant }
+
     func resetRetry() {
         consecutiveFailures = 0
         retryNotBefore = nil
@@ -134,6 +137,16 @@ public final class SamplingCore: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.airstat.sampling", qos: .utility)
     private var timer: DispatchSourceTimer?
     private var baseInterval: TimeInterval = 2
+    /// The wall-clock minute the process list was last read for a peak, and whether
+    /// the read that names the process is still owed. See `wantsPeakWitness`.
+    private var witnessedMinute: Int?
+    private var witnessFollowUpDue = false
+    /// Machine-wide CPU, as a fraction of every core, above which a minute gets a
+    /// look at the process list. A tenth is one runaway core on a twelve core Mac,
+    /// which is the case a day chart most often has to explain.
+    static let cpuWitnessThreshold = 0.10
+    /// Memory pressure above which the minute gets the same look.
+    static let memoryWitnessThreshold = 0.6
     private var activity: SamplingActivity = .menuBar
     private var enabledSources: Set<CollectorID> = Set(CollectorID.allCases)
     private var publicIPLookupEnabled = false
@@ -369,8 +382,13 @@ public final class SamplingCore: @unchecked Sendable {
         run(powerSlot)
         run(thermalSlot)
         // Processes are by far the most expensive source; only ever sampled when
-        // the panel that displays them is actually on screen.
-        if activity >= .panel { run(processSlot) }
+        // the panel that displays them is actually on screen, or twice in a minute
+        // the day chart will have to explain.
+        if activity >= .panel {
+            run(processSlot)
+        } else if wantsPeakWitness() {
+            run(processSlot)
+        }
 
         guard changed else { return }
 
@@ -383,6 +401,7 @@ public final class SamplingCore: @unchecked Sendable {
             power: powerSlot.state,
             thermal: thermalSlot.state,
             processes: processSlot.state,
+            processesSampled: processSlot.sampled(at: now),
             system: systemSlot.state,
             capturedAt: Date(),
             capturedInstant: now
@@ -392,7 +411,34 @@ public final class SamplingCore: @unchecked Sendable {
         DispatchQueue.main.async { MainActor.assumeIsolated { callback(snapshot) } }
     }
 
+    /// Whether this tick should read the process list to name what is behind a
+    /// peak. A minute whose CPU or memory pressure clears the threshold gets two
+    /// reads: the first rebaselines the per-process counters and reports nothing,
+    /// the second, a tick later, carries real percentages over that tick. One pair
+    /// per minute at most, so a sustained load costs two reads a minute and an idle
+    /// machine costs none.
+    private func wantsPeakWitness() -> Bool {
+        if witnessFollowUpDue {
+            witnessFollowUpDue = false
+            return true
+        }
+        let busy = cpuSlot.state.value?.total.busy ?? 0
+        let pressure = memorySlot.state.value?.pressureFraction ?? 0
+        guard busy >= Self.cpuWitnessThreshold || pressure >= Self.memoryWitnessThreshold else {
+            return false
+        }
+        let minute = Int(Date().timeIntervalSince1970 / 60)
+        guard minute != witnessedMinute else { return false }
+        witnessedMinute = minute
+        // Counters last read minutes or hours ago would rank processes by their
+        // average since then, not by what they are doing now.
+        processSlot.invalidateBaseline()
+        witnessFollowUpDue = true
+        return true
+    }
+
     private func thermalMultiplier(for identifier: CollectorID) -> Double {
+
         switch identifier {
         case .gpu, .disk, .processes: return thermalCadenceMultiplier
         default: return 1

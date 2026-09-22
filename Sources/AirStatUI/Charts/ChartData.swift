@@ -119,6 +119,8 @@ public enum ChartValueFormat: Equatable, Sendable {
         case .batteryWatts, .systemWatts: return .watts
         case .cpuTemperature, .gpuTemperature: return .temperature
         case .fanRPM: return .rpm
+        case .batteryPlugged: return .fraction
+
         }
     }
 }

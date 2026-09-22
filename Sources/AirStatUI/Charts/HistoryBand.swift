@@ -25,6 +25,8 @@ struct BandColumn: Equatable {
     var low: Double
     var mean: Double
     var high: Double
+    /// The process behind the high, when the minute that set it was looked at.
+    var note: String? = nil
 }
 
 /// Samples reduced to per-pixel columns that keep both ends of what happened.
@@ -65,17 +67,19 @@ struct BandPlot {
                             var hi = -Float.greatestFiniteMagnitude
                             var sum = 0.0
                             var weight = 0
+                            var peak = -1
                             for i in start..<Swift.min(end, n) where counts[i] > 0 {
                                 let count = Int(counts[i])
                                 lo = Swift.min(lo, lows[i])
-                                hi = Swift.max(hi, highs[i])
+                                if highs[i] > hi { hi = highs[i]; peak = i }
                                 sum += Double(means[i]) * Double(count)
                                 weight += count
                             }
                             if weight > 0 {
                                 out[column] = BandColumn(low: Double(lo),
                                                          mean: sum / Double(weight),
-                                                         high: Double(hi))
+                                                         high: Double(hi),
+                                                         note: peak >= 0 ? minutes.notes[peak] : nil)
                             }
                         }
                     }
@@ -183,7 +187,7 @@ struct BandPlot {
     }
 
     /// The mean through every run of two or more columns. A run of one column has
-    /// no direction to draw and is left to `dotPath`.
+    /// no direction to draw and gets a dot from `strokeMarksPath` instead.
     func linePath() -> Path {
         var path = Path()
         for run in runs where run.count > 1 {
@@ -194,15 +198,63 @@ struct BandPlot {
         return path
     }
 
-    /// A dot for every run of exactly one column: a single sampled minute between
-    /// gaps, or the first minute of a day. A dot says "measured here" and nothing
-    /// about what happened either side, which is all that is known.
-    func dotPath() -> Path {
-        var path = Path()
+    /// Everything drawn in the line's own stroke, as one path: the mean through
+    /// every run, a dot for every lone column, and the marker on `newest` when it
+    /// is given. A dot is a single sampled minute between gaps, or the first minute
+    /// of a day: it says "measured here" and nothing about what happened either
+    /// side, which is all that is known. One path is one layer, and a chart is
+    /// drawn by Core Animation as
+    /// one bitmap per layer, so the count of these is the count of 2x backing
+    /// stores the panel holds while it is open. A dot as a circle of radius half
+    /// the stroke, stroked, is a solid disc of one stroke's diameter, which at the
+    /// line's weight reads as the point marker it replaces.
+    func strokeMarksPath(lineWidth: CGFloat, newest: Int? = nil) -> Path {
+        var path = linePath()
         for run in runs where run.count == 1 {
             let i = run.lowerBound
-            path.addPath(ChartLayout.marker(at: CGPoint(x: x(i), y: y(columns[i]!.mean))))
+            path.addPath(ChartLayout.marker(at: CGPoint(x: x(i), y: y(columns[i]!.mean)),
+                                            radius: lineWidth / 2))
         }
+        if let newest, let column = columns[newest] {
+            path.addPath(ChartLayout.marker(at: CGPoint(x: x(newest), y: y(column.mean)),
+                                            radius: lineWidth * 0.75))
+        }
+        return path
+    }
+
+    /// The bars with the newest marker in the same fill, for the same reason.
+    func barPath(newest: Int?) -> Path {
+        var path = barPath()
+        if let newest, let column = columns[newest] {
+            path.addPath(ChartLayout.marker(at: CGPoint(x: x(newest), y: y(column.high))))
+        }
+        return path
+    }
+
+    /// The newest sampled column, where the "now" marker sits.
+    var newestSampled: Int? { columns.lastIndex(where: { $0 != nil }) }
+
+    /// Full-height rectangles over every run of columns `included` says yes to,
+    /// for shading the stretches of a day something was true: on the charger,
+    /// say. Each run is one subpath, so the shading is one fill.
+    func spanPath(where included: (BandColumn) -> Bool) -> Path {
+        var path = Path()
+        var start: Int?
+        func close(at end: Int) {
+            guard let s = start else { return }
+            let left = s == 0 ? rect.minX : (x(s - 1) + x(s)) / 2
+            let right = end == count ? rect.maxX : (x(end - 1) + x(end)) / 2
+            path.addRect(CGRect(x: left, y: rect.minY, width: right - left, height: rect.height))
+            start = nil
+        }
+        for (index, column) in columns.enumerated() {
+            if let column, included(column) {
+                if start == nil { start = index }
+            } else {
+                close(at: index)
+            }
+        }
+        close(at: count)
         return path
     }
 
@@ -257,6 +309,15 @@ struct BandPlot {
         }
         return path
     }
+
+    /// The horizontal gridlines and the time marks as one path, so the grid is one
+    /// stroke and one layer rather than two of each.
+    func gridPath(divisions: Int = 4, marks: [Double]) -> Path {
+        var path = ChartPlot.gridPath(in: rect, divisions: divisions)
+        path.addPath(timeGridPath(marks: marks))
+        return path
+    }
+
 }
 
 /// Labels for the time axis under a history plot.
