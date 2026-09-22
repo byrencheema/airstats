@@ -191,3 +191,28 @@ struct HistoryAxisTests {
         #expect(PanelModule.thermal.historySeries?.domain == 30...100)
     }
 }
+
+@Suite("Charger shading")
+struct ShadingTests {
+    private let rect = CGRect(x: 0, y: 0, width: 10, height: 100)
+    private let unit = ChartScale(upperBound: 1, isDerived: false, peak: 1)
+
+    private func plugged(_ values: [Double?]) -> BandPlot {
+        BandPlot(rect: rect, scale: unit,
+                 minutes: MinuteSeries(key: .batteryPlugged,
+                                       minima: values.map { Float($0 ?? 0) },
+                                       averages: values.map { Float($0 ?? 0) },
+                                       maxima: values.map { Float($0 ?? 0) },
+                                       counts: values.map { $0 == nil ? 0 : 1 },
+                                       end: Date(timeIntervalSince1970: 600)))
+    }
+
+    @Test("a window spent entirely on one side of the threshold is not shaded")
+    func oneState() {
+        #expect(!plugged([1, 1, 1, nil, 1, 1]).straddles(0.5))
+        #expect(!plugged([0, 0, 0, 0, 0, 0]).straddles(0.5))
+        #expect(!plugged([nil, nil]).straddles(0.5))
+        #expect(plugged([1, 1, 0, 0, 1, 1]).straddles(0.5))
+        #expect(plugged([0.2, 0.7]).straddles(0.5))
+    }
+}

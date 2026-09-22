@@ -234,7 +234,21 @@ struct BandPlot {
     /// The newest sampled column, where the "now" marker sits.
     var newestSampled: Int? { columns.lastIndex(where: { $0 != nil }) }
 
+    /// Whether the sampled columns fall on both sides of `threshold`: a window
+    /// with a plug or an unplug in it, rather than one spent entirely on power or
+    /// entirely off it.
+    func straddles(_ threshold: Double) -> Bool {
+        var above = false, below = false
+        for column in columns {
+            guard let column else { continue }
+            if column.mean >= threshold { above = true } else { below = true }
+            if above && below { return true }
+        }
+        return false
+    }
+
     /// Full-height rectangles over every run of columns `included` says yes to,
+
     /// for shading the stretches of a day something was true: on the charger,
     /// say. Each run is one subpath, so the shading is one fill.
     func spanPath(where included: (BandColumn) -> Bool) -> Path {

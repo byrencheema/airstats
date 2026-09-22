@@ -362,6 +362,8 @@ public enum SnapshotFixtures {
             history.record(.diskRead, max(0, 6_000_000 + 9_000_000 * sin(t * Double.pi * 13 + 0.3)))
             history.record(.diskWrite, max(0, 900_000 + 1_400_000 * sin(t * Double.pi * 5)))
             history.record(.batteryPercent, 92 - 16 * t)
+            // Unplugged two minutes in, so the live span shows the shading end.
+            history.record(.batteryPlugged, t < 0.4 ? 1 : 0)
             history.record(.cpuTemperature, 44 + 14 * cpu)
             history.record(.fanRPM, 1_400 + 2_600 * cpu)
         }

@@ -8,7 +8,9 @@ import AirStatKit
 /// thinner line in the same tint so a day of uploads leaves a trace in a chart that
 /// is mostly downloads. `shading` is a 0 or 1 series whose 1 stretches are washed
 /// behind the plot: for the battery, the hours on the charger, which is where every
-/// change of slope on a charge line comes from.
+/// change of slope on a charge line comes from. The wash is only drawn when the
+/// window holds both states. A window spent entirely on power washed edge to edge
+/// reads as a disabled chart, and says nothing the header's "charging" does not.
 public struct ModuleHistory: Equatable, Sendable {
     public let key: SeriesKey
     public let secondary: SeriesKey?
@@ -208,6 +210,8 @@ public struct HistoryChart: View {
     /// The shading series is 0 or 1 per sample; a column is shaded when more of its
     /// minute was spent at 1.
     static let shadeThreshold = 0.5
+    /// The fraction of the scale below which data leaves the ceiling label alone.
+    static let boundLabelBand = 0.85
 
     private var resolvedRange: HistoryRange {
         range ?? (day.collectedSpan(of: module.key) >= Self.dayDefaultThreshold ? .day : .recent)
@@ -265,7 +269,7 @@ public struct HistoryChart: View {
                 let secondary = window.secondary.map { $0.plot(in: rect, scale: window.scale) }
                 let shade = window.shade.map { $0.plot(in: rect, scale: Self.unitScale) }
                 ZStack {
-                    if let shade {
+                    if let shade, shade.straddles(Self.shadeThreshold) {
                         ShadeLayer(plot: shade)
                     }
                     if ChartSettings.showsGrid {
@@ -314,10 +318,13 @@ public struct HistoryChart: View {
     }
 
     /// The top of a fixed vertical axis, stated in place; a derived one is reported
-    /// in the footer, where nothing can cover it.
+    /// in the footer, where nothing can cover it. Left out when the data reaches
+    /// the band the label sits in: a line along the ceiling states the ceiling
+    /// better than a label it runs through, and a full battery sits there for hours.
     @ViewBuilder
     private func boundLabel(_ window: Window) -> some View {
-        if !window.isEmpty && !window.scale.isDerived {
+        if !window.isEmpty && !window.scale.isDerived,
+           window.primary.maximum < window.scale.lowerBound + window.scale.span * Self.boundLabelBand {
             SwiftUI.Text(window.string(window.scale.upperBound, using: formatter))
                 .font(Design.Text.micro)
                 .foregroundStyle(Design.Palette.tertiaryText)
@@ -641,8 +648,12 @@ public struct HistorySilhouette: View {
                 if !minutes.isEmpty {
                     let scale = self.scale
                     if let shade {
-                        ShadeLayer(plot: BandPlot(rect: rect, scale: scale, minutes: shade))
+                        let plot = BandPlot(rect: rect, scale: scale, minutes: shade)
+                        if plot.straddles(HistoryChart.shadeThreshold) {
+                            ShadeLayer(plot: plot)
+                        }
                     }
+
                     if let secondary {
                         SecondaryLayer(plot: BandPlot(rect: rect, scale: scale, minutes: secondary),
                                        tint: tint)
