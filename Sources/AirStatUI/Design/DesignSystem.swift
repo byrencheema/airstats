@@ -154,6 +154,8 @@ public enum Design {
         /// A module revealing or hiding its detail while the panel follows its height.
         public static let disclosureDuration: TimeInterval = 0.18
         public static let disclosure = Animation.easeOut(duration: disclosureDuration)
+        /// A history plot arriving once the rows above it have finished unfolding.
+        public static let chartReveal = Animation.easeOut(duration: 0.12)
         ///
         /// Panel present/dismiss.
         public static let present = Animation.easeOut(duration: 0.14)

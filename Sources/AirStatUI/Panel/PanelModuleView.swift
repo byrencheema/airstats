@@ -85,6 +85,7 @@ struct PanelModuleView: View {
         }
         .padding(.vertical, Design.Space.xxs)
         .environment(\.metricFormatter, formatter)
+        .environment(\.isDisclosureInProgress, layout?.isDisclosureTransitionActive == true)
     }
 
     // MARK: Header

@@ -13,6 +13,7 @@ enum RenderCLI {
         var appearances: [Bool] = []
         var outputDirectory = URL(fileURLWithPath: "render", isDirectory: true)
         var collectedMinutes: Int?
+        var withoutHistory = false
         var settings = AirStatKit.Settings()
 
         var index = 0
@@ -65,6 +66,10 @@ enum RenderCLI {
                     exit(2)
                 }
                 collectedMinutes = minutes
+            // Every chart's first state, and the one a reviewer never sees by accident
+            // because the fixtures come with a day of history.
+            case "--no-history":
+                withoutHistory = true
             case "--modules":
                 index += 1
                 let names = (arguments[safe: index] ?? "").split(separator: ",")
@@ -128,7 +133,7 @@ enum RenderCLI {
                             let request = OffscreenRenderer.Request(
                                 surface: surface, scenario: scenario,
                                 isDark: isDark, scale: scale, settings: settings,
-                                collectedMinutes: collectedMinutes)
+                                collectedMinutes: collectedMinutes, withoutHistory: withoutHistory)
                             do {
                                 let url = try OffscreenRenderer.render(request, to: outputDirectory)
                                 print(url.path)

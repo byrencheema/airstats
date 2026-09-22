@@ -332,6 +332,10 @@ struct BandPlot {
 
     /// Vertical hairlines at the interior time marks.
     func timeGridPath(marks: [Double]) -> Path {
+        Self.timeGridPath(in: rect, marks: marks)
+    }
+
+    static func timeGridPath(in rect: CGRect, marks: [Double]) -> Path {
         var path = Path()
         for mark in marks where mark > 0 && mark < 1 {
             let x = rect.minX + rect.width * CGFloat(mark)
@@ -344,8 +348,14 @@ struct BandPlot {
     /// The horizontal gridlines and the time marks as one path, so the grid is one
     /// stroke and one layer rather than two of each.
     func gridPath(divisions: Int = 4, marks: [Double]) -> Path {
+        Self.gridPath(in: rect, divisions: divisions, marks: marks)
+    }
+
+    /// The same grid with no series behind it, so a chart that is still collecting
+    /// has the frame it will have once it is not.
+    static func gridPath(in rect: CGRect, divisions: Int = 4, marks: [Double]) -> Path {
         var path = ChartPlot.gridPath(in: rect, divisions: divisions)
-        path.addPath(timeGridPath(marks: marks))
+        path.addPath(timeGridPath(in: rect, marks: marks))
         return path
     }
 

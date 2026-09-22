@@ -64,6 +64,11 @@ public struct HistoryChart: View {
 
     @State private var scrub: Scrub?
     @Environment(\.metricFormatter) private var formatter
+    /// Whether the module this chart sits in is still unfolding. Set by the panel;
+    /// false everywhere else, so previews and the renderer draw the plot at once.
+    @Environment(\.isDisclosureInProgress) private var isDisclosing
+    /// Whether this chart came into being mid-unfold. Only then does the plot wait.
+    @State private var appearedWhileDisclosing = false
 
     public init(_ module: ModuleHistory,
                 history: MetricHistory,
@@ -223,7 +228,10 @@ public struct HistoryChart: View {
         let shade = module.shading.map { ChartSeries($0, from: history, tint: lineTint) }
         switch resolvedRange {
         case .recent:
-            return Window(range: .recent, span: recent.span,
+            // An empty series has no span, and a frame with no span labels every
+            // mark "now". The window it will fill is the configured one, so the
+            // axis says so from the first frame.
+            return Window(range: .recent, span: recent.stats.isEmpty ? settings.historyDuration : recent.span,
                           end: history.lastSampleDate ?? Date(), format: recent.format,
                           primary: Track(recent: recent),
                           secondary: secondary.map { Track(recent: $0) },
@@ -254,6 +262,17 @@ public struct HistoryChart: View {
                     .accessibilityHidden(true)
             }
         }
+        // The plot arrives after the rows, not with them.
+        //
+        // Revealed top-down with the rest of the detail, the grid and the trace swept
+        // past under the clip for the length of the unfold, and at 0.18s that read as
+        // a flicker rather than a reveal. The axis and the footer are text and unfold
+        // with the rows; the plot holds back until the height has settled and then
+        // fades in as one piece. A chart that was already on screen when some other
+        // module started unfolding is not touched.
+        .opacity(isDisclosing && appearedWhileDisclosing ? 0 : 1)
+        .animation(Design.Motion.respectingAccessibility(Design.Motion.chartReveal), value: isDisclosing)
+        .onAppear { appearedWhileDisclosing = isDisclosing }
     }
 
     /// One layer per mark rather than one drawing pass. See `PlotShape` for why this
@@ -263,7 +282,17 @@ public struct HistoryChart: View {
         let rect = ChartLayout.plotRect(in: size)
         if rect.width > 1, rect.height > 1 {
             if window.isEmpty {
-                EmptyBaseline(rect: rect)
+                // The frame the plot will have, drawn before there is a plot, so the
+                // first samples land inside a chart instead of turning a blank into
+                // one. What Activity Monitor does with its empty history.
+                ZStack {
+                    if ChartSettings.showsGrid {
+                        PlotShape(BandPlot.gridPath(in: rect, marks: HistoryAxis.marks))
+                            .stroke(Design.Palette.primaryText.opacity(Design.Chart.gridOpacity),
+                                    lineWidth: Design.Space.hairline)
+                    }
+                    EmptyBaseline(rect: rect)
+                }
             } else {
                 let plot = window.primary.plot(in: rect, scale: window.scale)
                 let secondary = window.secondary.map { $0.plot(in: rect, scale: window.scale) }

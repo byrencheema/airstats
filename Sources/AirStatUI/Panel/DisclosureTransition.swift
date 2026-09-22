@@ -1,5 +1,18 @@
 import SwiftUI
 
+/// True inside a module while the panel is animating a disclosure. Content that
+/// would rather arrive after the unfold than during it reads this.
+private struct DisclosureInProgressKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isDisclosureInProgress: Bool {
+        get { self[DisclosureInProgressKey.self] }
+        set { self[DisclosureInProgressKey.self] = newValue }
+    }
+}
+
 extension AnyTransition {
     /// A module's detail unfolding from under its header.
     ///
