@@ -38,6 +38,10 @@ BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Resources/Info.plis
 # never has to be updated. The version lives in the git tag and in the bundle.
 DMG="$DIST/AirStats.dmg"
 
+# The notes go into the appcast at the very end, after minutes of notarization, so a
+# version the site's changelog has no entry for is refused here instead.
+uv run Scripts/appcast.py --version "$VERSION" --check
+
 if ! security find-identity -v -p codesigning | grep -q "$IDENTITY"; then
   echo "error: no '$IDENTITY' certificate in the keychain." >&2
   echo "  Xcode > Settings > Accounts > Manage Certificates > + > Developer ID Application" >&2
@@ -160,7 +164,7 @@ SIGNATURE="$("$SPARKLE_BIN/sign_update" --ed-key-file "$SPARKLE_KEY" "$DMG")"
 # else, which is how a dry run stays out of a repo it is not ready to commit to.
 uv run Scripts/appcast.py \
   --version "$VERSION" --build "$BUILD" --dmg "$DMG" --signature "$SIGNATURE" \
-  ${APPCAST:+--appcast "$APPCAST"}
+  --notes-out "$DIST/notes-$VERSION.md" ${APPCAST:+--appcast "$APPCAST"}
 
 # The homebrew/cask entry pins a version and a checksum of this exact file, and nothing
 # above updates it. Homebrew's autobump bot usually opens that PR within a day of the
@@ -175,9 +179,9 @@ echo "  $SIGNATURE"
 echo
 echo "Next, in this order (docs/RELEASING.md has the reasons):"
 echo "  1. git tag v$VERSION && git push origin v$VERSION"
-echo "  2. gh release create v$VERSION $DMG --title \"AirStats $VERSION\""
+echo "  2. gh release create v$VERSION $DMG --title \"AirStats $VERSION\" --notes-file $DIST/notes-$VERSION.md"
 echo "     The asset must be named AirStats.dmg. The appcast item already points at it."
 echo "  3. brew bump-cask-pr airstats --version $VERSION"
 echo "     Skip it if Homebrew's autobump bot already opened one. The sha256 must be $SHA."
-echo "  4. Commit and push public/appcast.xml in airstat-site. Do this last: it is what"
+echo "  4. Commit and push public/appcast.xml and src/changelog.json in airstat-site. Do this last: it is what"
 echo "     tells every installed copy to go and download the file from step 2."
