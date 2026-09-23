@@ -222,7 +222,7 @@ public enum SnapshotFixtures {
     }
 
     public static func power(percent: Double, charging: Bool) -> PowerSnapshot {
-        PowerSnapshot(
+        var power = PowerSnapshot(
             hasBattery: true,
             percentage: percent,
             isCharging: charging,
@@ -246,7 +246,19 @@ public enum SnapshotFixtures {
             systemWatts: nil,
             isOptimizedChargingPaused: false
         )
+        power.accessories = [
+            AccessoryBattery(id: "airpods", name: "AirPods Pro", category: "Headphones",
+                             percent: 64, isCharging: false, parts: [
+                                .init(name: "Left", percent: 64, isCharging: false),
+                                .init(name: "Right", percent: 71, isCharging: false),
+                                .init(name: "Case", percent: 90, isCharging: false),
+                             ]),
+            AccessoryBattery(id: "mouse", name: "Magic Mouse", category: "Mouse",
+                             percent: 23, isCharging: charging),
+        ]
+        return power
     }
+
 
     public static func desktopPower() -> PowerSnapshot {
         PowerSnapshot(hasBattery: false, isPluggedIn: true, adapterWatts: 143,
@@ -350,10 +362,71 @@ public enum SnapshotFixtures {
             history.record(.diskRead, max(0, 6_000_000 + 9_000_000 * sin(t * Double.pi * 13 + 0.3)))
             history.record(.diskWrite, max(0, 900_000 + 1_400_000 * sin(t * Double.pi * 5)))
             history.record(.batteryPercent, 92 - 16 * t)
+            // Unplugged two minutes in, so the live span shows the shading end.
+            history.record(.batteryPlugged, t < 0.4 ? 1 : 0)
             history.record(.cpuTemperature, 44 + 14 * cpu)
             history.record(.fanRPM, 1_400 + 2_600 * cpu)
         }
         history.markSampleDate(referenceDate)
         return history
     }
+
+    /// A day of minute buckets ending at the reference date, with the shape a real
+    /// day has: quiet overnight, a working-hours plateau, one spike, and two hours
+    /// with no samples at all where the machine slept. Two samples a minute, spread
+    /// around the curve, so every bucket has a band and not just a line.
+    ///
+    /// `collectedMinutes` keeps only the newest that many minutes, which is what a
+    /// day looks like on a machine that launched the app that long ago.
+    public static func dayHistory(capacity: Int = MinuteHistory.defaultCapacity,
+                                  collectedMinutes: Int? = nil) -> MinuteHistory {
+        var day = MinuteHistory(capacity: capacity)
+        let end = referenceDate
+        let firstCollected = collectedMinutes.map { max(0, capacity - $0) } ?? 0
+        for index in 0..<capacity {
+            let t = Double(index) / Double(capacity)
+            let date = end.addingTimeInterval(-Double(capacity - index) * MinuteHistory.bucketDuration)
+            day.advance(to: date)
+            if index < firstCollected { continue }
+            // Asleep from roughly 3 to 5 in the morning of a 24 hour window that ends
+            // mid afternoon.
+            if t > 0.50 && t < 0.585 { continue }
+            let working = t > 0.62 ? 0.24 : (t < 0.30 ? 0.16 : 0.05)
+            let wobble = 0.05 * sin(t * Double.pi * 40) + 0.03 * sin(t * Double.pi * 9 + 0.4)
+            var spike: Double = 0
+            if t > 0.80 && t < 0.83 { spike = 0.55 * (1 - abs(t - 0.815) / 0.015) }
+            let cpu = min(0.99, max(0.02, 0.06 + working + wobble + spike))
+            for jitter in [0.82, 1.18] {
+                let sample = min(0.99, cpu * jitter)
+                day.record(.cpuTotal, sample)
+                day.record(.cpuUser, sample * 0.62)
+                day.record(.cpuSystem, sample * 0.38)
+                day.record(.cpuPerformance, min(0.99, sample * 1.15))
+                day.record(.cpuEfficiency, sample * 0.7)
+                day.record(.memoryUsed, min(0.95, (0.42 + 0.22 * t + 0.04 * sin(t * Double.pi * 7)) * (0.98 + 0.02 * jitter)))
+                day.record(.memoryPressure, 0.2 + 0.12 * sin(t * Double.pi * 3) * jitter)
+                day.record(.gpuUtilization, max(0, 0.05 + 0.5 * spike + 0.08 * sin(t * Double.pi * 25) * jitter))
+                day.record(.networkDownload, max(0, (600_000 + 2_400_000 * working * 4 * abs(sin(t * Double.pi * 31))) * jitter))
+                day.record(.networkUpload, max(0, (90_000 + 300_000 * working * abs(sin(t * Double.pi * 17))) * jitter))
+                day.record(.diskRead, max(0, (1_500_000 + 12_000_000 * spike + 3_000_000 * working * abs(sin(t * Double.pi * 23))) * jitter))
+                day.record(.diskWrite, max(0, (400_000 + 2_000_000 * working * abs(sin(t * Double.pi * 13))) * jitter))
+                day.record(.batteryPercent, max(8, min(100, t < 0.3 ? 100 - 20 * t / 0.3 : (t < 0.6 ? 80 + 50 * (t - 0.3) : 100 - 60 * (t - 0.6)))))
+                // On the charger for the middle stretch, which is the part of the
+                // curve that climbs.
+                day.record(.batteryPlugged, t >= 0.3 && t < 0.6 ? 1 : 0)
+                day.record(.cpuTemperature, 41 + 22 * sample)
+                day.record(.fanRPM, sample > 0.45 ? 1_400 + 3_200 * sample : 0)
+            }
+            // The minutes a real day would have looked at: the spike, and the
+            // working-hours stretch where CPU clears the witness threshold.
+            if spike > 0 {
+                day.note(.cpu, name: "swift-frontend", value: cpu)
+            } else if cpu >= 0.10 {
+                day.note(.cpu, name: index % 7 == 0 ? "Google Chrome Helper (Renderer)" : "Xcode", value: cpu)
+            }
+            if t > 0.9 { day.note(.memory, name: "Xcode", value: 0.42 + 0.22 * t) }
+        }
+        return day
+    }
+
 }

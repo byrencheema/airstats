@@ -83,6 +83,8 @@ struct AppearancePane: View {
                         Text(SettingsLabels.duration(duration)).tag(duration)
                     }
                 }
+                Toggle("Show a 24-hour history in the panel",
+                       isOn: settings.binding(\.panel.showsHistoryChart))
             } header: {
                 Text("Charts")
             }

@@ -16,6 +16,10 @@ public final class MetricsEngine {
     /// Bounded ring buffers behind every chart.
     public private(set) var history: MetricHistory
 
+    /// The last 24 hours, one bucket per minute. Survives sleep and lock: see
+    /// `setSuspensionReason`.
+    public private(set) var dayHistory = MinuteHistory()
+
     public private(set) var activity: SamplingActivity = .menuBar
 
     /// Wall-clock time of the last snapshot, for the "updated Xs ago" affordance.
@@ -35,6 +39,10 @@ public final class MetricsEngine {
     public var staleOverride: Bool?
 
     private let settingsStore: SettingsStore
+    private let dayHistoryFile: MinuteHistoryFile
+    /// The newest minute the day was last written at, so the hourly save is a
+    /// subtraction per sample and not a timer.
+    private var dayHistorySavedMinute: Int?
     private var core: SamplingCore?
     private var isPanelVisible = false
     private var isDesktopWidgetVisible = false
@@ -63,12 +71,18 @@ public final class MetricsEngine {
         let s = settingsStore.settings
         self.history = MetricHistory(capacity: s.historyCapacity,
                                      sampleInterval: s.general.updateInterval)
+        self.dayHistoryFile = MinuteHistoryFile(
+            directory: settingsStore.settingsFileURL.deletingLastPathComponent())
     }
 
     // MARK: Lifecycle
 
     public func start() {
         guard core == nil else { return }
+        if dayHistory.isEmpty, let saved = dayHistoryFile.load(capacity: dayHistory.capacity) {
+            dayHistory = saved
+            dayHistorySavedMinute = saved.newestMinute
+        }
         let core = SamplingCore { [weak self] snapshot in
             self?.ingest(snapshot)
         }
@@ -87,6 +101,10 @@ public final class MetricsEngine {
     public var isObservingPowerState: Bool { powerStateObserver != nil }
 
     public func stop() {
+        // Synchronous: this runs from the app's termination path, where a detached
+        // write would not get to finish.
+        dayHistoryFile.save(dayHistory)
+        dayHistorySavedMinute = dayHistory.newestMinute
         observationTask?.cancel()
         observationTask = nil
         settingsApplyTask?.cancel()
@@ -191,13 +209,17 @@ public final class MetricsEngine {
         guard oldReasons != suspensionReasons else { return }
 
         if !suspensionReasons.isEmpty {
+            if oldReasons.isEmpty { saveDayHistory() }
             updateActivity()
             return
         }
         if !oldReasons.isEmpty {
             core?.noteWakeFromSleep()
             // Rates spanning any sleep/lock interval are meaningless; drop the
-            // discontinuity only when every suspension reason has cleared.
+            // discontinuity only when every suspension reason has cleared. The raw
+            // tier only: the minute tier is anchored to wall-clock minutes, so the
+            // sleep shows up there as the gap it was, and a day of buckets is not
+            // thrown away because the lid closed.
             history.clear()
         }
         updateActivity()
@@ -330,56 +352,116 @@ public final class MetricsEngine {
 
     /// Fold a snapshot into history. Only series whose metric is actually available
     /// are appended — a missing sensor leaves a gap rather than a fabricated zero.
+    /// Writes the day off the main actor. The tier is a value, so the copy handed
+    /// to the task is the snapshot being saved and later samples cannot race it.
+    private func saveDayHistory() {
+        let snapshot = dayHistory
+        let file = dayHistoryFile
+        dayHistorySavedMinute = snapshot.newestMinute
+        Task.detached(priority: .utility) { file.save(snapshot) }
+    }
+
     private func record(_ s: SystemSnapshot) {
         history.markSampleDate(s.capturedAt)
+        dayHistory.advance(to: s.capturedAt)
+        if let newest = dayHistory.newestMinute, newest - (dayHistorySavedMinute ?? newest) >= 60 {
+            saveDayHistory()
+        }
 
         if let cpu = s.cpu.value {
-            history.record(.cpuTotal, cpu.total.busy)
-            history.record(.cpuUser, cpu.total.user)
-            history.record(.cpuSystem, cpu.total.system)
-            if let p = cpu.performanceBusy { history.record(.cpuPerformance, p) }
-            if let e = cpu.efficiencyBusy { history.record(.cpuEfficiency, e) }
+            fold(.cpuTotal, cpu.total.busy)
+            fold(.cpuUser, cpu.total.user)
+            fold(.cpuSystem, cpu.total.system)
+            if let p = cpu.performanceBusy { fold(.cpuPerformance, p) }
+            if let e = cpu.efficiencyBusy { fold(.cpuEfficiency, e) }
         }
         if let mem = s.memory.value {
-            history.record(.memoryUsed, mem.usedFraction)
-            history.record(.memoryPressure, mem.pressureFraction)
-            history.record(.memorySwap, Double(mem.swapUsedBytes))
+            fold(.memoryUsed, mem.usedFraction)
+            fold(.memoryPressure, mem.pressureFraction)
+            fold(.memorySwap, Double(mem.swapUsedBytes))
         }
         if let gpu = s.gpu.value, let primary = gpu.primary {
-            if let util = primary.utilization { history.record(.gpuUtilization, util) }
+            if let util = primary.utilization { fold(.gpuUtilization, util) }
             if let used = primary.vramUsedBytes, let total = primary.vramTotalBytes, total > 0 {
-                history.record(.gpuVRAM, Double(used) / Double(total))
+                fold(.gpuVRAM, Double(used) / Double(total))
             }
         }
         if let net = s.network.value {
-            history.record(.networkUpload, net.uploadBytesPerSecond)
-            history.record(.networkDownload, net.downloadBytesPerSecond)
+            fold(.networkUpload, net.uploadBytesPerSecond)
+            fold(.networkDownload, net.downloadBytesPerSecond)
         }
         if let disk = s.disk.value {
-            history.record(.diskRead, disk.readBytesPerSecond)
-            history.record(.diskWrite, disk.writeBytesPerSecond)
-            if let root = disk.rootVolume { history.record(.diskUsed, root.usedFraction) }
+            fold(.diskRead, disk.readBytesPerSecond)
+            fold(.diskWrite, disk.writeBytesPerSecond)
+            if let root = disk.rootVolume { fold(.diskUsed, root.usedFraction) }
         }
         if let power = s.power.value {
-            if let pct = power.percentage { history.record(.batteryPercent, pct) }
-            if let w = power.batteryWatts { history.record(.batteryWatts, w) }
-            if let w = power.systemWatts { history.record(.systemWatts, w) }
+            if let pct = power.percentage { fold(.batteryPercent, pct) }
+            if let w = power.batteryWatts { fold(.batteryWatts, w) }
+            if let w = power.systemWatts { fold(.systemWatts, w) }
+            if power.hasBattery { fold(.batteryPlugged, power.isPluggedIn ? 1 : 0) }
+        }
+        if s.processesSampled, let processes = s.processes.value {
+            noteProcesses(processes, in: s)
         }
         if let thermal = s.thermal.value {
-            if let c = thermal.cpuCelsius { history.record(.cpuTemperature, c) }
-            if let g = thermal.gpuCelsius { history.record(.gpuTemperature, g) }
-            if let fan = thermal.fans.first { history.record(.fanRPM, fan.currentRPM) }
+            if let c = thermal.cpuCelsius { fold(.cpuTemperature, c) }
+            if let g = thermal.gpuCelsius { fold(.gpuTemperature, g) }
+            if let fan = thermal.fans.first { fold(.fanRPM, fan.currentRPM) }
         }
     }
+
+    /// One sample into both tiers.
+    private func fold(_ key: SeriesKey, _ value: Double) {
+        history.record(key, value)
+        dayHistory.record(key, value)
+    }
+
+    /// The process at the top of a fresh list, against the minute it was seen in.
+    /// The tier keeps the name from the highest machine-wide reading of the minute,
+    /// so a list taken at the peak wins over one taken as it fell away.
+    ///
+    /// Only a process that accounts for a real share of the load is worth naming.
+    /// The list covers this user's processes, not root's or the kernel's, and on an
+    /// idle machine the top of it can be this app doing the scan: naming it would
+    /// explain a 16% peak with a process using 3% of one core, and blame the
+    /// observer for it. A name that does not carry a fifth of the load is left off,
+    /// and the peak stays unexplained, which is the truth.
+    static let cpuNoteShare = 0.2
+    /// Memory needs a lower bar. This app is never the top resident set, and a
+    /// process holding a tenth of everything in use is still the true answer to who
+    /// held the most; a fifth would be 4.5 GB on a 32 GB machine, which almost
+    /// nothing but a VM clears.
+    static let memoryNoteShare = 0.1
+
+    private func noteProcesses(_ processes: ProcessSnapshot, in s: SystemSnapshot) {
+        let rows = processes.processes
+        if let cpu = s.cpu.value,
+           let top = rows.max(by: { $0.cpuPercent < $1.cpuPercent }) {
+            let cores = Double(max(cpu.perCore.count, 1))
+            if top.cpuPercent >= cpu.total.busy * cores * 100 * Self.cpuNoteShare, top.cpuPercent > 0 {
+                dayHistory.note(.cpu, name: top.name, value: cpu.total.busy)
+            }
+        }
+        if let memory = s.memory.value, memory.usedBytes > 0,
+           let top = rows.max(by: { $0.memoryBytes < $1.memoryBytes }),
+           Double(top.memoryBytes) >= Double(memory.usedBytes) * Self.memoryNoteShare {
+            dayHistory.note(.memory, name: top.name, value: memory.usedFraction)
+        }
+    }
+
+
 
     /// Injects fixture data for offscreen rendering and previews.
     ///
     /// Deliberately not gated behind `#if DEBUG`: the render CLI ships in the same
     /// binary and is how the UI gets reviewed, and a fixture path that only exists in
     /// debug builds cannot verify what release builds actually draw.
-    public func loadFixture(snapshot: SystemSnapshot, history: MetricHistory) {
+    public func loadFixture(snapshot: SystemSnapshot, history: MetricHistory,
+                            dayHistory: MinuteHistory = MinuteHistory()) {
         self.snapshot = snapshot
         self.history = history
+        self.dayHistory = dayHistory
         self.lastUpdate = snapshot.capturedAt
     }
 

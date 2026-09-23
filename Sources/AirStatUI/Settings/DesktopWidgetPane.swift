@@ -51,6 +51,7 @@ struct DesktopWidgetPane: View {
                                range: 160...480,
                                format: SettingsLabels.points)
                 Toggle("Use compact layout", isOn: settings.binding(\.desktopWidget.isCompact))
+                Toggle("Show a 24-hour history", isOn: settings.binding(\.desktopWidget.showsHistoryChart))
                 SettingsSlider(title: "Opacity",
                                value: settings.quantized(\.desktopWidget.opacity, step: 0.05),
                                range: 0.2...1,

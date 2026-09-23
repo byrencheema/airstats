@@ -22,6 +22,29 @@ extension PanelModuleView {
         }
     }
 
+    /// The history chart under a module's rows, when the module has a series and the
+    /// user has not switched the charts off.
+    ///
+    /// Under the rows rather than over them: the rows are what the module is for, and
+    /// the chart is the same headline value the header already shows, spread over
+    /// time. `available` lets a module withhold the chart when the series behind it
+    /// cannot exist on this machine, a battery chart on a desktop being the case.
+    @ViewBuilder
+    func history(available: Bool = true) -> some View {
+        if available, settings.settings.panel.showsHistoryChart,
+           let series = module.historySeries {
+            HistoryChart(series,
+                         history: engine.history,
+                         day: engine.dayHistory,
+                         settings: settings.settings.charts,
+                         tint: chartTint,
+                         band: bandTint,
+                         range: $historyRange)
+
+                .padding(.top, Design.Space.s)
+        }
+    }
+
     /// Detail when the module is open, and the reason when the metric is unavailable.
     ///
     /// A failure is shown whether or not the module is collapsed: for a module that
@@ -33,7 +56,10 @@ extension PanelModuleView {
         @ViewBuilder content: @escaping (V) -> C
     ) -> some View {
         if isExpanded {
+            // The transition lives here, on the view that is actually inserted and
+            // removed. On the container in `PanelModuleView` it applied to nothing.
             MetricContent(state) { content($0) }
+                .transition(.disclosure)
         } else if let failure = state.failure {
             UnavailableNote(failure)
         }
@@ -49,6 +75,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Load", loadAverage(cpu.loadAverage)),
                     PanelDetailEntry("Threads", formatter.count(cpu.threadCount)),
                 ])
+                history()
             }
         }
     }
@@ -106,6 +133,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Total", formatter.memory(memory.totalBytes)),
                 ])
                 memoryProcesses
+                history()
             }
         }
     }
@@ -171,6 +199,7 @@ extension PanelModuleView {
                     }
                     let entries = gpuEntries(device)
                     if !entries.isEmpty { PanelDetailGrid(entries: entries) }
+                    history(available: device.utilization != nil)
                 }
             } else {
                 UnavailableNote(.failed("No graphics device reported"))
@@ -210,6 +239,7 @@ extension PanelModuleView {
                     PanelBarRow(label: wifi.ssid ?? "Signal", value: signalValue(wifi),
                                 fraction: quality, tint: tint)
                 }
+                history()
             }
         }
     }
@@ -264,6 +294,7 @@ extension PanelModuleView {
                     PanelDetailEntry("Read", formatter.diskRate(disk.readBytesPerSecond)),
                     PanelDetailEntry("Write", formatter.diskRate(disk.writeBytesPerSecond)),
                 ])
+                history()
             }
         }
     }
@@ -318,11 +349,59 @@ extension PanelModuleView {
                 }
                 let entries = powerEntries(power)
                 if !entries.isEmpty { PanelDetailGrid(entries: entries) }
+                ForEach(power.accessories) { accessory in
+                    accessoryRow(accessory)
+                }
+                history(available: power.hasBattery && power.percentage != nil)
             }
         }
     }
 
+    /// Laid out like a disk volume, name over its bar, rather than as a bar row:
+    /// a bar row keeps 58 points for the label, and "AirPods Pro" with three part
+    /// figures beside it needs the whole width.
+    private func accessoryRow(_ accessory: AccessoryBattery) -> some View {
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.xs) {
+                Text(accessory.name)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: Design.Space.m)
+                Text(accessoryValue(accessory))
+                    .font(Design.Text.caption.monospacedDigit())
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .lineLimit(1)
+            }
+            CapacityBar(fraction: accessory.percent / 100, tint: PanelModuleView.barTint)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "64%", or for earbuds each part in turn, "L 64%  R 71%  Case 90%", with
+    /// "charging" after whatever is on power. The parts are what the user needs to
+    /// know, since one flat bud is the one that gets swapped into the case.
+    private func accessoryValue(_ accessory: AccessoryBattery) -> String {
+
+        guard !accessory.parts.isEmpty else {
+            let charge = formatter.percentValue(accessory.percent)
+            return accessory.isCharging ? "\(charge) · charging" : charge
+        }
+        return accessory.parts.map { part in
+            let label: String
+            switch part.name.lowercased() {
+            case "left": label = "L"
+            case "right": label = "R"
+            default: label = part.name
+            }
+            let charge = formatter.percentValue(part.percent)
+            return part.isCharging ? "\(label) \(charge)⚡︎" : "\(label) \(charge)"
+        }.joined(separator: "  ")
+    }
+
     private func adapterSummary(_ power: PowerSnapshot) -> String? {
+
         if let name = power.adapterName { return name }
         if let watts = power.adapterWatts { return formatter.count(watts) + " W" }
         return nil
@@ -365,6 +444,7 @@ extension PanelModuleView {
                 if let reason = thermal.sensorsUnavailableReason {
                     UnavailableNote(.unsupported(reason))
                 }
+                history(available: thermal.cpuCelsius != nil)
             }
         }
     }

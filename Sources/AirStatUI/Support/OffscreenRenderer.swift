@@ -43,6 +43,11 @@ public enum OffscreenRenderer {
         public var history: MetricHistory {
             self == .pending ? MetricHistory() : SnapshotFixtures.history()
         }
+
+        public func dayHistory(collectedMinutes: Int? = nil) -> MinuteHistory {
+            self == .pending ? MinuteHistory()
+                             : SnapshotFixtures.dayHistory(collectedMinutes: collectedMinutes)
+        }
     }
 
     public struct Request: Sendable {
@@ -51,14 +56,22 @@ public enum OffscreenRenderer {
         public var isDark: Bool
         public var scale: CGFloat
         public var settings: AirStatKit.Settings
+        /// Minutes of the 24 hour tier to fill, newest first; nil for the whole day.
+        public var collectedMinutes: Int?
+        /// Live readings with no history behind them: the first seconds after launch,
+        /// when every chart is still collecting.
+        public var withoutHistory: Bool
 
         public init(surface: Surface, scenario: Scenario = .nominal, isDark: Bool = false,
-                    scale: CGFloat = 2, settings: AirStatKit.Settings = AirStatKit.Settings()) {
+                    scale: CGFloat = 2, settings: AirStatKit.Settings = AirStatKit.Settings(),
+                    collectedMinutes: Int? = nil, withoutHistory: Bool = false) {
             self.surface = surface
             self.scenario = scenario
             self.isDark = isDark
             self.scale = scale
             self.settings = settings
+            self.collectedMinutes = collectedMinutes
+            self.withoutHistory = withoutHistory
         }
 
         public var fileName: String {
@@ -317,12 +330,15 @@ enum PreviewEngine {
         let key = cacheKey(request)
         if let existing = engineCache[key] { return existing }
         let engine = MetricsEngine(settingsStore: store(request))
-        engine.loadFixture(snapshot: request.scenario.snapshot, history: request.scenario.history)
+        engine.loadFixture(snapshot: request.scenario.snapshot,
+                           history: request.withoutHistory ? MetricHistory() : request.scenario.history,
+                           dayHistory: request.withoutHistory ? MinuteHistory()
+                               : request.scenario.dayHistory(collectedMinutes: request.collectedMinutes))
         engineCache[key] = engine
         return engine
     }
 
     private static func cacheKey(_ request: OffscreenRenderer.Request) -> String {
-        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)"
+        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)-\(request.collectedMinutes ?? -1)-\(request.withoutHistory)"
     }
 }

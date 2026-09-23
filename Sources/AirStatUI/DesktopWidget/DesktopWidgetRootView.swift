@@ -44,7 +44,10 @@ struct DesktopWidgetRootView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Space.l) {
             ForEach(modules, id: \.self) { module in
-                DesktopWidgetModuleView(module: module, engine: engine, isCompact: desktopWidget.isCompact)
+                DesktopWidgetModuleView(module: module, engine: engine,
+                                        isCompact: desktopWidget.isCompact,
+                                        showsHistory: desktopWidget.showsHistoryChart,
+                                        chartStyle: settings.settings.charts.style)
             }
         }
         // Equal top and bottom. A window with more space under its content than over
@@ -81,6 +84,8 @@ private struct DesktopWidgetModuleView: View {
     let module: PanelModule
     let engine: MetricsEngine
     let isCompact: Bool
+    let showsHistory: Bool
+    let chartStyle: ChartStyle
 
     @Environment(\.metricFormatter) private var formatter
 
@@ -91,6 +96,9 @@ private struct DesktopWidgetModuleView: View {
     static let indent = iconColumn + Design.Space.s
     /// Bar height, and the height reserved where a module has no bar to draw.
     static let barHeight: CGFloat = 3
+    /// The day silhouette. Two lines of detail tall: enough for a shape, not enough
+    /// to become the thing the module is about.
+    static let historyHeight: CGFloat = 24
 
     var body: some View {
         VStack(alignment: .leading, spacing: Design.Space.xs) {
@@ -102,6 +110,7 @@ private struct DesktopWidgetModuleView: View {
                     DesktopWidgetDetailRow(detail: detail)
                         .padding(.leading, Self.indent)
                 }
+                history(tint: readout.tint)
             case .failure(let failure):
                 // One line, not four. The panel has room to explain why a sensor is
                 // missing; a HUD that spends three lines saying "no reading" is
@@ -110,6 +119,24 @@ private struct DesktopWidgetModuleView: View {
                                  failure: failure)
                 if failure == .pending { pendingReservation }
             }
+        }
+    }
+
+    /// The last 24 hours under the rows, in the metric's own colour.
+    ///
+    /// Drawn only once the day has an hour in it. This is a row, not a chart surface
+    /// with axes to frame an empty plot, and a row that appears once is better than
+    /// a dashed line with a dot on it for sixty minutes. With the day saved across
+    /// launches that wait happens once, after install.
+    @ViewBuilder
+    private func history(tint: Color) -> some View {
+        if showsHistory, let series = module.historySeries,
+           engine.dayHistory.collectedSpan(of: series.key) >= HistoryChart.dayDefaultThreshold {
+            HistorySilhouette(series, day: engine.dayHistory, tint: tint,
+                              style: chartStyle, height: Self.historyHeight)
+
+                .padding(.leading, Self.indent)
+                .padding(.top, Design.Space.xxs)
         }
     }
 

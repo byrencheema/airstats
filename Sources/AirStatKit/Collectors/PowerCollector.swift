@@ -34,6 +34,12 @@ public final class PowerCollector: MetricSource {
     private var didLookUpBattery = false
     /// Fixed for the life of the pack, so it is read once instead of every sample.
     private var designCapacity: Int?
+    /// Accessory batteries and when they were last read. Earbuds report their charge
+    /// to macOS on their own schedule, minutes apart, so reading the list every
+    /// five seconds would return the same figures and cost a copy of the list.
+    private var accessories: [AccessoryBattery] = []
+    private var accessoriesReadAt: ContinuousClock.Instant?
+    static let accessoryInterval: Duration = .seconds(60)
 
     public init() {}
 
@@ -48,6 +54,8 @@ public final class PowerCollector: MetricSource {
         }
         didLookUpBattery = false
         designCapacity = nil
+        accessories = []
+        accessoriesReadAt = nil
     }
 
     public func collect(context: SampleContext) -> MetricState<PowerSnapshot> {
@@ -75,6 +83,7 @@ public final class PowerCollector: MetricSource {
         snapshot.hasBattery = source != nil || boolean("BatteryInstalled") == true
 
         applyAdapter(to: &snapshot)
+        snapshot.accessories = currentAccessories()
 
         guard snapshot.hasBattery else {
             // A Mac with no battery is running off the wall by definition; there is no
@@ -90,9 +99,111 @@ public final class PowerCollector: MetricSource {
         return .value(snapshot)
     }
 
+    // MARK: Accessories
+
+    /// The accessory list, re-read once a minute.
+    ///
+    /// The same power source machinery the internal battery comes from, asked for
+    /// its accessory sources: this is what `pmset -g accps` and the Bluetooth menu
+    /// read. The call is exported by IOKit but not declared in its public headers,
+    /// so it is declared here; if a macOS release stops answering, the list is
+    /// empty and the panel shows no accessory rows, which is the state it starts in.
+    private func currentAccessories() -> [AccessoryBattery] {
+        let now = ContinuousClock.now
+        if let readAt = accessoriesReadAt, now - readAt < Self.accessoryInterval {
+            return accessories
+        }
+        accessoriesReadAt = now
+        accessories = Self.readAccessories()
+        return accessories
+    }
+
+    static func readAccessories() -> [AccessoryBattery] {
+        guard let blob = IOPSCopyPowerSourcesByType(Self.accessorySourceType)?.takeRetainedValue(),
+              let handles = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
+        else { return [] }
+        let sources = handles.compactMap {
+            IOPSGetPowerSourceDescription(blob, $0)?.takeUnretainedValue() as? [String: Any]
+        }
+        return accessories(from: sources)
+    }
+
+    /// `kIOPSSourceForAccessories` in IOKit's private key header.
+    private static let accessorySourceType: Int32 = 3
+
+    /// Folds the accessory sources into one accessory per device.
+    ///
+    /// A source with a group identifier is one part of a device that reports
+    /// several: the parts are gathered under the group, the combined part names the
+    /// device and gives its headline charge, and the rest are listed by their part
+    /// name. A source without a group is a device by itself. Anything without a
+    /// name and a charge is skipped rather than shown as a nameless row.
+    static func accessories(from sources: [[String: Any]]) -> [AccessoryBattery] {
+        struct Entry {
+            let name: String
+            let percent: Double
+            let isCharging: Bool
+            let identifier: String
+            let part: String?
+            let group: String?
+            let category: String?
+        }
+        let entries: [Entry] = sources.compactMap { source in
+            // The list can carry the Mac's own battery and a UPS alongside the
+            // accessories; both are typed, and neither is a thing on the desk.
+            if let type = source[kIOPSTypeKey] as? String,
+               type == kIOPSInternalBatteryType || type == kIOPSUPSType { return nil }
+            guard let name = source["Name"] as? String, !name.isEmpty,
+                  !name.hasPrefix("InternalBattery"),
+
+                  let capacity = (source["Current Capacity"] as? NSNumber)?.doubleValue else { return nil }
+            let maximum = (source["Max Capacity"] as? NSNumber)?.doubleValue ?? 100
+            let percent = maximum > 0 ? min(100, max(0, capacity / maximum * 100)) : capacity
+            let charging = source["Is Charging"] as? Bool
+                ?? ((source["Power Source State"] as? String) == "AC Power")
+            let identifier = source["Accessory Identifier"] as? String
+                ?? source["Hardware Serial Number"] as? String ?? name
+            return Entry(name: name, percent: percent, isCharging: charging,
+                         identifier: identifier, part: source["Part Identifier"] as? String,
+                         group: source["Group Identifier"] as? String,
+                         category: source["Accessory Category"] as? String)
+        }
+
+        var order: [String] = []
+        var grouped: [String: [Entry]] = [:]
+        for entry in entries {
+            let key = entry.group ?? "\(entry.identifier)|\(entry.name)"
+            if grouped[key] == nil { order.append(key) }
+            grouped[key, default: []].append(entry)
+        }
+
+        return order.compactMap { key in
+            guard let members = grouped[key] else { return nil }
+            if members.count == 1, members[0].group == nil {
+                let one = members[0]
+                return AccessoryBattery(id: one.identifier, name: one.name, category: one.category,
+                                        percent: one.percent, isCharging: one.isCharging)
+            }
+            let combined = members.first { $0.part == "Combined" }
+            let parts = members.filter { $0.part != "Combined" }.map {
+                AccessoryBattery.Part(name: $0.part ?? $0.name, percent: $0.percent,
+                                      isCharging: $0.isCharging)
+            }
+            let named = combined ?? members.first { !($0.category ?? "").localizedCaseInsensitiveContains("case") }
+                ?? members[0]
+            let buds = parts.filter { $0.name.caseInsensitiveCompare("Case") != .orderedSame }
+            let headline = combined?.percent ?? (buds.isEmpty ? parts : buds).map(\.percent).min() ?? named.percent
+            return AccessoryBattery(id: named.identifier, name: named.name, category: named.category,
+                                    percent: headline,
+                                    isCharging: combined?.isCharging ?? parts.contains { $0.isCharging },
+                                    parts: parts)
+        }
+    }
+
     // MARK: Assembly
 
     private func applyCharge(to snapshot: inout PowerSnapshot, source: [String: Any]?) {
+
         // Taken as a ratio on purpose. IOPowerSources documents no unit for these two
         // keys and is free to report either mAh or a percentage — on Apple Silicon it
         // reports a percentage, so both are 100 at full charge — and dividing one by
@@ -265,3 +376,8 @@ public final class PowerCollector: MetricSource {
 
     private func dictionary(_ key: String) -> [String: Any]? { property(key) as? [String: Any] }
 }
+
+/// Exported by IOKit and used by `pmset`, but absent from the public headers. The
+/// argument selects the source type; see `PowerCollector.accessorySourceType`.
+@_silgen_name("IOPSCopyPowerSourcesByType")
+private func IOPSCopyPowerSourcesByType(_ type: Int32) -> Unmanaged<CFTypeRef>?

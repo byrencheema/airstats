@@ -10,6 +10,8 @@ import AirStatKit
 @Observable
 final class PanelLayoutState {
     var collapsedModulesOverride: Set<PanelModule>?
+    /// The collapsed set a disclosure started from, held until it has finished.
+    var disclosureOrigin: Set<PanelModule>?
     var isDisclosureTransitionActive = false
     @ObservationIgnored var toggleModule: ((PanelModule) -> Void)?
 }
@@ -80,11 +82,26 @@ public struct PanelRootView: View {
             // case that it reaches the ceiling below.
             .scrollIndicators(.never)
             .defaultScrollAnchor(.top)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxHeight: Self.maximumModuleHeight)
             PanelSeparator()
             PanelFooterView()
         }
+        // The list takes whatever height the window has, and the rows sit at its top.
+        //
+        // The window's frame and this hierarchy's height animate as two systems, and
+        // for the frames where they disagree something has to give. It used to be the
+        // list: sized to its content and capped by a `frame(maxHeight:)`, it was
+        // centred in the room the window offered, so every row slid down by half the
+        // difference while the window led and back up as the content caught up. The
+        // header being clicked moved under the pointer. Letting the scroll view fill
+        // the window instead keeps every row where it is; the disagreement lands on
+        // the footer, which rides the window's bottom edge, and on a few points of
+        // list clipped behind it while the content leads.
+        //
+        // Sizing: the window is measured from this hierarchy's ideal height, which for
+        // a scroll view is its content, so below the screen's ceiling nothing scrolls.
+        // Past it the controller caps the window and the list scrolls under a footer
+        // that stays on screen.
+        .frame(maxHeight: .infinity, alignment: .top)
         .frame(width: PanelSettings.width)
         .environment(\.metricFormatter, MetricFormatter(settings: settings.settings.general))
     }
@@ -108,25 +125,24 @@ public struct PanelRootView: View {
     /// two collapsed summary rows there is nothing to divide: the rows already read as a
     /// list. So a separator appears only where an expanded module begins or ends, which
     /// is exactly where the eye needs to know a block started.
+    ///
+    /// While a disclosure runs, a rule the new layout adds stays clear until the module
+    /// it belongs to has finished unfolding, so it never cuts across a half-open detail.
+    /// Rules the new layout drops fade with the fold as before.
     private func separatorNeeded(before index: Int) -> Bool {
         let collapsed = layout?.collapsedModulesOverride
             ?? settings.settings.panel.collapsedModules
-        let previous = modules[index - 1]
-        let current = modules[index]
-        return !collapsed.contains(previous) || !collapsed.contains(current)
+        guard let origin = layout?.disclosureOrigin else {
+            return separatorNeeded(before: index, collapsed: collapsed)
+        }
+        return separatorNeeded(before: index, collapsed: collapsed)
+            && separatorNeeded(before: index, collapsed: origin)
     }
 
-    /// A ceiling the module list refuses to grow past.
-    ///
-    /// The footer sits outside the scroll region, so Settings and Quit stay on screen
-    /// no matter how many modules are enabled or how long the process list gets — the
-    /// positioning code has no answer for a window taller than `visibleFrame` beyond
-    /// pinning it and letting the bottom fall away. Below the ceiling `fixedSize` still
-    /// sizes the window to its content, so nothing scrolls in the ordinary case.
-    private static var maximumModuleHeight: CGFloat {
-        guard let visible = NSScreen.main?.visibleFrame.height else { return .infinity }
-        return max(visible - Design.Space.xxl * 3, 240)
+    private func separatorNeeded(before index: Int, collapsed: Set<PanelModule>) -> Bool {
+        !collapsed.contains(modules[index - 1]) || !collapsed.contains(modules[index])
     }
+
 }
 
 /// Inset rule between modules. macOS insets its separators to the content margin so

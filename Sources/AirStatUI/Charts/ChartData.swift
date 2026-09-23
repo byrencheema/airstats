@@ -119,6 +119,8 @@ public enum ChartValueFormat: Equatable, Sendable {
         case .batteryWatts, .systemWatts: return .watts
         case .cpuTemperature, .gpuTemperature: return .temperature
         case .fanRPM: return .rpm
+        case .batteryPlugged: return .fraction
+
         }
     }
 }
@@ -196,10 +198,7 @@ public struct ChartSeries: Equatable {
     /// stored as 0...100 that still has a real ceiling. Everything else — rates,
     /// temperatures, wattage, fan speed — has no maximum this app can know, which is
     /// what forces those charts onto a data-derived scale.
-    public var naturalUpperBound: Double? {
-        if key.isNormalized { return 1 }
-        return key == .batteryPercent ? 100 : nil
-    }
+    public var naturalUpperBound: Double? { key.naturalUpperBound }
 }
 
 // MARK: - Scale
@@ -242,14 +241,23 @@ public struct ChartScale: Equatable, Sendable {
     /// mountain — the single most dishonest thing a system monitor can do, and the
     /// reason adaptive scaling is reserved for series that have no ceiling to scale to.
     public static func resolve(_ series: [ChartSeries], adaptive: Bool) -> ChartScale {
-        let peak = series.reduce(0.0) { max($0, $1.stats.maximum) }
+        resolve(peak: series.reduce(0.0) { max($0, $1.stats.maximum) },
+                domain: series.compactMap(\.domain).first,
+                naturalUpperBound: series.compactMap(\.naturalUpperBound).max(),
+                adaptive: adaptive)
+    }
+
+    /// The same resolution from the three facts it actually depends on, for a chart
+    /// whose peak comes from somewhere other than a `SampleRing`.
+    public static func resolve(peak: Double, domain: ClosedRange<Double>?,
+                               naturalUpperBound: Double?, adaptive: Bool) -> ChartScale {
         // An explicit band wins outright: the module has already decided what this
         // metric's meaningful range is, and no amount of data should move it.
-        if let stated = series.compactMap(\.domain).first {
+        if let stated = domain {
             return ChartScale(lowerBound: stated.lowerBound, upperBound: stated.upperBound,
                               isDerived: false, isExplicit: true, peak: peak)
         }
-        if let natural = series.compactMap(\.naturalUpperBound).max() {
+        if let natural = naturalUpperBound {
             return ChartScale(upperBound: natural, isDerived: false, peak: peak)
         }
         // An idle rate chart still needs a non-zero domain to divide by; the peak label

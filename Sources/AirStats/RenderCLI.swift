@@ -12,6 +12,8 @@ enum RenderCLI {
         var scales: [CGFloat] = []
         var appearances: [Bool] = []
         var outputDirectory = URL(fileURLWithPath: "render", isDirectory: true)
+        var collectedMinutes: Int?
+        var withoutHistory = false
         var settings = AirStatKit.Settings()
 
         var index = 0
@@ -52,6 +54,22 @@ enum RenderCLI {
             // expanded) is exactly the one worth looking at.
             case "--expanded":
                 settings.desktopWidget.isCompact = false
+            // Off by default, and the day silhouette is the tallest thing a widget
+            // module can grow.
+            case "--history":
+                settings.desktopWidget.showsHistoryChart = true
+            // A day still being collected is the state every launch starts in.
+            case "--collected":
+                index += 1
+                guard let minutes = Int(arguments[safe: index] ?? ""), minutes >= 0 else {
+                    FileHandle.standardError.write(Data("--collected wants a number of minutes\n".utf8))
+                    exit(2)
+                }
+                collectedMinutes = minutes
+            // Every chart's first state, and the one a reviewer never sees by accident
+            // because the fixtures come with a day of history.
+            case "--no-history":
+                withoutHistory = true
             case "--modules":
                 index += 1
                 let names = (arguments[safe: index] ?? "").split(separator: ",")
@@ -114,7 +132,8 @@ enum RenderCLI {
                         for scale in scales {
                             let request = OffscreenRenderer.Request(
                                 surface: surface, scenario: scenario,
-                                isDark: isDark, scale: scale, settings: settings)
+                                isDark: isDark, scale: scale, settings: settings,
+                                collectedMinutes: collectedMinutes, withoutHistory: withoutHistory)
                             do {
                                 let url = try OffscreenRenderer.render(request, to: outputDirectory)
                                 print(url.path)
