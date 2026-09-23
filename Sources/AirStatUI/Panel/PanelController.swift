@@ -223,6 +223,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // be the pass that flashes one.
         withTransaction(transaction) {
             layout.isDisclosureTransitionActive = true
+            layout.disclosureOrigin = current
         }
         window.layoutIfNeeded()
 
@@ -250,6 +251,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
             settings.update { $0.panel.collapsedModules = target }
             withTransaction(transaction) {
                 layout.collapsedModulesOverride = nil
+                layout.disclosureOrigin = nil
                 layout.isDisclosureTransitionActive = false
             }
             window.layoutIfNeeded()
@@ -325,6 +327,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             layout.collapsedModulesOverride = nil
+            layout.disclosureOrigin = nil
             layout.isDisclosureTransitionActive = false
         }
         isDisclosureTransitionActive = false

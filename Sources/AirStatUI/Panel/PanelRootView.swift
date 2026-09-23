@@ -10,6 +10,8 @@ import AirStatKit
 @Observable
 final class PanelLayoutState {
     var collapsedModulesOverride: Set<PanelModule>?
+    /// The collapsed set a disclosure started from, held until it has finished.
+    var disclosureOrigin: Set<PanelModule>?
     var isDisclosureTransitionActive = false
     @ObservationIgnored var toggleModule: ((PanelModule) -> Void)?
 }
@@ -123,12 +125,22 @@ public struct PanelRootView: View {
     /// two collapsed summary rows there is nothing to divide: the rows already read as a
     /// list. So a separator appears only where an expanded module begins or ends, which
     /// is exactly where the eye needs to know a block started.
+    ///
+    /// While a disclosure runs, a rule the new layout adds stays clear until the module
+    /// it belongs to has finished unfolding, so it never cuts across a half-open detail.
+    /// Rules the new layout drops fade with the fold as before.
     private func separatorNeeded(before index: Int) -> Bool {
         let collapsed = layout?.collapsedModulesOverride
             ?? settings.settings.panel.collapsedModules
-        let previous = modules[index - 1]
-        let current = modules[index]
-        return !collapsed.contains(previous) || !collapsed.contains(current)
+        guard let origin = layout?.disclosureOrigin else {
+            return separatorNeeded(before: index, collapsed: collapsed)
+        }
+        return separatorNeeded(before: index, collapsed: collapsed)
+            && separatorNeeded(before: index, collapsed: origin)
+    }
+
+    private func separatorNeeded(before index: Int, collapsed: Set<PanelModule>) -> Bool {
+        !collapsed.contains(modules[index - 1]) || !collapsed.contains(modules[index])
     }
 
 }
