@@ -427,20 +427,25 @@ public final class MetricsEngine {
     /// explain a 16% peak with a process using 3% of one core, and blame the
     /// observer for it. A name that does not carry a fifth of the load is left off,
     /// and the peak stays unexplained, which is the truth.
-    static let noteShare = 0.2
+    static let cpuNoteShare = 0.2
+    /// Memory needs a lower bar. This app is never the top resident set, and a
+    /// process holding a tenth of everything in use is still the true answer to who
+    /// held the most; a fifth would be 4.5 GB on a 32 GB machine, which almost
+    /// nothing but a VM clears.
+    static let memoryNoteShare = 0.1
 
     private func noteProcesses(_ processes: ProcessSnapshot, in s: SystemSnapshot) {
         let rows = processes.processes
         if let cpu = s.cpu.value,
            let top = rows.max(by: { $0.cpuPercent < $1.cpuPercent }) {
             let cores = Double(max(cpu.perCore.count, 1))
-            if top.cpuPercent >= cpu.total.busy * cores * 100 * Self.noteShare, top.cpuPercent > 0 {
+            if top.cpuPercent >= cpu.total.busy * cores * 100 * Self.cpuNoteShare, top.cpuPercent > 0 {
                 dayHistory.note(.cpu, name: top.name, value: cpu.total.busy)
             }
         }
         if let memory = s.memory.value, memory.usedBytes > 0,
            let top = rows.max(by: { $0.memoryBytes < $1.memoryBytes }),
-           Double(top.memoryBytes) >= Double(memory.usedBytes) * Self.noteShare {
+           Double(top.memoryBytes) >= Double(memory.usedBytes) * Self.memoryNoteShare {
             dayHistory.note(.memory, name: top.name, value: memory.usedFraction)
         }
     }
