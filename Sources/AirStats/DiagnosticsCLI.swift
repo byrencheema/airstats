@@ -51,6 +51,7 @@ enum DiagnosticsCLI {
       --light / --dark   appearance (omit for both)
       --scale N       backing scale, repeatable (omit for 1 and 2)
       --tint C        metric colour as #RRGGBB or r,g,b; the panel stays monochrome
+      --menubar M[:S][,M…]  menu bar readouts to draw, as MenuBarMetric names with an optional :style
 
     Examples:
       AirStats --probe cpu --repeat 5 --interval 1 --verbose
