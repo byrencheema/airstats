@@ -175,12 +175,18 @@ public struct MetricFormatter: Sendable {
             magnitude /= b
             unitIndex += 1
         }
-        // Exactly zero is worth showing as a clean "0", not "0.0".
-        if unitIndex == 0 && magnitude < 1 { return compact ? "0 \(units[0])" : "0 \(units[0])" }
+        // Exactly zero is worth showing as a clean "0", not "0.0". Compact drops the
+        // "/s" here too, so an idle rate sits in the same form as a moving one.
+        if unitIndex == 0 && magnitude < 1 {
+            return "0 " + (compact ? units[0].replacingOccurrences(of: "/s", with: "")
+                                   : units[0])
+        }
         let places = magnitude < 10 && unitIndex > 0 ? 1 : 0
         let number = fixed(magnitude, decimals: places)
-        return compact ? number + units[unitIndex].replacingOccurrences(of: "/s", with: "")
-                       : number + " " + units[unitIndex]
+        // Compact keeps the space: "44 MB" not "44MB" — the unit is a separate word,
+        // not a suffix on the digits.
+        return number + " " + (compact ? units[unitIndex].replacingOccurrences(of: "/s", with: "")
+                                       : units[unitIndex])
     }
 
     // MARK: Temperature

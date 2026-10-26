@@ -11,9 +11,10 @@ import AirStatKit
 ///
 /// Three rules shape everything below.
 ///
-/// One line. No Apple status item stacks text, and two rows in a 22-point bar means
-/// two rows of type too small to read at a glance — which is the only thing a menu bar
-/// readout is for.
+/// One line per number. No Apple status item stacks text, and two rows in a 22-point
+/// bar means small type — so stacking stays opt-in: a caption above its number when
+/// the user asks for one, and the `.stackedPair` style, which trades the paired
+/// readout's one wide line for two narrow rows.
 ///
 /// Nothing is drawn that is not known. A sparkline with no samples is omitted, not
 /// flattened to a baseline: a full-width horizontal rule is indistinguishable from a
@@ -46,7 +47,8 @@ public final class MenuBarContentView: NSView {
         /// its number, a caption and what it captions. Four gaps in a deliberate ladder
         /// is what makes the grouping legible: 2 binds a glyph to its number, 4 binds
         /// the parts of one readout, 6 binds the two directions of a paired one, and
-        /// the 8 between status items separates whole readouts.
+        /// the 8 between status items separates whole readouts. The stacked style
+        /// binds its directions by sharing a column instead.
         static let partGap = Design.Space.xs
         static let glyphGap = Design.Space.xxs
         static let pairGap = Design.Space.s
@@ -238,14 +240,18 @@ public final class MenuBarContentView: NSView {
         var bar: CGFloat = 0
         var statusDot: CGFloat = 0
         var graph: CGFloat = 0
-        var primaryGlyph: CGFloat = 0
-        var primaryValue: CGFloat = 0
-        var secondaryGlyph: CGFloat = 0
-        var secondaryValue: CGFloat = 0
         /// Width of the caption-above-value column, when the item stacks. The caption
         /// and the number share this one slot instead of taking a slot each, so the
         /// item is as wide as the wider of the two rather than as wide as their sum.
         var stack: CGFloat = 0
+        /// Width of a paired readout's two-row block on the `.stackedPair` style: one
+        /// shared column for the direction glyphs and one for the values. The pair's
+        /// other styles keep the primary/secondary slots below.
+        var pair: CGFloat = 0
+        var primaryGlyph: CGFloat = 0
+        var primaryValue: CGFloat = 0
+        var secondaryGlyph: CGFloat = 0
+        var secondaryValue: CGFloat = 0
 
         var width: CGFloat {
             var total: CGFloat = 0
@@ -263,6 +269,7 @@ public final class MenuBarContentView: NSView {
             append(statusDot, after: Layout.partGap)
             append(graph, after: Layout.partGap)
             append(stack, after: Layout.partGap)
+            append(pair, after: Layout.partGap)
             append(primaryGlyph, after: Layout.partGap)
             append(primaryValue, after: primaryGlyph > 0 ? Layout.glyphGap : Layout.partGap)
             append(secondaryGlyph, after: Layout.pairGap)
@@ -274,11 +281,12 @@ public final class MenuBarContentView: NSView {
     /// Whether an item draws its caption above its number rather than beside it.
     ///
     /// Only when the user has asked for a caption on an item that draws a number:
-    /// there is nothing to stack otherwise. A paired readout keeps its two directions
-    /// side by side — that pair is already one logical row, and stacking it under a
-    /// caption would be three rows of type in a 22-point bar.
+    /// there is nothing to stack otherwise. A paired readout never takes this slot —
+    /// its two directions are already the two rows a 22-point bar fits, and a caption
+    /// on top would be three.
     private func isStacked(_ item: MenuBarItemRender) -> Bool {
         item.caption != nil && item.style.drawsValue && !item.isUnavailable
+            && item.secondary == nil
     }
 
     private func geometry(for item: MenuBarItemRender, symbol: SymbolAsset?,
@@ -334,6 +342,19 @@ public final class MenuBarContentView: NSView {
         if hasGraph(item) { geometry.graph = Layout.graphWidth }
 
         guard item.style.drawsValue else { return geometry }
+
+        // On the stacked style a paired readout draws its directions in one block:
+        // the glyphs share a left column, the values a right-aligned one at the
+        // stacked size. Everything is measured off the reserved strings, so the
+        // block's width is as fixed as a single value's.
+        if item.style == .stackedPair, let secondary = item.secondary {
+            let glyphs = max(glyphWidth(item.primary, role: .stackedValue),
+                             glyphWidth(secondary, role: .stackedValue))
+            let values = max(reservedWidth(item.primary, model: model, role: .stackedValue),
+                             reservedWidth(secondary, model: model, role: .stackedValue))
+            geometry.pair = (glyphs > 0 ? glyphs + Layout.glyphGap : 0) + values
+            return geometry
+        }
 
         // A stacked item's number is set one size down and shares its column with the
         // caption above it, so both rows are measured here and the wider one sets the
@@ -481,6 +502,13 @@ public final class MenuBarContentView: NSView {
             x += geometry.stack
         }
 
+        if geometry.pair > 0, let secondary = item.secondary {
+            gap(Layout.partGap)
+            drawPair(item, secondary: secondary, in: x, width: geometry.pair,
+                     colors: colors, scale: scale, context: context)
+            x += geometry.pair
+        }
+
         if geometry.primaryValue > 0 {
             gap(Layout.partGap)
             if geometry.primaryGlyph > 0, let glyph = item.primary.glyph {
@@ -562,6 +590,36 @@ public final class MenuBarContentView: NSView {
         }
         drawText(valueText, role: .stackedValue, x: valueX, baseline: valueBaseline,
                  color: colors.value, scale: scale, context: context)
+    }
+
+    /// The two directions of a paired readout, stacked secondary over primary —
+    /// ↗ upload over ↙ download for the network item. The arrows share a column on
+    /// the left and each value is right-aligned in the column beside it, so the
+    /// last digits of both rates sit in the same column.
+    ///
+    /// Both rows are set at the stacked size — two full-size rows do not fit a
+    /// 22-point bar — and the block is centred on the midline by cap height, the
+    /// same way `drawStack` centres a caption over its number.
+    private func drawPair(_ item: MenuBarItemRender, secondary: MenuBarLine,
+                          in x: CGFloat, width columnWidth: CGFloat,
+                          colors: ItemColors, scale: CGFloat, context: CGContext) {
+        let cap = fonts[.stackedValue].capHeight
+        let total = cap * 2 + Design.MenuBar.stackedRowGap
+        let glyphColumn = max(item.primary.glyph.map { width($0, role: .stackedValue) } ?? 0,
+                              secondary.glyph.map { width($0, role: .stackedValue) } ?? 0)
+
+        for (line, baseline) in [(secondary, bounds.midY + total / 2 - cap),
+                                 (item.primary, bounds.midY - total / 2)] {
+            if let glyph = line.glyph {
+                drawText(glyph, role: .stackedValue,
+                         x: x + (glyphColumn - width(glyph, role: .stackedValue)) / 2,
+                         baseline: baseline, color: colors.glyph, scale: scale,
+                         context: context)
+            }
+            drawText(line.valueText, role: .stackedValue,
+                     x: x + columnWidth - width(line.valueText, role: .stackedValue),
+                     baseline: baseline, color: colors.value, scale: scale, context: context)
+        }
     }
 
     /// What one item paints each of its parts with.
@@ -1233,7 +1291,7 @@ private extension MenuBarDisplayStyle {
     /// Whether this style draws a formatted number.
     var drawsValue: Bool {
         switch self {
-        case .text, .textAndGraph, .iconAndText: return true
+        case .text, .textAndGraph, .iconAndText, .stackedPair: return true
         case .graph, .battery, .statusDot, .bar: return false
         }
     }
