@@ -139,9 +139,14 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
             // should draw by default, so it leads the list.
             return [.battery] + MenuBarDisplayStyle.general
         case .networkThroughput:
-            // The one readout that is already two directions, so it is the one the
-            // two lights can stand in for.
-            return MenuBarDisplayStyle.general + [.statusDot]
+            // The readout that is already two directions, so it is the one the
+            // two lights can stand in for — and a pair is the only thing the
+            // stacked style has to stack.
+            return MenuBarDisplayStyle.general + [.statusDot, .stackedPair]
+        case .diskActivity:
+            // The other two-direction readout: read over write stacks the same
+            // way up does over down.
+            return MenuBarDisplayStyle.general + [.stackedPair]
         case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure:
             // The readouts that are a fraction of a known ceiling, which is the only
             // thing a fill level can honestly draw.
@@ -167,6 +172,9 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
     case battery
     case statusDot
     case bar
+    /// A paired readout drawn as two stacked rows — glyphs in one shared column,
+    /// values right-aligned beside them — instead of both directions on one line.
+    case stackedPair
 
     /// The styles any numeric readout can take. The indicator styles are left out
     /// because each draws one kind of metric and nothing else.
@@ -181,17 +189,20 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
         case .battery: return "Battery Indicator"
         case .statusDot: return "Status Dot"
         case .bar: return "Compact Bar"
+        case .stackedPair: return "Stacked Pair"
         }
     }
 
     /// Whether a caption would add anything. It would not for the two styles that
     /// already name their metric with a glyph, and the status dots are meant to be
     /// the smallest thing on the bar, so they carry no text at all. A bar is an
-    /// anonymous shape, so the caption is what says which fraction it is.
+    /// anonymous shape, so the caption is what says which fraction it is. The
+    /// stacked pair is already the two rows a 22-point bar fits — a caption on top
+    /// would be a third.
     public var supportsCaption: Bool {
         switch self {
         case .text, .graph, .textAndGraph, .bar: return true
-        case .iconAndText, .battery, .statusDot: return false
+        case .iconAndText, .battery, .statusDot, .stackedPair: return false
         }
     }
 }
