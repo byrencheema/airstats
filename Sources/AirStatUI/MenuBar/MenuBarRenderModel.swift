@@ -336,6 +336,15 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 accessibilityValue = "Disk free \(valueText)"
             }
 
+        case .diskUsage:
+            if let root = snapshot.disk.value?.rootVolume {
+                valueText = formatter.percent(root.usedFraction)
+                unavailable = false
+                level = root.usedFraction
+                accessibilityValue = "Disk usage \(valueText)"
+            }
+            seriesKey = .diskUsed
+
         case .battery:
             if let power = snapshot.power.value, let pct = power.percentage {
                 valueText = formatter.percentValue(pct)
@@ -482,6 +491,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .networkDownload: return "NET ↓"
         case .diskActivity: return nil
         case .diskFree: return "FREE"
+        case .diskUsage: return "DSK"
         case .battery: return "BATT"
         case .batteryTime: return "LEFT"
         case .systemPower: return "PWR"
@@ -580,7 +590,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .memoryUsage, .memoryPressure: return "memorychip"
         case .gpuUsage: return "cube.transparent"
         case .networkThroughput, .networkUpload, .networkDownload: return "network"
-        case .diskActivity, .diskFree: return "internaldrive"
+        case .diskActivity, .diskFree, .diskUsage: return "internaldrive"
         case .battery, .batteryTime: return "battery.100"
         case .systemPower: return "bolt"
         case .fanSpeed: return "fan"

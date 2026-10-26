@@ -84,7 +84,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
     case memoryUsage, memoryPressure
     case gpuUsage
     case networkThroughput, networkUpload, networkDownload
-    case diskActivity, diskFree
+    case diskActivity, diskFree, diskUsage
     case battery, batteryTime, systemPower
     case fanSpeed
     case uptime
@@ -102,6 +102,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
         case .networkDownload: return "Network Download"
         case .diskActivity: return "Disk Activity"
         case .diskFree: return "Disk Free"
+        case .diskUsage: return "Disk Usage"
         case .battery: return "Battery"
         case .batteryTime: return "Battery Time Remaining"
         case .systemPower: return "System Power"
@@ -118,7 +119,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
         case .memoryUsage, .memoryPressure: return .memory
         case .gpuUsage: return .gpu
         case .networkThroughput, .networkUpload, .networkDownload: return .network
-        case .diskActivity, .diskFree: return .disk
+        case .diskActivity, .diskFree, .diskUsage: return .disk
         case .battery, .batteryTime, .systemPower: return .power
         case .uptime: return .system
         }
@@ -142,7 +143,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
             // The one readout that is already two directions, so it is the one the
             // two lights can stand in for.
             return MenuBarDisplayStyle.general + [.statusDot]
-        case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure:
+        case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure, .diskUsage:
             // The readouts that are a fraction of a known ceiling, which is the only
             // thing a fill level can honestly draw.
             return MenuBarDisplayStyle.general + [.bar]
