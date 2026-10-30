@@ -5,7 +5,10 @@ in review.
 
 ## Getting set up
 
-You need macOS 14 or later and the Swift 6 toolchain that ships with Xcode 16.
+You need macOS Sonoma 14.5 or later and Xcode 16 or later. The macOS 26 SDK enables
+Liquid Glass; older SDKs build with the existing material and sheen fallback.
+The app supports Intel and Apple silicon; `Scripts/build.sh` compiles both slices and
+assembles one universal app bundle.
 
 ```sh
 git clone <your fork>

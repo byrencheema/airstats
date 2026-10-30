@@ -26,12 +26,13 @@ sysctl and CoreWLAN.
 ## Requirements
 
 - macOS 14 or later
-- Apple silicon
+- Intel or Apple silicon
 
 ## Install
 
 Download it from [airstats.app](https://airstats.app), open the dmg and drag the app to
-Applications. It is signed and notarized, so it opens with no warning.
+Applications. The release includes both Intel (`x86_64`) and Apple silicon (`arm64`)
+builds in one app. It is signed and notarized, so it opens with no warning.
 
 Or with Homebrew:
 
@@ -45,7 +46,9 @@ those can be turned off in General settings.
 
 ## Build from source
 
-You need Xcode 26 or later: the app draws Liquid Glass, which needs the macOS 26 SDK.
+You need Xcode 16 or later and macOS Sonoma 14.5 or later on the build Mac. Xcode 26's
+SDK enables Liquid Glass; builds with an earlier SDK use AirStats' existing material
+and sheen fallback instead.
 
 ```sh
 Scripts/build.sh release
@@ -53,9 +56,10 @@ cp -R .build/release/AirStats.app /Applications/
 open /Applications/AirStats.app
 ```
 
-`Scripts/build.sh` wraps the SwiftPM binary in a `.app` bundle, copies `Sparkle.framework`
-into `Contents/Frameworks`, and signs it ad hoc. macOS grants a status item only to a
-signed bundle with `LSUIElement` set. Run the script with no argument for a debug build.
+`Scripts/build.sh` builds both architectures, wraps them in one universal `.app` bundle,
+copies `Sparkle.framework` into `Contents/Frameworks`, and signs it ad hoc. macOS grants a
+status item only to a signed bundle with `LSUIElement` set. Run the script with no
+argument for a debug build.
 
 An ad-hoc signature is enough to run a build you made yourself, and not enough to travel:
 macOS refuses an ad-hoc bundle that arrived over the internet. `Scripts/release.sh` is what

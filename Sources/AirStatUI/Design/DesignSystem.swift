@@ -374,13 +374,23 @@ private struct FloatingSurface<S: InsettableShape>: ViewModifier {
     @Environment(\.rendersOffscreen) private var rendersOffscreen
 
     func body(content: Content) -> some View {
+        // The deployment guard handles older macOS releases. The compiler guard is
+        // also needed because earlier SDKs do not declare the Glass API at all.
+#if compiler(>=6.2)
         if #available(macOS 26.0, *), !rendersOffscreen {
             content.glassEffect(.regular, in: shape)
         } else {
-            content
-                .background(.regularMaterial, in: shape)
-                .overlay { GlassSheen(shape: shape) }
+            legacySurface(content)
         }
+#else
+        legacySurface(content)
+#endif
+    }
+
+    private func legacySurface(_ content: Content) -> some View {
+        content
+            .background(.regularMaterial, in: shape)
+            .overlay { GlassSheen(shape: shape) }
     }
 }
 
@@ -440,38 +450,42 @@ public struct GlassSheen<S: InsettableShape>: View {
 @MainActor
 public func glassWindowBackdrop(around content: NSView, cornerRadius: CGFloat) -> NSView {
     content.translatesAutoresizingMaskIntoConstraints = false
+    // Keep the SDK-specific type out of builds made before the Glass API was declared.
+#if compiler(>=6.2)
     if #available(macOS 26.0, *) {
         let glass = WindowGlassView()
         glass.style = .regular
         glass.cornerRadius = cornerRadius
         glass.contentView = content
         return glass
-    } else {
-        // `.hudWindow` rather than `.menu`: neither surface is a menu, and the menu
-        // material is nearly opaque. `.active` rather than following the window,
-        // because both are routinely looked at while another app is frontmost and a
-        // backdrop that goes flat the moment it opens defeats the point of having one.
-        let effect = GlassBackdropView(material: .hudWindow, cornerRadius: cornerRadius,
-                                       state: .active)
-        effect.addSubview(content)
-        NSLayoutConstraint.activate([
-            content.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
-            content.topAnchor.constraint(equalTo: effect.topAnchor),
-            content.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
-        ])
-        return effect
     }
+#endif
+    // `.hudWindow` rather than `.menu`: neither surface is a menu, and the menu
+    // material is nearly opaque. `.active` rather than following the window,
+    // because both are routinely looked at while another app is frontmost and a
+    // backdrop that goes flat the moment it opens defeats the point of having one.
+    let effect = GlassBackdropView(material: .hudWindow, cornerRadius: cornerRadius,
+                                   state: .active)
+    effect.addSubview(content)
+    NSLayoutConstraint.activate([
+        content.leadingAnchor.constraint(equalTo: effect.leadingAnchor),
+        content.trailingAnchor.constraint(equalTo: effect.trailingAnchor),
+        content.topAnchor.constraint(equalTo: effect.topAnchor),
+        content.bottomAnchor.constraint(equalTo: effect.bottomAnchor),
+    ])
+    return effect
 }
 
 /// `NSGlassEffectView` lays its content view out to fill it but reports a fixed 10 by
 /// 10 fitting size whatever the content needs, pinned or not. The panel takes its
 /// window's size from that figure, so it opened as a 10 point square. This reports the
 /// content's size instead.
+#if compiler(>=6.2)
 @available(macOS 26.0, *)
 private final class WindowGlassView: NSGlassEffectView {
     override var fittingSize: NSSize { contentView?.fittingSize ?? super.fittingSize }
 }
+#endif
 
 /// An `NSVisualEffectView` carrying the same sheen, for the surfaces whose background
 /// is a window's content view rather than a SwiftUI modifier, on releases before
