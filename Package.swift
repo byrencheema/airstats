@@ -16,10 +16,9 @@ let package = Package(
         // Metric collection. Deliberately Swift 5 language mode: the collectors are
         // queue-confined by construction (see SamplingCore) rather than by the type
         // system, and the low-level Mach/IOKit code they wrap is not Sendable-clean.
-        // The older spelling also works with early Swift 6 Command Line Tools.
         .target(
             name: "AirStatKit",
-            swiftSettings: [.swiftLanguageVersion(.v5)],
+            swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreWLAN"),
@@ -30,12 +29,12 @@ let package = Package(
             name: "AirStatUI",
             dependencies: ["AirStatKit", .product(name: "Sparkle", package: "Sparkle")],
             resources: [.process("Resources")],
-            swiftSettings: [.swiftLanguageVersion(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(
             name: "AirStats",
             dependencies: ["AirStatKit", "AirStatUI", .product(name: "Sparkle", package: "Sparkle")],
-            swiftSettings: [.swiftLanguageVersion(.v5)],
+            swiftSettings: [.swiftLanguageMode(.v5)],
             // Sparkle ships as a framework, and Scripts/build.sh puts it in
             // Contents/Frameworks. Without this the binary looks only where SwiftPM
             // linked it from and the assembled .app dies at launch with a dyld error.
@@ -50,7 +49,7 @@ let package = Package(
         .testTarget(
             name: "AirStatKitTests",
             dependencies: ["AirStatKit", "AirStatUI"],
-            swiftSettings: [.swiftLanguageVersion(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5)]
         ),
     ]
 )

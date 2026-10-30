@@ -116,8 +116,7 @@ merge_framework_architectures() {
   local host_file other_file relative host_arches other_arches
   local index=0
 
-  mkdir -p "$MERGE_TMP/framework-host" "$MERGE_TMP/framework-other" \
-    "$MERGE_TMP/framework-universal"
+  mkdir -p "$MERGE_TMP/framework-universal"
 
   while IFS= read -r -d '' host_file; do
     host_arches="$(lipo -archs "$host_file" 2>/dev/null)" || continue
@@ -139,12 +138,7 @@ merge_framework_architectures() {
       return 1
     fi
 
-    lipo "$host_file" -thin "$HOST_ARCH" \
-      -output "$MERGE_TMP/framework-host/$index"
-    lipo "$other_file" -thin "$OTHER_ARCH" \
-      -output "$MERGE_TMP/framework-other/$index"
-    lipo -create "$MERGE_TMP/framework-host/$index" \
-      "$MERGE_TMP/framework-other/$index" \
+    lipo -create "$host_file" "$other_file" \
       -output "$MERGE_TMP/framework-universal/$index"
     chmod +x "$MERGE_TMP/framework-universal/$index"
     mv "$MERGE_TMP/framework-universal/$index" "$host_file"

@@ -343,11 +343,15 @@ struct RestoreDefaultsButton: View {
 /// nothing there.
 struct GlassBackdrop: View {
     var body: some View {
+#if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             Color.clear
         } else {
             LegacyGlassBackdrop()
         }
+#else
+        LegacyGlassBackdrop()
+#endif
     }
 }
 

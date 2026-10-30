@@ -46,9 +46,9 @@ those can be turned off in General settings.
 
 ## Build from source
 
-You need Xcode 16 or later and macOS Sonoma 14.5 or later on the build Mac. Xcode 26's
-SDK enables Liquid Glass; builds with an earlier SDK use AirStats' existing material
-and sheen fallback instead.
+The universal build has been verified with Xcode 27 on Apple silicon. Older Xcode and
+macOS build environments may work, but have not been verified. The macOS 26 SDK enables
+Liquid Glass; builds with an earlier SDK use AirStats' existing material and sheen fallback.
 
 ```sh
 Scripts/build.sh release
