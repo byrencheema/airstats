@@ -24,6 +24,8 @@
 	<string>11</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
+	<key>LSRequiresNativeExecution</key>
+	<true/>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHighResolutionCapable</key>
