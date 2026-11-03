@@ -22,9 +22,6 @@ public final class PanelController: NSObject, NSWindowDelegate {
     private var window: PanelWindow?
     private var layout: PanelLayoutState?
     private var isDisclosureTransitionActive = false
-    /// Animations still running in the current disclosure: SwiftUI's reveal and
-    /// AppKit's window resize. The transition ends when the last of them does.
-    private var disclosureAnimationsPending = 0
 
     /// Every `NSEvent` monitor and notification observer this controller owns, in one
     /// place. Two collections, one lifetime: they are installed together when the
@@ -195,14 +192,13 @@ public final class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: Geometry
 
-    /// Toggle one module as a single AppKit/SwiftUI transaction.
+    /// Toggle one module as an atomic AppKit/SwiftUI layout change.
     ///
-    /// SwiftUI's intrinsic height is an animation value, so following each invalidation
-    /// makes the window chase the content one run-loop turn behind. Instead, stage the
-    /// final hierarchy synchronously to obtain one destination, restore the current
-    /// hierarchy before anything is displayed, then animate both systems to that one
-    /// destination. Intrinsic callbacks and resize delegate re-entry are ignored until
-    /// the transaction has completed.
+    /// The panel's content and window height are measured by different layout systems.
+    /// Animating both on older macOS releases lets the rows below a disclosure move out
+    /// of sync with the window resize, leaving them visibly offset. Stage the final
+    /// content, resize the window with implicit AppKit animations disabled, then commit
+    /// both before drawing the next frame.
     func toggleModule(_ module: PanelModule) {
         guard !isDisclosureTransitionActive else { return }
 
@@ -214,125 +210,34 @@ public final class PanelController: NSObject, NSWindowDelegate {
             return
         }
 
-        isDisclosureTransitionActive = true
-
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
-        // Enter the transition on its own layout pass, before the hierarchy changes
-        // shape. The scroll indicator is retired here, so the measurement below cannot
-        // be the pass that flashes one.
+        isDisclosureTransitionActive = true
         withTransaction(transaction) {
             layout.isDisclosureTransitionActive = true
             layout.disclosureOrigin = current
-        }
-        window.layoutIfNeeded()
-
-        // Measure the final hierarchy without allowing the staging state to animate or
-        // reach the screen. The window itself remains on its current frame throughout.
-        withTransaction(transaction) {
             layout.collapsedModulesOverride = target
         }
         window.layoutIfNeeded()
+
         let fitting = window.contentView?.fittingSize
             ?? NSSize(width: PanelSettings.width, height: window.frame.height)
         let destination = targetFrame(for: fitting, anchoredTo: lastAnchor, on: lastScreen)
 
-        let duration = disclosureDuration
-        // Reduce Motion: nothing to animate, so the ordering is the whole job. The
-        // hierarchy is already staged at its final shape, so the window is taken to the
-        // frame that fits it before anything is drawn, and the setting is written
-        // behind that. Nothing is ever laid out taller than the window holding it, and
-        // implicit AppKit animations are off for the exchange, so neither the scroller
-        // nor the backdrop has anything to fade.
-        if duration == 0 {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            window.setFrame(destination, display: false)
-            settings.update { $0.panel.collapsedModules = target }
-            withTransaction(transaction) {
-                layout.collapsedModulesOverride = nil
-                layout.disclosureOrigin = nil
-                layout.isDisclosureTransitionActive = false
-            }
-            window.layoutIfNeeded()
-            window.displayIfNeeded()
-            CATransaction.commit()
-            isDisclosureTransitionActive = false
-            position(window, anchoredTo: lastAnchor, on: lastScreen)
-            return
-        }
-
-        withTransaction(transaction) {
-            layout.collapsedModulesOverride = current
-        }
-        window.layoutIfNeeded()
-
-        // Persist behind the presentation override so this write cannot restructure the
-        // visible tree before the coordinated transition begins.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        window.setFrame(destination, display: false)
         settings.update { $0.panel.collapsedModules = target }
-
-        // The transition ends when the later of the two animations ends, not when
-        // AppKit's does.
-        //
-        // The two are given the same curve and the same duration, but SwiftUI's starts
-        // on its next render and AppKit's starts now, so the reveal is still a few
-        // frames from done when the window arrives. Finishing on the window alone
-        // measured the content while it was still short — 24pt short on a Memory open
-        // — snapped the window down to that, and then let the resize path walk it back
-        // up one intrinsic-size change at a time: seven visible steps after every
-        // open. Waiting for both, the window sits at its destination while the reveal
-        // catches up, and the one `position` at the end has nothing left to move.
-        disclosureAnimationsPending = 2
-        let animationDidEnd = { [weak self, weak window, weak layout] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.disclosureAnimationsPending -= 1
-                guard self.disclosureAnimationsPending == 0, let window, let layout else { return }
-                self.finishDisclosure(window: window, layout: layout)
-            }
-        }
-        withAnimation(Design.Motion.disclosure, completionCriteria: .logicallyComplete) {
-            layout.collapsedModulesOverride = target
-        } completion: {
-            animationDidEnd()
-        }
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            window.animator().setFrame(destination, display: true)
-        } completionHandler: {
-            animationDidEnd()
-        }
-        // A completion that never comes would leave every click ignored and every
-        // resize dropped for the life of the window. Neither has been seen to fail,
-        // but the cost of being wrong is a dead panel, so the transition is ended by
-        // the clock if it is still open well after both animations should be over.
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(Int(duration * 1000) + 250))
-            guard let self, self.isDisclosureTransitionActive,
-                  self.disclosureAnimationsPending > 0,
-                  let window = self.window, let layout = self.layout else { return }
-            self.disclosureAnimationsPending = 0
-            self.finishDisclosure(window: window, layout: layout)
-        }
-    }
-
-    private var disclosureDuration: TimeInterval {
-        Design.Motion.respectingAccessibility(Design.Motion.disclosure) == nil
-            ? 0 : Design.Motion.disclosureDuration
-    }
-
-    private func finishDisclosure(window: NSWindow, layout: PanelLayoutState) {
-        var transaction = Transaction(animation: nil)
-        transaction.disablesAnimations = true
         withTransaction(transaction) {
             layout.collapsedModulesOverride = nil
             layout.disclosureOrigin = nil
             layout.isDisclosureTransitionActive = false
         }
+        window.layoutIfNeeded()
+        window.displayIfNeeded()
+        CATransaction.commit()
+
         isDisclosureTransitionActive = false
-        // Resolve any sub-point discrepancy between the measured destination and the
-        // final intrinsic size without producing a second visible move.
         position(window, anchoredTo: lastAnchor, on: lastScreen)
     }
 
