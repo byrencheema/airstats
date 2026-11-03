@@ -66,9 +66,9 @@ public final class SoftwareUpdater {
     /// can say it is checking instead of showing nothing.
     public private(set) var isChecking = false
     public private(set) var checksAutomatically: Bool
-    /// Whether Sparkle downloads and installs on its own. Off until the user says
-    /// otherwise, either here or in Sparkle's own window, which offers the same choice
-    /// the first time it installs something.
+    /// Whether Sparkle downloads and installs on its own. On unless the user has said
+    /// otherwise, either here or in Sparkle's own window: Info.plist only supplies the
+    /// default, and a choice the user made is stored and wins over it.
     public private(set) var installsAutomatically: Bool
 
     /// The release that is outstanding, or nil. Set from the moment a check finds one
