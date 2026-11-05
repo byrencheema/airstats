@@ -56,6 +56,18 @@ public struct PanelRootView: View {
                 }
                 PanelSeparator()
             }
+            if let insight {
+                PanelInsightRow(insight: insight) { [layout, settings] in
+                    let module = insight.kind.module
+                    guard settings.settings.panel.collapsedModules.contains(module) else { return }
+                    if let toggle = layout?.toggleModule {
+                        toggle(module)
+                    } else {
+                        settings.update { $0.panel.collapsedModules = $0.panel.collapsedModules(toggling: module) }
+                    }
+                }
+                PanelSeparator()
+            }
             ScrollView(.vertical) {
                 VStack(alignment: .leading, spacing: 0) {
                     let captionColumnWidth = captionColumnWidth
@@ -109,6 +121,12 @@ public struct PanelRootView: View {
     @Environment(\.panelActions) private var actions
 
     private var modules: [PanelModule] { settings.settings.panel.visibleModules }
+
+    private var insight: PanelInsight? {
+        PanelInsight.make(snapshot: engine.snapshot,
+                          recentCPU: engine.history.values(.cpuTotal),
+                          formatter: MetricFormatter(settings: settings.settings.general))
+    }
 
     /// One width for every row's qualifier column, from the captions on screen now.
     private var captionColumnWidth: CGFloat {
@@ -214,6 +232,70 @@ struct PanelUpdateRow: View {
         .accessibilityLabel(headline)
         .accessibilityHint(update.isReadyToInstall ? "Relaunches AirStats into the new version"
                                                    : "Opens the updater to install it")
+    }
+}
+
+/// The panel's one line of news about the Mac itself, when there is any.
+///
+/// Built like the update row so the two read as the same kind of thing: a symbol and a
+/// sentence above the modules. Clicking it opens the module that explains it.
+struct PanelInsightRow: View {
+    let insight: PanelInsight
+    let open: @MainActor () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: open) {
+            HStack(spacing: Design.Space.s) {
+                Image(systemName: insight.kind.symbolName)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Color(nsColor: .systemOrange))
+                    .frame(width: Design.Space.l)
+                Text(insight.text)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Design.Space.panelInset)
+            .padding(.vertical, Design.Space.m)
+            .background(isHovering ? Design.Palette.track : .clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(Design.Motion.respectingAccessibility(Design.Motion.hover)) {
+                isHovering = hovering
+            }
+        }
+        .accessibilityLabel(insight.text)
+        .accessibilityHint("Opens the \(insight.kind.module.label) module")
+    }
+}
+
+extension PanelInsight.Kind {
+    /// Where the explanation lives. A busy CPU opens Top Processes rather than CPU,
+    /// because the question it raises is which app, not which core.
+    var module: PanelModule {
+        switch self {
+        case .thermal: return .thermal
+        case .memory: return .memory
+        case .battery: return .battery
+        case .cpu: return .processes
+        case .disk: return .disk
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .thermal: return "thermometer.high"
+        case .memory: return "memorychip"
+        case .battery: return "battery.25percent"
+        case .cpu: return "cpu"
+        case .disk: return "internaldrive"
+        }
     }
 }
 
