@@ -90,7 +90,9 @@ public final class PowerCollector: MetricSource {
         snapshot.isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         snapshot.hasBattery = source != nil || boolean("BatteryInstalled") == true
 
-        applyAdapter(to: &snapshot)
+        // Only the panel names the adapter, and asking for it opens a fresh XPC
+        // connection to powerd every time: about 40% of this collector's cost.
+        if context.activity >= .panel { applyAdapter(to: &snapshot) }
         snapshot.accessories = currentAccessories()
 
         guard snapshot.hasBattery else {
