@@ -7,6 +7,8 @@ final class SourceSlot<Source: MetricSource> {
     private(set) var state: MetricState<Source.Output> = .pending
     private var lastSampled: ContinuousClock.Instant?
     private var isStarted = false
+    /// Started and not suspended: its state is a reading of now, not a leftover.
+    var isLive: Bool { isStarted && !isRetired }
     /// Set when the source reports `.unsupported`. We never call it again this
     /// session — that is the whole point of distinguishing unsupported from failed.
     private(set) var isRetired = false
@@ -385,12 +387,27 @@ public final class SamplingCore: @unchecked Sendable {
             processes: processSlot.state,
             processesSampled: processSlot.sampled(at: now),
             system: systemSlot.state,
+            liveSources: liveSources(),
             capturedAt: Date(),
             capturedInstant: now
         )
 
         let callback = onSnapshot
         DispatchQueue.main.async { MainActor.assumeIsolated { callback(snapshot) } }
+    }
+
+    private func liveSources() -> Set<CollectorID> {
+        var live = Set<CollectorID>()
+        if cpuSlot.isLive { live.insert(.cpu) }
+        if memorySlot.isLive { live.insert(.memory) }
+        if gpuSlot.isLive { live.insert(.gpu) }
+        if networkSlot.isLive { live.insert(.network) }
+        if diskSlot.isLive { live.insert(.disk) }
+        if powerSlot.isLive { live.insert(.power) }
+        if thermalSlot.isLive { live.insert(.thermal) }
+        if processSlot.isLive { live.insert(.processes) }
+        if systemSlot.isLive { live.insert(.system) }
+        return live
     }
 
     /// Whether this tick should read the process list to name what is behind a

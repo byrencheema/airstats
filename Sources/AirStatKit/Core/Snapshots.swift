@@ -722,6 +722,10 @@ public struct SystemSnapshot: Sendable, Equatable {
     /// "what is running now" has to check this first.
     public var processesSampled: Bool
     public var system: MetricState<SystemInfoSnapshot>
+    /// Sources running when this was taken. A source suspended when the panel closed
+    /// keeps its last state, which is a reading of the past and must not be written
+    /// into history as though it were measured again on every tick since.
+    public var liveSources: Set<CollectorID>
     public var capturedAt: Date
     /// Monotonic capture instant, used for staleness checks across sleep.
     public var capturedInstant: ContinuousClock.Instant
@@ -736,6 +740,7 @@ public struct SystemSnapshot: Sendable, Equatable {
                 processes: MetricState<ProcessSnapshot> = .pending,
                 processesSampled: Bool = false,
                 system: MetricState<SystemInfoSnapshot> = .pending,
+                liveSources: Set<CollectorID> = Set(CollectorID.allCases),
                 capturedAt: Date = Date(),
                 capturedInstant: ContinuousClock.Instant = Monotonic.now) {
         self.cpu = cpu
@@ -748,6 +753,7 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.processes = processes
         self.processesSampled = processesSampled
         self.system = system
+        self.liveSources = liveSources
         self.capturedAt = capturedAt
         self.capturedInstant = capturedInstant
     }
