@@ -525,18 +525,33 @@ struct HistoryRangePicker: View {
     let recentLabel: String
 
     var body: some View {
+        QuietSegmentedControl(selection: $range,
+                              options: [(.recent, recentLabel), (.day, "24h")],
+                              accessibilityLabel: "Range")
+    }
+}
+
+/// Text segments with a capsule behind the chosen one. Quieter than a system
+/// segmented control, which reads as a toolbar dropped into a glance surface.
+struct QuietSegmentedControl<Value: Hashable>: View {
+    @Binding var selection: Value
+    let options: [(Value, String)]
+    let accessibilityLabel: String
+
+    var body: some View {
         HStack(spacing: Design.Space.xxs) {
-            segment(.recent, label: recentLabel)
-            segment(.day, label: "24h")
+            ForEach(options, id: \.0) { option in
+                segment(option.0, label: option.1)
+            }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Range")
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    private func segment(_ value: HistoryRange, label: String) -> some View {
-        let selected = range == value
+    private func segment(_ value: Value, label: String) -> some View {
+        let selected = selection == value
         return Button {
-            range = value
+            selection = value
         } label: {
             SwiftUI.Text(label)
                 .font(Design.Text.micro.weight(selected ? .semibold : .regular))

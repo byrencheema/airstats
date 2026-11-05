@@ -1,6 +1,6 @@
 import Foundation
 
-/// Per-process CPU, memory, threads and I/O.
+/// Per-process CPU, memory, threads, I/O and power.
 ///
 /// Concurrency: every method runs on `SamplingCore`'s serial queue. See
 /// `MetricSource` for the full contract, including the rule that a failed syscall
@@ -30,6 +30,7 @@ public final class ProcessCollector: MetricSource {
         var cpuTime: UInt64
         var diskRead: UInt64
         var diskWrite: UInt64
+        var energy: UInt64
         var hasIO: Bool
         var seenAt: UInt64
     }
@@ -144,6 +145,7 @@ public final class ProcessCollector: MetricSource {
             baselines[pid] = Baseline(cpuTime: cpuTime,
                                       diskRead: previous?.diskRead ?? 0,
                                       diskWrite: previous?.diskWrite ?? 0,
+                                      energy: previous?.energy ?? 0,
                                       hasIO: previous?.hasIO ?? false,
                                       seenAt: generation)
             candidates.append(Candidate(pid: pid, cpuPercent: percent,
@@ -249,11 +251,16 @@ public final class ProcessCollector: MetricSource {
         var memoryBytes = all.ptinfo.pti_resident_size
         var readRate: Double?
         var writeRate: Double?
+        var watts: Double?
 
-        var usage = rusage_info_v4()
+        // V6 for `ri_energy_nj`, the kernel's running total of the energy this process
+        // has cost. Differenced like the disk counters it is a real power figure: a
+        // thread spinning on a performance core reads about 5 W, which is what the
+        // chip reports for one busy core.
+        var usage = rusage_info_v6()
         let usageOK = withUnsafeMutablePointer(to: &usage) {
             $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-                proc_pid_rusage(candidate.pid, RUSAGE_INFO_V4, $0)
+                proc_pid_rusage(candidate.pid, RUSAGE_INFO_V6, $0)
             }
         } == 0
 
@@ -270,9 +277,13 @@ public final class ProcessCollector: MetricSource {
                     if usage.ri_diskio_byteswritten >= previous.diskWrite {
                         writeRate = Double(usage.ri_diskio_byteswritten - previous.diskWrite) / elapsed
                     }
+                    if usage.ri_energy_nj >= previous.energy {
+                        watts = Double(usage.ri_energy_nj - previous.energy) / 1_000_000_000 / elapsed
+                    }
                 }
                 previous.diskRead = usage.ri_diskio_bytesread
                 previous.diskWrite = usage.ri_diskio_byteswritten
+                previous.energy = usage.ri_energy_nj
                 previous.hasIO = true
                 baselines[candidate.pid] = previous
             }
@@ -294,6 +305,7 @@ public final class ProcessCollector: MetricSource {
                           startTime: start,
                           diskReadBytesPerSecond: readRate,
                           diskWriteBytesPerSecond: writeRate,
+                          powerWatts: watts,
                           isAppleSignedSystem: path.map(Self.isSystemPath) ?? false)
     }
 

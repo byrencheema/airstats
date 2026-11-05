@@ -110,6 +110,15 @@ enum RenderCLI {
                     exit(2)
                 }
                 settings.panel.collapsedModules.subtract(parsed)
+            case "--sort":
+                index += 1
+                guard let key = ProcessSortKey(rawValue: arguments[safe: index] ?? ""),
+                      PanelSettings.processSortOptions.contains(key) else {
+                    let known = PanelSettings.processSortOptions.map(\.rawValue).joined(separator: ", ")
+                    FileHandle.standardError.write(Data("--sort wants one of: \(known)\n".utf8))
+                    exit(2)
+                }
+                settings.panel.processSort = key
             case "--scenario":
                 index += 1
                 guard let scenario = OffscreenRenderer.Scenario(rawValue: arguments[safe: index] ?? "") else {

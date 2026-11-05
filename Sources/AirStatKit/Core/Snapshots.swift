@@ -615,16 +615,18 @@ public struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
     public var threadCount: Int
     public var userName: String?
     public var startTime: Date?
-    public var energyImpact: Double?
     public var diskReadBytesPerSecond: Double?
     public var diskWriteBytesPerSecond: Double?
+    /// Average power over the last interval, from the kernel's per-process energy
+    /// counter. Watts rather than Activity Monitor's unitless Energy Impact.
+    public var powerWatts: Double?
     public var isAppleSignedSystem: Bool
 
     public init(pid: Int32, parentPID: Int32 = 0, name: String, executablePath: String? = nil,
                 bundleIdentifier: String? = nil, cpuPercent: Double = 0, memoryBytes: UInt64 = 0,
                 threadCount: Int = 0, userName: String? = nil, startTime: Date? = nil,
-                energyImpact: Double? = nil, diskReadBytesPerSecond: Double? = nil,
-                diskWriteBytesPerSecond: Double? = nil, isAppleSignedSystem: Bool = false) {
+                diskReadBytesPerSecond: Double? = nil, diskWriteBytesPerSecond: Double? = nil,
+                powerWatts: Double? = nil, isAppleSignedSystem: Bool = false) {
         self.pid = pid
         self.parentPID = parentPID
         self.name = name
@@ -635,9 +637,9 @@ public struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
         self.threadCount = threadCount
         self.userName = userName
         self.startTime = startTime
-        self.energyImpact = energyImpact
         self.diskReadBytesPerSecond = diskReadBytesPerSecond
         self.diskWriteBytesPerSecond = diskWriteBytesPerSecond
+        self.powerWatts = powerWatts
         self.isAppleSignedSystem = isAppleSignedSystem
     }
 }

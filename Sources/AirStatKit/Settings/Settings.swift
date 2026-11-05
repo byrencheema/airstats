@@ -374,26 +374,32 @@ public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Has
 /// process row count and sort, sparklines, focus behaviour. All of it is gone: the
 /// panel is a glance surface reached by one click, and a settings pane with eight
 /// controls governing it was more configuration than the surface earns. What remains
-/// is the one piece of state the user still sets, and they set it by clicking a
-/// heading in the panel itself rather than by opening a window.
+/// is state the user sets in the panel itself, by clicking a heading or a process
+/// sort, rather than by opening a window.
 public struct PanelSettings: Sendable, Codable, Equatable {
     /// Modules the user has collapsed to just their summary row.
     public var collapsedModules: Set<PanelModule>
     /// Draw the history chart under an expanded module's rows.
     public var showsHistoryChart: Bool
+    /// What Top Processes ranks by, picked in the module itself.
+    public var processSort: ProcessSortKey
 
     /// Fixed layout, previously the `width` setting. 380pt gives a detail grid three
     /// columns and a process name room beside its icon, and still leaves the panel
     /// narrower than the narrowest MacBook screen at any status item position.
     public static let width: Double = 380
-    /// Previously `processRowCount` and `processSortKey`.
+    /// Previously `processRowCount`.
     public static let processRowCount = 5
-    public static let processSortKey: ProcessSortKey = .cpu
+    /// The ways Top Processes can rank. Memory is left out because the Memory module
+    /// already lists the biggest users: this list answers "what is busy".
+    public static let processSortOptions: [ProcessSortKey] = [.cpu, .diskIO, .energy]
 
     public init(collapsedModules: Set<PanelModule> = PanelSettings.defaultCollapsed,
-                showsHistoryChart: Bool = true) {
+                showsHistoryChart: Bool = true,
+                processSort: ProcessSortKey = .cpu) {
         self.collapsedModules = Self.accordion(collapsedModules)
         self.showsHistoryChart = showsHistoryChart
+        self.processSort = Self.processSortOptions.contains(processSort) ? processSort : .cpu
     }
 
     /// The collapsed set after a click on `module`'s header.
@@ -439,8 +445,10 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     /// a new release's modules appear without a stored order having to be migrated.
     public var visibleModules: [PanelModule] { PanelModule.allCases }
 
+    /// `processSort` rather than the old `processSortKey`, which files from before the
+    /// panel pane was removed may still carry with a key this list no longer offers.
     private enum CodingKeys: String, CodingKey {
-        case collapsedModules, showsHistoryChart
+        case collapsedModules, showsHistoryChart, processSort
     }
 
     /// Decoded leniently, and settings files written before the panel pane was removed
@@ -450,6 +458,8 @@ public struct PanelSettings: Sendable, Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         collapsedModules = Self.accordion(c.value(.collapsedModules, or: PanelSettings.defaultCollapsed))
         showsHistoryChart = c.value(.showsHistoryChart, or: true)
+        let sort = c.value(.processSort, or: ProcessSortKey.cpu)
+        processSort = Self.processSortOptions.contains(sort) ? sort : .cpu
     }
 }
 
