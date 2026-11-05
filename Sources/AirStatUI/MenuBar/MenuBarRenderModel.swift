@@ -189,6 +189,11 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         let metric = config.metric
         let dash = MetricFormatter.unavailable
         let widest = formatter.widestSample(for: metric)
+        // Only a graph draws the series. Building it for a text readout anyway made
+        // every model differ from the last, since the history moves every sample, so
+        // the status item relaid and redrew on every tick even when its text had not
+        // changed.
+        let drawsSeries = config.style == .graph || config.style == .textAndGraph
 
         var valueText = dash
         var seriesKey: SeriesKey?
@@ -284,7 +289,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             // Down and up share one scale so the two stacked graphs are comparable;
             // normalising each to its own peak would make a trickle of upload look
             // identical to a saturated link.
-            let pair = jointlyNormalized(history, .networkDownload, .networkUpload)
+            let pair = drawsSeries ? jointlyNormalized(history, .networkDownload, .networkUpload) : ([], [])
             // The stacked style angles its arrows to the diagonal; the one-line
             // styles keep the vertical pair they have always drawn.
             let stacked = config.style == .stackedPair
@@ -324,7 +329,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 accessibilityValue = "Disk read \(formatter.diskRate(disk.readBytesPerSecond)), "
                     + "write \(formatter.diskRate(disk.writeBytesPerSecond))"
             }
-            let pair = jointlyNormalized(history, .diskRead, .diskWrite)
+            let pair = drawsSeries ? jointlyNormalized(history, .diskRead, .diskWrite) : ([], [])
             secondary = MenuBarLine(glyph: "W", valueText: writeText,
                                     widestText: rateWidest, series: pair.1)
             return finish(config: config, caption: nil,
@@ -407,7 +412,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             }
         }
 
-        let series = seriesKey.map { normalizedSeries(history, key: $0) } ?? []
+        let series = drawsSeries ? seriesKey.map { normalizedSeries(history, key: $0) } ?? [] : []
         return finish(config: config, caption: caption(for: config),
                       primary: MenuBarLine(valueText: valueText, widestText: widest,
                                            series: series),
