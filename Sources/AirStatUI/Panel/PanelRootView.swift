@@ -13,6 +13,11 @@ final class PanelLayoutState {
     /// The collapsed set a disclosure started from, held until it has finished.
     var disclosureOrigin: Set<PanelModule>?
     var isDisclosureTransitionActive = false
+    /// False once the panel has faded out. The window is kept for a quick reopen, but
+    /// a hidden tree still observes the engine and re-renders every module and chart
+    /// on every tick, which measured as doubling the app's CPU for the two minutes the
+    /// window was kept. Hidden, the panel draws nothing and observes nothing.
+    var isPresented = true
     @ObservationIgnored var toggleModule: ((PanelModule) -> Void)?
 }
 
@@ -46,6 +51,14 @@ public struct PanelRootView: View {
     }
 
     public var body: some View {
+        if layout?.isPresented == false {
+            Color.clear.frame(width: PanelSettings.width, height: 1)
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let pending = updates?.pending {
                 PanelUpdateRow(update: pending) { [updates] in

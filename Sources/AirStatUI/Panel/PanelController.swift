@@ -82,6 +82,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
         releaseTask?.cancel()
         releaseTask = nil
         let window = existingOrNewWindow()
+        layout?.isPresented = true
         lastAnchor = anchor
         lastScreen = screen ?? anchor.flatMap(Self.screen(containing:))
         presentation &+= 1
@@ -125,6 +126,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
                 // here would hide a window the user just asked for.
                 guard let self, self.presentation == generation else { return }
                 window.orderOut(nil)
+                self.layout?.isPresented = false
             }
         }
         scheduleWindowRelease()
