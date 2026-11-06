@@ -150,7 +150,7 @@ public final class CPUCollector: MetricSource {
             return .failure(.failed("getloadavg failed"))
         }
 
-        guard let processes = processCount(), let threads = threadCount() else {
+        guard let processes = processCount(), let threads = threadCount(refresh: context.activity >= .panel) else {
             return .failure(.failed("proc_listpids failed: \(errnoMessage())"))
         }
 
@@ -202,8 +202,12 @@ public final class CPUCollector: MetricSource {
         listPIDs(&pidBuffer, filter: UInt32(PROC_ALL_PIDS), argument: 0)
     }
 
-    private func threadCount() -> Int? {
-        if let taken = threadCountTakenAt, Monotonic.seconds(since: taken) < Self.threadCountInterval {
+    /// Only the panel shows the count, and reading the zone table costs about 0.4 ms,
+    /// which is most of this collector. So with the panel shut the last count is kept,
+    /// and opening it forces a sample that refreshes it before it is drawn.
+    private func threadCount(refresh: Bool) -> Int? {
+        if let taken = threadCountTakenAt,
+           !refresh || Monotonic.seconds(since: taken) < Self.threadCountInterval {
             return cachedThreadCount
         }
         var counted = threadZoneReadable ? liveThreadCount() : nil
