@@ -184,9 +184,8 @@ public enum SnapshotFixtures {
             ],
             primaryInterfaceName: "en0",
             connectionType: .wifi,
-            wifi: WiFiInfo(ssid: "Sunnyvale", bssid: nil, rssi: -46, noise: -92,
-                           channel: 6, band: "2.4 GHz", transmitRateMbps: 229,
-                           security: "WPA3 Personal"),
+            wifi: WiFiInfo(ssid: "Sunnyvale", rssi: -46, channel: 6, band: "2.4 GHz",
+                           transmitRateMbps: 229),
             localIPv4: "10.0.0.69",
             // A documentation-range address (RFC 5737), so the fixture shows the row the
             // opt-in lookup fills in without any machine's real address in the source.

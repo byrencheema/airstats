@@ -256,25 +256,18 @@ public struct NetworkInterfaceStats: Sendable, Equatable, Hashable, Identifiable
 
 public struct WiFiInfo: Sendable, Equatable, Hashable {
     public var ssid: String?
-    public var bssid: String?
     public var rssi: Int?
-    public var noise: Int?
     public var channel: Int?
     public var band: String?
     public var transmitRateMbps: Double?
-    public var security: String?
 
-    public init(ssid: String? = nil, bssid: String? = nil, rssi: Int? = nil, noise: Int? = nil,
-                channel: Int? = nil, band: String? = nil, transmitRateMbps: Double? = nil,
-                security: String? = nil) {
+    public init(ssid: String? = nil, rssi: Int? = nil, channel: Int? = nil,
+                band: String? = nil, transmitRateMbps: Double? = nil) {
         self.ssid = ssid
-        self.bssid = bssid
         self.rssi = rssi
-        self.noise = noise
         self.channel = channel
         self.band = band
         self.transmitRateMbps = transmitRateMbps
-        self.security = security
     }
 
     /// Signal quality 0...1 derived from RSSI, using the same -100…-50 dBm ramp
