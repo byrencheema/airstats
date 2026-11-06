@@ -90,9 +90,11 @@ public final class PowerCollector: MetricSource {
         snapshot.isLowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         snapshot.hasBattery = source != nil || boolean("BatteryInstalled") == true
 
-        // Only the panel names the adapter, and asking for it opens a fresh XPC
-        // connection to powerd every time: about 40% of this collector's cost.
-        if context.activity >= .panel { applyAdapter(to: &snapshot) }
+        // Only the panel names the adapter or shows the battery's health, and they are
+        // the dear reads here: the adapter opens a fresh XPC connection to powerd every
+        // time, and on macOS 27 health copies the whole BatteryData dictionary twice.
+        let forPanel = context.activity >= .panel
+        if forPanel { applyAdapter(to: &snapshot) }
         snapshot.accessories = currentAccessories()
 
         guard snapshot.hasBattery else {
@@ -105,7 +107,7 @@ public final class PowerCollector: MetricSource {
 
         applyCharge(to: &snapshot, source: source)
         applyElectrical(to: &snapshot)
-        applyHealth(to: &snapshot, source: source)
+        if forPanel { applyHealth(to: &snapshot, source: source) }
         return .value(snapshot)
     }
 
