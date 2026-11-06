@@ -193,6 +193,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         // every model differ from the last, since the history moves every sample, so
         // the status item relaid and redrew on every tick even when its text had not
         // changed.
+        // The same goes for the bar's fill level, which is raw and so moves on every
+        // sample.
         let drawsSeries = config.style == .graph || config.style == .textAndGraph
 
         var valueText = dash
@@ -359,7 +361,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let power = snapshot.power.value, let pct = power.percentage {
                 valueText = formatter.percentValue(pct)
                 unavailable = false
-                let charge = min(max(pct / 100, 0), 1)
+                let charge = wholePercent(pct / 100)
                 let isLow = !power.isCharging && charge <= MenuBarItemRender.lowBatteryFraction
                 // Rounded off the clamped charge rather than off the raw percentage, so
                 // the digits and the fill can never disagree about how full it is.
@@ -419,7 +421,14 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                       secondary: nil,
                       unavailable: unavailable, accessibility: accessibilityValue,
                       settings: settings, battery: battery,
-                      level: level.map { min(max($0, 0), 1) })
+                      level: config.style == .bar ? level.map(wholePercent) : nil)
+    }
+
+    /// A fraction clamped to 0...1 and rounded to the percent. Finer than either the
+    /// bar or the battery fill can draw, and coarse enough that a reading drifting
+    /// by a hundredth of a percent leaves the model equal and the item undrawn.
+    private static func wholePercent(_ fraction: Double) -> Double {
+        (min(max(fraction, 0), 1) * 100).rounded() / 100
     }
 
     /// What the battery indicator draws, gathered in one place so the three fields can

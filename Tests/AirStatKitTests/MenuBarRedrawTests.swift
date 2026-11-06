@@ -35,6 +35,31 @@ struct MenuBarRedrawTests {
         #expect(model(.text, history: history(samples: 10)) == model(.text, history: history(samples: 11)))
     }
 
+    @Test("a reading that moves without changing the text leaves a text model equal")
+    func textIgnoresSubPercentDrift() {
+        let history = history(samples: 10)
+        var before = SnapshotFixtures.nominal
+        before.cpu = .value(SnapshotFixtures.cpu(busy: 0.121))
+        var after = before
+        after.cpu = .value(SnapshotFixtures.cpu(busy: 0.123))
+        let settings = Self.settings[.text]!
+        #expect(MenuBarRenderModel(snapshot: before, history: history, settings: settings, isStale: false)
+                == MenuBarRenderModel(snapshot: after, history: history, settings: settings, isStale: false))
+    }
+
+    @Test("a battery fill that moves within one percent leaves the model equal")
+    func batteryIgnoresSubPercentDrift() {
+        var settings = Settings()
+        settings.menuBar.items = [MenuBarItemConfig(metric: .battery, style: .battery)]
+        var before = SnapshotFixtures.nominal
+        before.power = .value(SnapshotFixtures.power(percent: 80.1, charging: false))
+        var after = before
+        after.power = .value(SnapshotFixtures.power(percent: 80.3, charging: false))
+        let history = history(samples: 10)
+        #expect(MenuBarRenderModel(snapshot: before, history: history, settings: settings, isStale: false)
+                == MenuBarRenderModel(snapshot: after, history: history, settings: settings, isStale: false))
+    }
+
     @Test("a graph still redraws when history moves")
     func graphFollowsHistory() {
         #expect(model(.graph, history: history(samples: 10)) != model(.graph, history: history(samples: 11)))
