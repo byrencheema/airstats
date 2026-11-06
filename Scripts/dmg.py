@@ -19,7 +19,9 @@ application = defines["app"]
 appname = os.path.basename(application)
 root = defines.get("root", os.getcwd())
 
-format = "UDZO"
+# LZMA rather than zlib: the universal app's image is 2.4 MB instead of 3.7.
+# Every macOS since 10.15 mounts it, and the app needs 14.
+format = "ULMO"
 compression_level = 9
 size = None
 
