@@ -26,13 +26,13 @@ public enum SettingsTab: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .general: return "General"
-        case .menuBar: return "Menu Bar"
-        case .appearance: return "Appearance"
-        case .desktopWidget: return "Desktop Widget"
-        case .notifications: return "Notifications"
-        case .shortcuts: return "Shortcuts"
-        case .about: return "About"
+        case .general: return L10n.tr("General", "Chung")
+        case .menuBar: return L10n.tr("Menu Bar", "Thanh menu")
+        case .appearance: return L10n.tr("Appearance", "Giao diện")
+        case .desktopWidget: return L10n.tr("Desktop Widget", "Widget màn hình")
+        case .notifications: return L10n.tr("Notifications", "Thông báo")
+        case .shortcuts: return L10n.tr("Shortcuts", "Phím tắt")
+        case .about: return L10n.tr("About", "Giới thiệu")
         }
     }
 
@@ -290,13 +290,13 @@ struct UnavailableBadge: View {
     var body: some View {
         HStack(spacing: Design.Space.xs) {
             Image(systemName: "minus.circle")
-            Text("Unavailable")
+            Text(L10n.tr("Unavailable", "Không khả dụng"))
         }
         .font(.callout)
         .foregroundStyle(Design.Palette.tertiaryText)
         .help(reason)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Not available on this Mac")
+        .accessibilityLabel(L10n.tr("Not available on this Mac", "Không khả dụng trên máy Mac này"))
         .accessibilityValue(reason)
     }
 }
@@ -317,17 +317,18 @@ struct RestoreDefaultsButton: View {
     @State private var isConfirming = false
 
     var body: some View {
-        Button("Restore Defaults") { isConfirming = true }
-            .confirmationDialog("Restore \(title) settings to their defaults?",
+        Button(L10n.tr("Restore Defaults", "Khôi phục mặc định")) { isConfirming = true }
+            .confirmationDialog(L10n.tr("Restore \(title) settings to their defaults?", "Khôi phục cài đặt \(title) về mặc định?"),
                                 isPresented: $isConfirming) {
-                Button("Restore Defaults", role: .destructive) {
+                Button(L10n.tr("Restore Defaults", "Khôi phục mặc định"), role: .destructive) {
                     for section in sections { settings.resetSection(section) }
                 }
-                Button("Cancel", role: .cancel) {}
+                Button(L10n.tr("Cancel", "Huỷ"), role: .cancel) {}
             } message: {
-                Text("Only \(title) is affected. Other settings are left alone.")
+                Text(L10n.tr("Only \(title) is affected. Other settings are left alone.",
+                             "Chỉ mục \(title) bị thay đổi. Các cài đặt khác được giữ nguyên."))
             }
-            .accessibilityHint("Restores \(title) to its default values")
+            .accessibilityHint(L10n.tr("Restores \(title) to its default values", "Khôi phục \(title) về mặc định"))
     }
 }
 
@@ -614,17 +615,19 @@ enum SettingsLabels {
 
     static func interval(_ seconds: TimeInterval) -> String {
         if seconds < 1 { return "\(Int(seconds * 1000)) ms" }
-        if seconds == 1 { return "1 second" }
-        return "\(Int(seconds)) seconds"
+        if seconds == 1 { return L10n.tr("1 second", "1 giây") }
+        return L10n.tr("\(Int(seconds)) seconds", "\(Int(seconds)) giây")
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
-        if seconds <= 0 { return "Immediately" }
-        if seconds < 60 { return "\(Int(seconds)) seconds" }
+        if seconds <= 0 { return L10n.tr("Immediately", "Ngay lập tức") }
+        if seconds < 60 { return L10n.tr("\(Int(seconds)) seconds", "\(Int(seconds)) giây") }
         let minutes = Int(seconds / 60)
-        if minutes < 60 { return minutes == 1 ? "1 minute" : "\(minutes) minutes" }
+        if minutes < 60 {
+            return minutes == 1 ? L10n.tr("1 minute", "1 phút") : L10n.tr("\(minutes) minutes", "\(minutes) phút")
+        }
         let hours = Int(seconds / 3600)
-        return hours == 1 ? "1 hour" : "\(hours) hours"
+        return hours == 1 ? L10n.tr("1 hour", "1 giờ") : L10n.tr("\(hours) hours", "\(hours) giờ")
     }
 
     static func points(_ value: Double) -> String { "\(Int(value.rounded())) pt" }
@@ -700,7 +703,7 @@ struct MenuBarPreviewStrip: View {
         HStack(spacing: 0) {
             Spacer(minLength: Design.Space.xl)
             if isEmpty {
-                Text("No readouts are enabled.")
+                Text(L10n.tr("No readouts are enabled.", "Chưa bật chỉ số nào."))
                     .font(.callout)
                     .foregroundStyle(Design.Palette.secondaryText)
                     .lineLimit(1)

@@ -155,27 +155,27 @@ public enum SeriesKey: String, Sendable, Equatable, Hashable, CaseIterable, Coda
     public var label: String {
         switch self {
         case .cpuTotal: return "CPU"
-        case .cpuUser: return "User"
-        case .cpuSystem: return "System"
-        case .cpuPerformance: return "P-Cores"
-        case .cpuEfficiency: return "E-Cores"
-        case .memoryUsed: return "Memory Used"
-        case .memoryPressure: return "Memory Pressure"
+        case .cpuUser: return L10n.tr("User", "Người dùng")
+        case .cpuSystem: return L10n.tr("System", "Hệ thống")
+        case .cpuPerformance: return L10n.tr("P-Cores", "Nhân P")
+        case .cpuEfficiency: return L10n.tr("E-Cores", "Nhân E")
+        case .memoryUsed: return L10n.tr("Memory Used", "Bộ nhớ đã dùng")
+        case .memoryPressure: return L10n.tr("Memory Pressure", "Áp lực bộ nhớ")
         case .memorySwap: return "Swap"
         case .gpuUtilization: return "GPU"
         case .gpuVRAM: return "VRAM"
-        case .networkUpload: return "Upload"
-        case .networkDownload: return "Download"
-        case .diskRead: return "Read"
-        case .diskWrite: return "Write"
-        case .diskUsed: return "Disk Used"
-        case .batteryPercent: return "Battery"
-        case .batteryWatts: return "Battery Power"
-        case .systemWatts: return "System Power"
-        case .cpuTemperature: return "CPU Temp"
-        case .gpuTemperature: return "GPU Temp"
-        case .fanRPM: return "Fan"
-        case .batteryPlugged: return "On Power"
+        case .networkUpload: return L10n.tr("Upload", "Tải lên")
+        case .networkDownload: return L10n.tr("Download", "Tải xuống")
+        case .diskRead: return L10n.tr("Read", "Đọc")
+        case .diskWrite: return L10n.tr("Write", "Ghi")
+        case .diskUsed: return L10n.tr("Disk Used", "Ổ đĩa đã dùng")
+        case .batteryPercent: return L10n.tr("Battery", "Pin")
+        case .batteryWatts: return L10n.tr("Battery Power", "Công suất pin")
+        case .systemWatts: return L10n.tr("System Power", "Công suất hệ thống")
+        case .cpuTemperature: return L10n.tr("CPU Temp", "Nhiệt độ CPU")
+        case .gpuTemperature: return L10n.tr("GPU Temp", "Nhiệt độ GPU")
+        case .fanRPM: return L10n.tr("Fan", "Quạt")
+        case .batteryPlugged: return L10n.tr("On Power", "Đang cắm sạc")
         }
     }
 

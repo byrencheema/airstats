@@ -23,7 +23,7 @@ struct NotificationsPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Notify me about these conditions",
+                Toggle(L10n.tr("Notify me about these conditions", "Thông báo khi có điều kiện sau"),
                        isOn: settings.binding(\.notifications.isEnabled, onChange: askIfNeeded))
                 permissionNotice
             }
@@ -33,7 +33,7 @@ struct NotificationsPane: View {
                     ruleRows(rule)
                 }
             } header: {
-                Text("Rules")
+                Text(L10n.tr("Rules", "Quy tắc"))
             }
             .disabled(!isEnabled)
 
@@ -56,12 +56,14 @@ struct NotificationsPane: View {
             case .granted, .undetermined:
                 EmptyView()
             case .requesting:
-                SettingsFootnote("Waiting for your answer to the macOS permission prompt.")
+                SettingsFootnote(L10n.tr("Waiting for your answer to the macOS permission prompt.",
+                                         "Đang chờ bạn xác nhận quyền thông báo từ macOS."))
             case .unavailable:
                 VStack(alignment: .leading, spacing: Design.Space.s) {
-                    SettingsCaution("macOS is not allowing AirStats to send notifications, "
-                                    + "so these rules cannot alert you.")
-                    Button("Open Notification Settings…") { openSystemNotificationSettings() }
+                    SettingsCaution(L10n.tr(
+                        "macOS is not allowing AirStats to send notifications, so these rules cannot alert you.",
+                        "macOS chưa cho phép AirStats gửi thông báo, nên các quy tắc này chưa thể cảnh báo."))
+                    Button(L10n.tr("Open Notification Settings…", "Mở Cài đặt Thông báo…")) { openSystemNotificationSettings() }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -73,7 +75,8 @@ struct NotificationsPane: View {
     /// the moment they said they want notifications.
     private func askIfNeeded(_ enabled: Bool) {
         guard enabled else { return }
-        authority?.request("AirStats alerts you when a metric crosses a threshold you set.")
+        authority?.request(L10n.tr("AirStats alerts you when a metric crosses a threshold you set.",
+                                   "AirStats sẽ cảnh báo khi một chỉ số vượt ngưỡng bạn đặt."))
     }
 
     private func openSystemNotificationSettings() {
@@ -116,12 +119,12 @@ struct NotificationsPane: View {
 
         if rule.isEnabled, unavailable == nil {
             VStack(alignment: .leading, spacing: Design.Space.m) {
-                Picker("Only after it holds for", selection: sustainedBinding(rule)) {
+                Picker(L10n.tr("Only after it holds for", "Chỉ báo sau khi duy trì trong"), selection: sustainedBinding(rule)) {
                     ForEach(Self.sustainedOptions, id: \.self) { seconds in
                         Text(SettingsLabels.duration(seconds)).tag(seconds)
                     }
                 }
-                Picker("Then stay quiet for", selection: cooldownBinding(rule)) {
+                Picker(L10n.tr("Then stay quiet for", "Sau đó tạm nghỉ trong"), selection: cooldownBinding(rule)) {
                     ForEach(Self.cooldownOptions, id: \.self) { seconds in
                         Text(SettingsLabels.duration(seconds)).tag(seconds)
                     }
@@ -168,9 +171,12 @@ struct NotificationsPane: View {
             ? (ThermalPressure(rawValue: Int(rule.threshold))?.label ?? "\(Int(rule.threshold))")
             : "\(Int(rule.threshold))\(rule.metric.unitSuffix)"
         let sustained = rule.sustainedFor <= 0
-            ? "as soon as it happens"
-            : "after \(SettingsLabels.duration(rule.sustainedFor)) of it holding"
-        return "Notifies \(sustained), then not again for \(SettingsLabels.duration(rule.cooldown)). Threshold: \(value). Needs the \(rule.metric.requiredSource.label) collector, which this rule keeps running."
+            ? L10n.tr("as soon as it happens", "ngay khi xảy ra")
+            : L10n.tr("after \(SettingsLabels.duration(rule.sustainedFor)) of it holding",
+                      "sau khi duy trì \(SettingsLabels.duration(rule.sustainedFor))")
+        return L10n.tr(
+            "Notifies \(sustained), then not again for \(SettingsLabels.duration(rule.cooldown)). Threshold: \(value). Needs the \(rule.metric.requiredSource.label) collector, which this rule keeps running.",
+            "Thông báo \(sustained), sau đó không lặp lại trong \(SettingsLabels.duration(rule.cooldown)). Ngưỡng: \(value). Yêu cầu bộ thu thập \(rule.metric.requiredSource.label).")
     }
 
     private func accessibilityValue(_ rule: ThresholdRule) -> String {

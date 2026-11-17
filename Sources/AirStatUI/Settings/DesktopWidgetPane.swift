@@ -19,7 +19,8 @@ struct DesktopWidgetPane: View {
             // beside it, and this row is the pane's subject rather than a section of
             // it — everything below configures the thing this switch puts on screen.
             Section {
-                Toggle("Show the desktop widget", isOn: settings.binding(\.desktopWidget.isEnabled))
+                Toggle(L10n.tr("Show the desktop widget", "Hiển thị widget trên màn hình"),
+                       isOn: settings.binding(\.desktopWidget.isEnabled))
             }
 
             // The preview and the list that fills it, side by side. Stacked, the
@@ -42,42 +43,45 @@ struct DesktopWidgetPane: View {
                     .disabled(!desktopWidget.isEnabled)
                 }
             } header: {
-                Text("Modules")
+                Text(L10n.tr("Modules", "Các mục hiển thị"))
             }
 
             Section {
-                SettingsSlider(title: "Width",
+                SettingsSlider(title: L10n.tr("Width", "Chiều rộng"),
                                value: settings.quantized(\.desktopWidget.width, step: 4),
                                range: 160...480,
                                format: SettingsLabels.points)
-                Toggle("Use compact layout", isOn: settings.binding(\.desktopWidget.isCompact))
-                Toggle("Show a 24-hour history", isOn: settings.binding(\.desktopWidget.showsHistoryChart))
-                SettingsSlider(title: "Opacity",
+                Toggle(L10n.tr("Use compact layout", "Dùng bố cục thu gọn"),
+                       isOn: settings.binding(\.desktopWidget.isCompact))
+                Toggle(L10n.tr("Show a 24-hour history", "Hiện lịch sử 24 giờ"),
+                       isOn: settings.binding(\.desktopWidget.showsHistoryChart))
+                SettingsSlider(title: L10n.tr("Opacity", "Độ mờ"),
                                value: settings.quantized(\.desktopWidget.opacity, step: 0.05),
                                range: 0.2...1,
                                format: SettingsLabels.percent)
-                Toggle("Fade when not in use", isOn: settings.binding(\.desktopWidget.dimsWhenInactive))
+                Toggle(L10n.tr("Fade when not in use", "Làm mờ khi không dùng"),
+                       isOn: settings.binding(\.desktopWidget.dimsWhenInactive))
                 if desktopWidget.dimsWhenInactive {
-                    SettingsSlider(title: "Faded opacity",
+                    SettingsSlider(title: L10n.tr("Faded opacity", "Độ mờ khi ẩn"),
                                    value: settings.quantized(\.desktopWidget.inactiveOpacity, step: 0.05),
                                    range: 0.15...1,
                                    format: SettingsLabels.percent)
                 }
             } header: {
-                Text("Size & Transparency")
+                Text(L10n.tr("Size & Transparency", "Kích thước & Độ trong suốt"))
             }
             .disabled(!desktopWidget.isEnabled)
 
             Section {
-                Picker("Position", selection: settings.binding(\.desktopWidget.corner)) {
+                Picker(L10n.tr("Position", "Vị trí"), selection: settings.binding(\.desktopWidget.corner)) {
                     ForEach(DesktopWidgetCorner.allCases, id: \.self) { corner in
                         Text(corner.label).tag(corner)
                     }
                 }
                 if desktopWidget.corner == .free {
-                    LabeledContent("Saved position", value: savedPositionText)
+                    LabeledContent(L10n.tr("Saved position", "Vị trí đã lưu"), value: savedPositionText)
                         .foregroundStyle(Design.Palette.secondaryText)
-                    Button("Forget Saved Position") {
+                    Button(L10n.tr("Forget Saved Position", "Xoá vị trí đã lưu")) {
                         settings.update {
                             $0.desktopWidget.originX = nil
                             $0.desktopWidget.originY = nil
@@ -86,20 +90,22 @@ struct DesktopWidgetPane: View {
                     .disabled(desktopWidget.originX == nil && desktopWidget.originY == nil)
                 }
             } header: {
-                Text("Position")
+                Text(L10n.tr("Position", "Vị trí"))
             }
             .disabled(!desktopWidget.isEnabled)
 
             Section {
-                Picker("Layer", selection: settings.binding(\.desktopWidget.depth)) {
+                Picker(L10n.tr("Layer", "Lớp hiển thị"), selection: settings.binding(\.desktopWidget.depth)) {
                     ForEach(DesktopWidgetDepth.allCases, id: \.self) { depth in
                         Text(depth.label).tag(depth)
                     }
                 }
-                Toggle("Click through the desktop widget", isOn: settings.binding(\.desktopWidget.isClickThrough))
-                Toggle("Show on all spaces", isOn: settings.binding(\.desktopWidget.showsOnAllSpaces))
+                Toggle(L10n.tr("Click through the desktop widget", "Cho phép bấm xuyên qua widget"),
+                       isOn: settings.binding(\.desktopWidget.isClickThrough))
+                Toggle(L10n.tr("Show on all spaces", "Hiện trên mọi màn hình ảo"),
+                       isOn: settings.binding(\.desktopWidget.showsOnAllSpaces))
             } header: {
-                Text("Behaviour")
+                Text(L10n.tr("Behaviour", "Hành vi"))
             } footer: {
                 Text(desktopWidget.depth.detail)
                     .font(.callout)
@@ -132,9 +138,9 @@ struct DesktopWidgetPane: View {
                         }
                         RowIconButton(systemName: "trash",
                                       help: desktopWidget.modules.count <= 1
-                                          ? "The desktop widget needs at least one module."
-                                          : "Remove \(module.label) from the desktop widget",
-                                      label: "Remove \(module.label)") {
+                                          ? L10n.tr("The desktop widget needs at least one module.", "Widget cần tối thiểu một mục.")
+                                          : L10n.tr("Remove \(module.label) from the desktop widget", "Xoá \(module.label) khỏi widget"),
+                                      label: L10n.tr("Remove \(module.label)", "Xoá \(module.label)")) {
                             settings.update { $0.desktopWidget.modules.removeAll { $0 == module } }
                         }
                         .disabled(desktopWidget.modules.count <= 1)
@@ -166,13 +172,13 @@ struct DesktopWidgetPane: View {
                     }
                 }
             } label: {
-                Label("Add Module", systemImage: "plus")
+                Label(L10n.tr("Add Module", "Thêm mục"), systemImage: "plus")
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
             .disabled(availableModules.isEmpty)
-            .help(availableModules.isEmpty ? "Every module is already in the desktop widget." : "")
-            .accessibilityLabel("Add a module to the desktop widget")
+            .help(availableModules.isEmpty ? L10n.tr("Every module is already in the desktop widget.", "Tất cả các mục đã có trong widget.") : "")
+            .accessibilityLabel(L10n.tr("Add a module to the desktop widget", "Thêm mục vào widget"))
 
             Spacer()
         }
@@ -203,7 +209,9 @@ struct DesktopWidgetPane: View {
     }
 
     private var savedPositionText: String {
-        guard let x = desktopWidget.originX, let y = desktopWidget.originY else { return "Not set" }
+        guard let x = desktopWidget.originX, let y = desktopWidget.originY else {
+            return L10n.tr("Not set", "Chưa đặt")
+        }
         return "\(Int(x)), \(Int(y))"
     }
 }

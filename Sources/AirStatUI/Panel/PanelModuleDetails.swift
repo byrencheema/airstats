@@ -73,8 +73,8 @@ extension PanelModuleView {
             VStack(alignment: .leading, spacing: Design.Space.xs) {
                 coreClusters(cpu)
                 PanelDetailGrid(entries: [
-                    PanelDetailEntry("Load", loadAverage(cpu.loadAverage)),
-                    PanelDetailEntry("Threads", formatter.count(cpu.threadCount)),
+                    PanelDetailEntry(L10n.tr("Load", "Tải"), loadAverage(cpu.loadAverage)),
+                    PanelDetailEntry(L10n.tr("Threads", "Luồng"), formatter.count(cpu.threadCount)),
                 ])
                 history()
             }
@@ -87,16 +87,19 @@ extension PanelModuleView {
         let performance = cores(cpu, of: .performance)
         if efficiency.isEmpty || performance.isEmpty {
             if !cpu.perCore.isEmpty {
-                PanelCoreRow(label: "\(cpu.perCore.count) cores", loads: cpu.perCore,
+                PanelCoreRow(label: L10n.tr("\(cpu.perCore.count) cores", "\(cpu.perCore.count) nhân"),
+                             loads: cpu.perCore,
                              busy: cpu.total.busy, tint: tint,
                              slotWidth: PanelCoreRow.slotWidth(sharedAcross: cpu.perCore.count))
             }
         } else {
             let slot = PanelCoreRow.slotWidth(sharedAcross: max(efficiency.count, performance.count))
             VStack(alignment: .leading, spacing: Design.Space.xs) {
-                PanelCoreRow(label: "\(efficiency.count) E-cores", loads: efficiency,
+                PanelCoreRow(label: L10n.tr("\(efficiency.count) E-cores", "\(efficiency.count) nhân E"),
+                             loads: efficiency,
                              busy: cpu.efficiencyBusy, tint: tint, slotWidth: slot)
-                PanelCoreRow(label: "\(performance.count) P-cores", loads: performance,
+                PanelCoreRow(label: L10n.tr("\(performance.count) P-cores", "\(performance.count) nhân P"),
+                             loads: performance,
                              busy: cpu.performanceBusy, tint: tint, slotWidth: slot)
             }
         }
@@ -122,16 +125,16 @@ extension PanelModuleView {
             let segments = Self.readableSegments(CompositionSegment.memory(memory))
             VStack(alignment: .leading, spacing: Design.Space.xs) {
                 StackedCompositionBar(segments, format: .memoryBytes,
-                                      title: "Memory composition",
+                                      title: L10n.tr("Memory composition", "Thành phần bộ nhớ"),
                                       barHeight: Design.Space.s, showsLegend: false)
                 PanelSegmentLegend(segments: segments, format: .memoryBytes)
-                PanelBarRow(label: "Pressure",
+                PanelBarRow(label: L10n.tr("Pressure", "Áp lực"),
                             value: "\(memory.memoryPressure.label) · \(formatter.percent(memory.pressureFraction))",
                             fraction: memory.pressureFraction,
                             tint: PanelModuleView.barTint)
                 PanelDetailGrid(entries: [
                     PanelDetailEntry("Swap", formatter.memory(memory.swapUsedBytes)),
-                    PanelDetailEntry("Total", formatter.memory(memory.totalBytes)),
+                    PanelDetailEntry(L10n.tr("Total", "Tổng"), formatter.memory(memory.totalBytes)),
                 ])
                 memoryProcesses
                 history()
@@ -149,7 +152,7 @@ extension PanelModuleView {
                 .sorted { $0.memoryBytes > $1.memoryBytes }
                 .prefix(PanelSettings.processRowCount)
             VStack(alignment: .leading, spacing: 0) {
-                Text("Top processes")
+                Text(L10n.tr("Top processes", "Tiến trình hàng đầu"))
                     .font(Design.Text.label)
                     .foregroundStyle(Design.Palette.secondaryText)
                     .padding(.bottom, Design.Space.xxs)
@@ -203,7 +206,7 @@ extension PanelModuleView {
                     history(available: device.utilization != nil)
                 }
             } else {
-                UnavailableNote(.failed("No graphics device reported"))
+                UnavailableNote(.failed(L10n.tr("No graphics device reported", "Không phát hiện thiết bị đồ hoạ")))
             }
         }
     }
@@ -213,10 +216,10 @@ extension PanelModuleView {
     private func gpuEntries(_ device: GPUDevice) -> [PanelDetailEntry] {
         var entries: [PanelDetailEntry] = []
         if let renderer = device.rendererUtilization {
-            entries.append(PanelDetailEntry("Renderer", formatter.percent(renderer)))
+            entries.append(PanelDetailEntry(L10n.tr("Renderer", "Dựng hình"), formatter.percent(renderer)))
         }
         if let tiler = device.tilerUtilization {
-            entries.append(PanelDetailEntry("Tiler", formatter.percent(tiler)))
+            entries.append(PanelDetailEntry(L10n.tr("Tiler", "Chia ô"), formatter.percent(tiler)))
         }
         return entries
     }
@@ -231,13 +234,13 @@ extension PanelModuleView {
                     // Full width rather than a grid cell, the way the battery's adapter
                     // row is: a grid cell is half of 340pt and truncated "203.0.113…"
                     // after the label, and an IPv6 answer is three times longer again.
-                    ReadoutRow("Public IP", publicIP)
+                    ReadoutRow(L10n.tr("Public IP", "IP công khai"), publicIP)
                 }
                 if let wifi = network.wifi, let quality = wifi.signalQuality {
                     // The network's name labels its own signal bar; a row that said
                     // "Signal" and a row that said "Network" would be two lines
                     // saying one thing.
-                    PanelBarRow(label: wifi.ssid ?? "Signal", value: signalValue(wifi),
+                    PanelBarRow(label: wifi.ssid ?? L10n.tr("Signal", "Tín hiệu"), value: signalValue(wifi),
                                 fraction: quality, tint: tint)
                 }
                 history()
@@ -247,12 +250,12 @@ extension PanelModuleView {
 
     private func networkEntries(_ network: NetworkSnapshot) -> [PanelDetailEntry] {
         var entries = [
-            PanelDetailEntry("Upload", formatter.networkRate(network.uploadBytesPerSecond)),
+            PanelDetailEntry(L10n.tr("Upload", "Tải lên"), formatter.networkRate(network.uploadBytesPerSecond)),
         ]
         if let ip = network.localIPv4 {
-            entries.append(PanelDetailEntry("Local IP", ip))
+            entries.append(PanelDetailEntry(L10n.tr("Local IP", "IP nội bộ"), ip))
         } else if let name = network.primaryInterfaceName {
-            entries.append(PanelDetailEntry("Interface", name))
+            entries.append(PanelDetailEntry(L10n.tr("Interface", "Giao diện"), name))
         }
         return entries
     }
@@ -268,7 +271,7 @@ extension PanelModuleView {
         switch state {
         case .value(let address): return address
         case .failure(.unsupported): return nil
-        case .failure(.pending): return "Looking up…"
+        case .failure(.pending): return L10n.tr("Looking up…", "Đang tra cứu…")
         case .failure: return MetricFormatter.unavailable
         }
     }
@@ -292,8 +295,8 @@ extension PanelModuleView {
                     volumeRow(volume)
                 }
                 PanelDetailGrid(entries: [
-                    PanelDetailEntry("Read", formatter.diskRate(disk.readBytesPerSecond)),
-                    PanelDetailEntry("Write", formatter.diskRate(disk.writeBytesPerSecond)),
+                    PanelDetailEntry(L10n.tr("Read", "Đọc"), formatter.diskRate(disk.readBytesPerSecond)),
+                    PanelDetailEntry(L10n.tr("Write", "Ghi"), formatter.diskRate(disk.writeBytesPerSecond)),
                 ])
                 history()
             }
@@ -327,7 +330,8 @@ extension PanelModuleView {
                         .foregroundStyle(Design.Palette.tertiaryText)
                 }
                 Spacer(minLength: Design.Space.m)
-                Text("\(formatter.storage(occupied)) of \(formatter.storage(volume.totalBytes))")
+                Text(L10n.tr("\(formatter.storage(occupied)) of \(formatter.storage(volume.totalBytes))",
+                             "\(formatter.storage(occupied)) / \(formatter.storage(volume.totalBytes))"))
                     .font(Design.Text.caption.monospacedDigit())
                     .foregroundStyle(Design.Palette.secondaryText)
                     .lineLimit(1)
@@ -346,7 +350,7 @@ extension PanelModuleView {
                     CapacityBar(fraction: percentage / 100, tint: PanelModuleView.barTint)
                 }
                 if let adapter = adapterSummary(power) {
-                    ReadoutRow("Adapter", adapter)
+                    ReadoutRow(L10n.tr("Adapter", "Bộ sạc"), adapter)
                 }
                 let entries = powerEntries(power)
                 if !entries.isEmpty { PanelDetailGrid(entries: entries) }
@@ -369,23 +373,23 @@ extension PanelModuleView {
         guard power.hasBattery else { return [] }
         var entries: [PanelDetailEntry] = []
         if power.isCharging, let toFull = power.timeToFull {
-            entries.append(PanelDetailEntry("Full in", formatter.duration(toFull)))
+            entries.append(PanelDetailEntry(L10n.tr("Full in", "Đầy sau"), formatter.duration(toFull)))
         } else if let toEmpty = power.timeToEmpty {
-            entries.append(PanelDetailEntry("Time left", formatter.duration(toEmpty)))
+            entries.append(PanelDetailEntry(L10n.tr("Time left", "Còn lại"), formatter.duration(toEmpty)))
         } else if power.isFullyCharged {
-            entries.append(PanelDetailEntry("State", "Charged"))
+            entries.append(PanelDetailEntry(L10n.tr("State", "Trạng thái"), L10n.tr("Charged", "Đã đầy")))
         }
         if let health = power.healthPercent {
-            entries.append(PanelDetailEntry("Health", formatter.percentValue(health)))
+            entries.append(PanelDetailEntry(L10n.tr("Health", "Độ chai"), formatter.percentValue(health)))
         }
         if let cycles = power.cycleCount {
-            entries.append(PanelDetailEntry("Cycles", formatter.count(cycles)))
+            entries.append(PanelDetailEntry(L10n.tr("Cycles", "Chu kỳ sạc"), formatter.count(cycles)))
         }
         if let condition = power.condition {
-            entries.append(PanelDetailEntry("Condition", condition))
+            entries.append(PanelDetailEntry(L10n.tr("Condition", "Tình trạng"), condition))
         }
         if power.isLowPowerMode {
-            entries.append(PanelDetailEntry("Low Power", "On"))
+            entries.append(PanelDetailEntry(L10n.tr("Low Power", "Nguồn điện thấp"), L10n.tr("On", "Bật")))
         }
         return entries
     }
@@ -396,9 +400,9 @@ extension PanelModuleView {
         section(engine.bluetooth) { bt in
             VStack(alignment: .leading, spacing: Design.Space.xs) {
                 if !bt.isPoweredOn {
-                    ReadoutRow("State", "Turned off", isDimmed: true)
+                    ReadoutRow(L10n.tr("State", "Trạng thái"), L10n.tr("Turned off", "Đã tắt"), isDimmed: true)
                 } else if bt.devices.isEmpty {
-                    Text("No paired devices")
+                    Text(L10n.tr("No paired devices", "Chưa có thiết bị ghép đôi"))
                         .font(Design.Text.caption)
                         .foregroundStyle(Design.Palette.tertiaryText)
                 }
@@ -406,7 +410,7 @@ extension PanelModuleView {
                     bluetoothConnectedRow(device)
                 }
                 if !bt.disconnectedDevices.isEmpty {
-                    VStack(alignment: .leading, spacing: Design.Space.xxs) {
+                    VStack(alignment: .leading, spacing: Design.Space.xs) {
                         ForEach(bt.disconnectedDevices) { device in
                             bluetoothDisconnectedRow(device)
                         }
@@ -421,20 +425,26 @@ extension PanelModuleView {
         let status = bluetoothConnectedValue(device)
         return VStack(alignment: .leading, spacing: Design.Space.xs) {
             HStack(spacing: Design.Space.s) {
-                Image(systemName: device.category.symbolName)
-                    .font(Design.Text.caption)
-                    .foregroundStyle(Design.Palette.secondaryText)
-                    .frame(width: Design.Space.l, alignment: .center)
+                BluetoothDeviceBadge(category: device.category, isConnected: true)
                 Text(device.name)
                     .font(Design.Text.label)
                     .foregroundStyle(Design.Palette.primaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Spacer(minLength: Design.Space.m)
-                Text(status)
-                    .font(Design.Text.caption.monospacedDigit())
-                    .foregroundStyle(Design.Palette.secondaryText)
-                    .lineLimit(1)
+                HStack(spacing: Design.Space.xs) {
+                    Text(status)
+                        .font(Design.Text.caption.monospacedDigit())
+                        .foregroundStyle(Design.Palette.secondaryText)
+                        .lineLimit(1)
+                    if device.parts.isEmpty, let percent = device.batteryPercent {
+                        Image(systemName: batterySymbolName(percent: percent, isCharging: device.isCharging))
+                            .font(.system(size: 12))
+                            .foregroundStyle(percent <= 20 && !device.isCharging
+                                             ? Color(nsColor: .systemRed)
+                                             : Design.Palette.secondaryText)
+                    }
+                }
             }
             if let percent = device.batteryPercent {
                 CapacityBar(fraction: percent / 100, tint: PanelModuleView.barTint)
@@ -442,30 +452,38 @@ extension PanelModuleView {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(device.name)
-        .accessibilityValue("Connected, \(status)")
+        .accessibilityValue(L10n.tr("Connected, \(status)", "Đã kết nối, \(status)"))
     }
 
     private func bluetoothDisconnectedRow(_ device: BluetoothDevice) -> some View {
         HStack(spacing: Design.Space.s) {
-            Image(systemName: device.category.symbolName)
-                .font(Design.Text.caption)
-                .foregroundStyle(Design.Palette.secondaryText)
-                .frame(width: Design.Space.l, alignment: .center)
+            BluetoothDeviceBadge(category: device.category, isConnected: false)
             Text(device.name)
                 .font(Design.Text.label)
                 .foregroundStyle(Design.Palette.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: Design.Space.m)
-            Text("Not connected")
+            Text(L10n.tr("Not connected", "Chưa kết nối"))
                 .font(Design.Text.caption)
                 .foregroundStyle(Design.Palette.tertiaryText)
                 .lineLimit(1)
         }
-        .opacity(0.55)
+        .opacity(0.65)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(device.name)
-        .accessibilityValue("Not connected")
+        .accessibilityValue(L10n.tr("Not connected", "Chưa kết nối"))
+    }
+
+    private func batterySymbolName(percent: Double, isCharging: Bool) -> String {
+        if isCharging { return "battery.100.bolt" }
+        switch percent {
+        case 88...: return "battery.100"
+        case 63...: return "battery.75"
+        case 38...: return "battery.50"
+        case 15...: return "battery.25"
+        default: return "battery.0"
+        }
     }
 
     /// Individual bud and case charges for multi-part earbuds, the percentage for a
@@ -477,6 +495,7 @@ extension PanelModuleView {
                 switch part.name.lowercased() {
                 case "left": label = "L"
                 case "right": label = "R"
+                case "case": label = L10n.tr("Case", "Hộp")
                 default: label = part.name
                 }
                 let charge = formatter.percentValue(part.percent)
@@ -485,12 +504,12 @@ extension PanelModuleView {
         }
         if let percent = device.batteryPercent {
             let charge = formatter.percentValue(percent)
-            return device.isCharging ? "\(charge) · charging" : charge
+            return device.isCharging ? "\(charge) · " + L10n.tr("charging", "đang sạc") : charge
         }
         if let rssi = device.rssi {
-            return "\(rssi) dBm · Connected"
+            return "\(rssi) dBm · " + L10n.tr("Connected", "Đã kết nối")
         }
-        return "Connected"
+        return L10n.tr("Connected", "Đã kết nối")
     }
 
     // MARK: Thermal
@@ -508,7 +527,7 @@ extension PanelModuleView {
     }
 
     private func thermalEntries(_ thermal: ThermalSnapshot) -> [PanelDetailEntry] {
-        var entries = [PanelDetailEntry("Pressure", thermal.pressure.label)]
+        var entries = [PanelDetailEntry(L10n.tr("Pressure", "Áp lực"), thermal.pressure.label)]
         if let gpu = thermal.gpuCelsius {
             entries.append(PanelDetailEntry("GPU", formatter.temperature(gpu)))
         }
@@ -612,7 +631,7 @@ extension PanelModuleView {
     private var systemDetail: some View {
         section(engine.system) { system in
             VStack(alignment: .leading, spacing: Design.Space.xxs) {
-                ReadoutRow("Model", system.modelName)
+                ReadoutRow(L10n.tr("Model", "Kiểu máy"), system.modelName)
                 PanelDetailGrid(entries: [
                     PanelDetailEntry("Chip", system.chipName),
                     PanelDetailEntry(system.osName, system.osVersion),
@@ -621,4 +640,35 @@ extension PanelModuleView {
         }
     }
 
+}
+
+/// Circular macOS Control Center-style icon badge for Bluetooth peripherals.
+private struct BluetoothDeviceBadge: View {
+    let category: BluetoothDeviceCategory
+    let isConnected: Bool
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private static let diameter: CGFloat = 20
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(backgroundColor)
+            Image(systemName: isConnected ? category.filledSymbolName : category.symbolName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(foregroundColor)
+        }
+        .frame(width: Self.diameter, height: Self.diameter)
+    }
+
+    private var backgroundColor: Color {
+        guard isConnected else { return Design.Palette.track }
+        return colorScheme == .dark ? .white : Design.Palette.accent
+    }
+
+    private var foregroundColor: Color {
+        guard isConnected else { return Design.Palette.secondaryText }
+        return colorScheme == .dark ? Design.Palette.accent : .white
+    }
 }

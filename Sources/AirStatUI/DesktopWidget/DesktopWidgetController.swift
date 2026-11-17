@@ -660,11 +660,11 @@ extension DesktopWidgetController {
         }
         menu.addItem(.separator())
 
-        let compact = menu.addItem(withTitle: "Compact", action: #selector(toggleCompact), keyEquivalent: "")
+        let compact = menu.addItem(withTitle: L10n.tr("Compact", "Thu gọn"), action: #selector(toggleCompact), keyEquivalent: "")
         compact.target = self
         compact.state = desktopWidget.isCompact ? .on : .off
 
-        let dim = menu.addItem(withTitle: "Dim When Inactive",
+        let dim = menu.addItem(withTitle: L10n.tr("Dim When Inactive", "Làm mờ khi không dùng"),
                                action: #selector(toggleDimming), keyEquivalent: "")
         dim.target = self
         dim.state = desktopWidget.dimsWhenInactive ? .on : .off
@@ -678,21 +678,23 @@ extension DesktopWidgetController {
             item.state = desktopWidget.depth == depth ? .on : .off
             item.toolTip = depth.detail
         }
-        menu.setSubmenu(layer, for: menu.addItem(withTitle: "Layer", action: nil, keyEquivalent: ""))
+        menu.setSubmenu(layer, for: menu.addItem(withTitle: L10n.tr("Layer", "Lớp hiển thị"), action: nil, keyEquivalent: ""))
 
-        let clickThrough = menu.addItem(withTitle: "Click-Through",
+        let clickThrough = menu.addItem(withTitle: L10n.tr("Click-Through", "Bấm xuyên qua"),
                                         action: #selector(toggleClickThrough), keyEquivalent: "")
         clickThrough.target = self
         clickThrough.state = desktopWidget.isClickThrough ? .on : .off
         // The one place the user is told how to undo it, at the moment they turn it on.
-        clickThrough.toolTip = "Clicks pass through to the window below. Hold ⌥⌘ to grab the desktop widget again, or turn this off in Settings."
+        clickThrough.toolTip = L10n.tr(
+            "Clicks pass through to the window below. Hold ⌥⌘ to grab the desktop widget again, or turn this off in Settings.",
+            "Thao tác chuột sẽ đi xuyên qua widget. Giữ ⌥⌘ để kéo lại widget, hoặc tắt tuỳ chọn này trong Cài đặt.")
 
         menu.addItem(.separator())
         if onRequestSettings != nil {
-            menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "")
+            menu.addItem(withTitle: L10n.tr("Settings…", "Cài đặt…"), action: #selector(openSettings), keyEquivalent: "")
                 .target = self
         }
-        menu.addItem(withTitle: "Hide Desktop Widget", action: #selector(hideDesktopWidget), keyEquivalent: "")
+        menu.addItem(withTitle: L10n.tr("Hide Desktop Widget", "Ẩn Widget màn hình"), action: #selector(hideDesktopWidget), keyEquivalent: "")
             .target = self
         return menu
     }

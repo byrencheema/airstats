@@ -23,8 +23,8 @@ public enum TemperatureUnit: String, Sendable, Codable, CaseIterable, Equatable,
 
     public var label: String {
         switch self {
-        case .celsius: return "Celsius (°C)"
-        case .fahrenheit: return "Fahrenheit (°F)"
+        case .celsius: return L10n.tr("Celsius (°C)", "Độ C (°C)")
+        case .fahrenheit: return L10n.tr("Fahrenheit (°F)", "Độ F (°F)")
         }
     }
     public var suffix: String {
@@ -42,8 +42,8 @@ public enum NetworkRateUnit: String, Sendable, Codable, CaseIterable, Equatable,
 
     public var label: String {
         switch self {
-        case .bytes: return "Bytes per second (MB/s)"
-        case .bits: return "Bits per second (Mbps)"
+        case .bytes: return L10n.tr("Bytes per second (MB/s)", "Byte mỗi giây (MB/s)")
+        case .bits: return L10n.tr("Bits per second (Mbps)", "Bit mỗi giây (Mbps)")
         }
     }
 }
@@ -57,8 +57,8 @@ public enum ByteUnitStyle: String, Sendable, Codable, CaseIterable, Equatable, H
 
     public var label: String {
         switch self {
-        case .binary: return "Binary (1 GB = 1024 MB)"
-        case .decimal: return "Decimal (1 GB = 1000 MB)"
+        case .binary: return L10n.tr("Binary (1 GB = 1024 MB)", "Nhị phân (1 GB = 1024 MB)")
+        case .decimal: return L10n.tr("Decimal (1 GB = 1000 MB)", "Thập phân (1 GB = 1000 MB)")
         }
     }
     public var base: Double { self == .binary ? 1024 : 1000 }
@@ -69,9 +69,9 @@ public enum AppearanceMode: String, Sendable, Codable, CaseIterable, Equatable, 
 
     public var label: String {
         switch self {
-        case .system: return "Match System"
-        case .light: return "Light"
-        case .dark: return "Dark"
+        case .system: return L10n.tr("Match System", "Theo hệ thống")
+        case .light: return L10n.tr("Light", "Sáng")
+        case .dark: return L10n.tr("Dark", "Tối")
         }
     }
 }
@@ -92,24 +92,24 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
 
     public var label: String {
         switch self {
-        case .cpuUsage: return "CPU Usage"
-        case .cpuTemperature: return "CPU Temperature"
-        case .cpuFrequency: return "CPU Frequency"
-        case .memoryUsage: return "Memory Usage"
-        case .memoryPressure: return "Memory Pressure"
-        case .gpuUsage: return "GPU Usage"
-        case .networkThroughput: return "Network (Up & Down)"
-        case .networkUpload: return "Network Upload"
-        case .networkDownload: return "Network Download"
-        case .diskActivity: return "Disk Activity"
-        case .diskFree: return "Disk Free"
-        case .battery: return "Battery"
-        case .batteryTime: return "Battery Time Remaining"
-        case .systemPower: return "System Power"
-        case .bluetoothDevices: return "Bluetooth Devices"
-        case .bluetoothBattery: return "Bluetooth Battery"
-        case .fanSpeed: return "Fan Speed"
-        case .uptime: return "Uptime"
+        case .cpuUsage: return L10n.tr("CPU Usage", "Mức dùng CPU")
+        case .cpuTemperature: return L10n.tr("CPU Temperature", "Nhiệt độ CPU")
+        case .cpuFrequency: return L10n.tr("CPU Frequency", "Xung nhịp CPU")
+        case .memoryUsage: return L10n.tr("Memory Usage", "Bộ nhớ sử dụng")
+        case .memoryPressure: return L10n.tr("Memory Pressure", "Áp lực bộ nhớ")
+        case .gpuUsage: return L10n.tr("GPU Usage", "Mức dùng GPU")
+        case .networkThroughput: return L10n.tr("Network (Up & Down)", "Mạng (Lên & Xuống)")
+        case .networkUpload: return L10n.tr("Network Upload", "Tải lên (Upload)")
+        case .networkDownload: return L10n.tr("Network Download", "Tải xuống (Download)")
+        case .diskActivity: return L10n.tr("Disk Activity", "Hoạt động ổ đĩa")
+        case .diskFree: return L10n.tr("Disk Free", "Dung lượng trống")
+        case .battery: return L10n.tr("Battery", "Pin")
+        case .batteryTime: return L10n.tr("Battery Time Remaining", "Thời lượng pin còn lại")
+        case .systemPower: return L10n.tr("System Power", "Công suất hệ thống")
+        case .bluetoothDevices: return L10n.tr("Bluetooth Devices", "Thiết bị Bluetooth")
+        case .bluetoothBattery: return L10n.tr("Bluetooth Battery", "Pin thiết bị Bluetooth")
+        case .fanSpeed: return L10n.tr("Fan Speed", "Tốc độ quạt")
+        case .uptime: return L10n.tr("Uptime", "Thời gian hoạt động")
         }
     }
 
@@ -179,13 +179,13 @@ public enum MenuBarDisplayStyle: String, Sendable, Codable, CaseIterable, Equata
 
     public var label: String {
         switch self {
-        case .text: return "Text"
-        case .graph: return "Graph"
-        case .textAndGraph: return "Text & Graph"
-        case .iconAndText: return "Icon & Text"
-        case .battery: return "Battery Indicator"
-        case .statusDot: return "Status Dot"
-        case .bar: return "Compact Bar"
+        case .text: return L10n.tr("Text", "Chữ")
+        case .graph: return L10n.tr("Graph", "Đồ thị")
+        case .textAndGraph: return L10n.tr("Text & Graph", "Chữ & Đồ thị")
+        case .iconAndText: return L10n.tr("Icon & Text", "Biểu tượng & Chữ")
+        case .battery: return L10n.tr("Battery Indicator", "Biểu tượng Pin")
+        case .statusDot: return L10n.tr("Status Dot", "Chấm trạng thái")
+        case .bar: return L10n.tr("Compact Bar", "Thanh gọn")
         }
     }
 
@@ -254,6 +254,8 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     /// the only surface left, and Settings is reached by launching the app again, by
     /// its hot key, or from the widget's context menu.
     public var isVisible: Bool
+    /// Draw the metric's icon above the value instead of a text caption when captions are on.
+    public var usesIconTitles: Bool
 
     /// Numbers are always set in a fixed-width face. Previously a toggle; a column of
     /// proportional digits shimmers as it changes, which is the single most visible
@@ -273,10 +275,12 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
 
     public init(items: [MenuBarItemConfig] = MenuBarSettings.defaultItems,
                 usesCombinedItem: Bool = true,
-                isVisible: Bool = true) {
+                isVisible: Bool = true,
+                usesIconTitles: Bool = false) {
         self.items = items
         self.usesCombinedItem = usesCombinedItem
         self.isVisible = isVisible
+        self.usesIconTitles = usesIconTitles
     }
 
     /// CPU, its temperature, GPU, and the battery.
@@ -309,7 +313,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
     public var enabledItems: [MenuBarItemConfig] { items.filter(\.isEnabled) }
 
     private enum CodingKeys: String, CodingKey {
-        case items, usesCombinedItem, isVisible
+        case items, usesCombinedItem, isVisible, usesIconTitles
     }
 
     /// Files written before the packing settings were removed still load: the keys
@@ -322,6 +326,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
         items = decodedItems.isEmpty ? MenuBarSettings.defaultItems : decodedItems.map { $0.sanitized() }
         usesCombinedItem = c.value(.usesCombinedItem, or: true)
         isVisible = c.value(.isVisible, or: true)
+        usesIconTitles = c.value(.usesIconTitles, or: false)
     }
 }
 
@@ -333,15 +338,15 @@ public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Has
     public var label: String {
         switch self {
         case .cpu: return "CPU"
-        case .memory: return "Memory"
+        case .memory: return L10n.tr("Memory", "Bộ nhớ")
         case .gpu: return "GPU"
-        case .network: return "Network"
-        case .disk: return "Disk"
-        case .battery: return "Battery"
+        case .network: return L10n.tr("Network", "Mạng")
+        case .disk: return L10n.tr("Disk", "Ổ đĩa")
+        case .battery: return L10n.tr("Battery", "Pin")
         case .bluetooth: return "Bluetooth"
-        case .thermal: return "Temperature"
-        case .processes: return "Top Processes"
-        case .system: return "System"
+        case .thermal: return L10n.tr("Temperature", "Nhiệt độ")
+        case .processes: return L10n.tr("Top Processes", "Tiến trình hàng đầu")
+        case .system: return L10n.tr("System", "Hệ thống")
         }
     }
 
@@ -455,9 +460,9 @@ public enum ChartStyle: String, Sendable, Codable, CaseIterable, Equatable, Hash
 
     public var label: String {
         switch self {
-        case .line: return "Line"
-        case .filledLine: return "Filled Line"
-        case .bars: return "Bars"
+        case .line: return L10n.tr("Line", "Đường")
+        case .filledLine: return L10n.tr("Filled Line", "Đường có nền")
+        case .bars: return L10n.tr("Bars", "Cột")
         }
     }
 }
@@ -514,11 +519,11 @@ public enum DesktopWidgetCorner: String, Sendable, Codable, CaseIterable, Equata
 
     public var label: String {
         switch self {
-        case .topLeft: return "Top Left"
-        case .topRight: return "Top Right"
-        case .bottomLeft: return "Bottom Left"
-        case .bottomRight: return "Bottom Right"
-        case .free: return "Custom Position"
+        case .topLeft: return L10n.tr("Top Left", "Trên trái")
+        case .topRight: return L10n.tr("Top Right", "Trên phải")
+        case .bottomLeft: return L10n.tr("Bottom Left", "Dưới trái")
+        case .bottomRight: return L10n.tr("Bottom Right", "Dưới phải")
+        case .free: return L10n.tr("Custom Position", "Vị trí tuỳ chỉnh")
         }
     }
 }
@@ -540,17 +545,17 @@ public enum DesktopWidgetDepth: String, Sendable, Codable, CaseIterable, Equatab
 
     public var label: String {
         switch self {
-        case .aboveEverything: return "Above Everything"
-        case .withWindows: return "With Other Windows"
-        case .wallpaper: return "On the Wallpaper"
+        case .aboveEverything: return L10n.tr("Above Everything", "Trên tất cả")
+        case .withWindows: return L10n.tr("With Other Windows", "Cùng các cửa sổ khác")
+        case .wallpaper: return L10n.tr("On the Wallpaper", "Trên hình nền")
         }
     }
 
     public var detail: String {
         switch self {
-        case .aboveEverything: return "Stays visible over full-screen apps."
-        case .withWindows: return "A normal floating window."
-        case .wallpaper: return "Behind every window, on the desktop picture."
+        case .aboveEverything: return L10n.tr("Stays visible over full-screen apps.", "Luôn hiển thị phía trên ứng dụng toàn màn hình.")
+        case .withWindows: return L10n.tr("A normal floating window.", "Cửa sổ nổi thông thường.")
+        case .wallpaper: return L10n.tr("Behind every window, on the desktop picture.", "Nằm sau mọi cửa sổ, ngay trên hình nền.")
         }
     }
 }
@@ -662,14 +667,14 @@ public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable,
 
     public var label: String {
         switch self {
-        case .cpuUsage: return "Sustained CPU usage above"
-        case .memoryPressure: return "Memory pressure above"
-        case .diskFree: return "Startup disk free space below"
-        case .batteryLow: return "Battery drops below"
-        case .batteryFull: return "Battery reaches"
-        case .bluetoothBatteryLow: return "Bluetooth battery drops below"
-        case .cpuTemperature: return "CPU temperature above"
-        case .thermalPressure: return "Thermal pressure reaches"
+        case .cpuUsage: return L10n.tr("Sustained CPU usage above", "CPU dùng liên tục vượt quá")
+        case .memoryPressure: return L10n.tr("Memory pressure above", "Áp lực bộ nhớ vượt quá")
+        case .diskFree: return L10n.tr("Startup disk free space below", "Ổ đĩa khởi động còn dưới")
+        case .batteryLow: return L10n.tr("Battery drops below", "Pin xuống dưới")
+        case .batteryFull: return L10n.tr("Battery reaches", "Pin đạt mức")
+        case .bluetoothBatteryLow: return L10n.tr("Bluetooth battery drops below", "Pin thiết bị Bluetooth xuống dưới")
+        case .cpuTemperature: return L10n.tr("CPU temperature above", "Nhiệt độ CPU vượt quá")
+        case .thermalPressure: return L10n.tr("Thermal pressure reaches", "Áp lực nhiệt đạt mức")
         }
     }
 
@@ -800,10 +805,10 @@ public enum ShortcutAction: String, Sendable, Codable, CaseIterable, Equatable, 
 
     public var label: String {
         switch self {
-        case .togglePanel: return "Show / Hide Panel"
-        case .toggleDesktopWidget: return "Show / Hide Desktop Widget"
-        case .toggleMenuBarItem: return "Show / Hide Menu Bar Item"
-        case .openSettings: return "Open Settings"
+        case .togglePanel: return L10n.tr("Show / Hide Panel", "Hiện / Ẩn bảng thống kê")
+        case .toggleDesktopWidget: return L10n.tr("Show / Hide Desktop Widget", "Hiện / Ẩn Widget màn hình")
+        case .toggleMenuBarItem: return L10n.tr("Show / Hide Menu Bar Item", "Hiện / Ẩn mục thanh Menu")
+        case .openSettings: return L10n.tr("Open Settings", "Mở Cài đặt")
         }
     }
 }
@@ -842,6 +847,7 @@ public struct GeneralSettings: Sendable, Codable, Equatable {
     /// the other being Sparkle's update check, which keeps its own preference.
     public var fetchesPublicIP: Bool
     public var showsDockIcon: Bool
+    public var language: AppLanguage
 
     public init(updateInterval: TimeInterval = 2,
                 launchAtLogin: Bool = true,
@@ -853,7 +859,8 @@ public struct GeneralSettings: Sendable, Codable, Equatable {
                 throttlesWhenOccluded: Bool = true,
                 pausesOnLowPower: Bool = false,
                 fetchesPublicIP: Bool = false,
-                showsDockIcon: Bool = false) {
+                showsDockIcon: Bool = false,
+                language: AppLanguage = .system) {
         self.updateInterval = updateInterval
         self.launchAtLogin = launchAtLogin
         self.appearance = appearance
@@ -865,6 +872,7 @@ public struct GeneralSettings: Sendable, Codable, Equatable {
         self.pausesOnLowPower = pausesOnLowPower
         self.fetchesPublicIP = fetchesPublicIP
         self.showsDockIcon = showsDockIcon
+        self.language = language
     }
 
     public static let allowedIntervals: [TimeInterval] = [0.5, 1, 2, 3, 5, 10, 30]
@@ -872,7 +880,7 @@ public struct GeneralSettings: Sendable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case updateInterval, launchAtLogin, appearance, temperatureUnit, networkRateUnit
         case byteUnitStyle, showsPercentSign, throttlesWhenOccluded, pausesOnLowPower
-        case fetchesPublicIP, showsDockIcon
+        case fetchesPublicIP, showsDockIcon, language
     }
 
     public init(from decoder: Decoder) throws {
@@ -888,6 +896,7 @@ public struct GeneralSettings: Sendable, Codable, Equatable {
         pausesOnLowPower = c.value(.pausesOnLowPower, or: false)
         fetchesPublicIP = c.value(.fetchesPublicIP, or: false)
         showsDockIcon = c.value(.showsDockIcon, or: false)
+        language = c.value(.language, or: AppLanguage.system)
     }
 }
 

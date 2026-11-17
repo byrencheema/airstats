@@ -14,6 +14,7 @@ public final class SettingsStore {
         didSet {
             guard settings != oldValue else { return }
             SettingsStore.currentTheme = settings.theme
+            SettingsStore.currentLanguage = settings.general.language
             revision &+= 1
             scheduleSave()
         }
@@ -30,6 +31,14 @@ public final class SettingsStore {
     /// Written only from `didSet` above and from `load`, both of which are main-actor
     /// confined, and always before the `revision` bump that makes SwiftUI re-read it.
     public nonisolated(unsafe) private(set) static var currentTheme = ThemeSettings()
+    public nonisolated(unsafe) private(set) static var currentLanguage: AppLanguage = .system
+
+    public static func withLanguage<T>(_ language: AppLanguage, perform body: () throws -> T) rethrows -> T {
+        let previous = currentLanguage
+        currentLanguage = language
+        defer { currentLanguage = previous }
+        return try body()
+    }
 
     /// Increments on every accepted change. Views observe this to recompute
     /// derived layout without diffing the whole settings tree.
@@ -55,6 +64,7 @@ public final class SettingsStore {
         // `didSet` does not fire during initialisation, so the first paint would use
         // the shipped palette and only pick up the user's colours on their next edit.
         SettingsStore.currentTheme = loaded.theme
+        SettingsStore.currentLanguage = loaded.general.language
     }
 
     /// Note that `HOME` does not redirect `applicationSupportDirectory`, so a test
@@ -105,13 +115,13 @@ public final class SettingsStore {
         /// than one of these.
         public var label: String {
             switch self {
-            case .general: return "General"
-            case .menuBar: return "Menu Bar"
-            case .charts: return "Charts"
-            case .desktopWidget: return "Desktop Widget"
-            case .notifications: return "Notifications"
-            case .shortcuts: return "Shortcuts"
-            case .theme: return "Colors"
+            case .general: return L10n.tr("General", "Chung")
+            case .menuBar: return L10n.tr("Menu Bar", "Thanh menu")
+            case .charts: return L10n.tr("Charts", "Biểu đồ")
+            case .desktopWidget: return L10n.tr("Desktop Widget", "Widget màn hình")
+            case .notifications: return L10n.tr("Notifications", "Thông báo")
+            case .shortcuts: return L10n.tr("Shortcuts", "Phím tắt")
+            case .theme: return L10n.tr("Colors", "Màu sắc")
             }
         }
     }

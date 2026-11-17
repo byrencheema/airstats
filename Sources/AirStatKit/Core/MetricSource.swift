@@ -8,15 +8,15 @@ public enum CollectorID: String, Sendable, Equatable, Hashable, CaseIterable, Co
     public var label: String {
         switch self {
         case .cpu: return "CPU"
-        case .memory: return "Memory"
+        case .memory: return L10n.tr("Memory", "Bộ nhớ")
         case .gpu: return "GPU"
-        case .network: return "Network"
-        case .disk: return "Disk"
-        case .power: return "Battery"
+        case .network: return L10n.tr("Network", "Mạng")
+        case .disk: return L10n.tr("Disk", "Ổ đĩa")
+        case .power: return L10n.tr("Battery", "Pin")
         case .bluetooth: return "Bluetooth"
-        case .thermal: return "Temperature"
-        case .processes: return "Processes"
-        case .system: return "System"
+        case .thermal: return L10n.tr("Temperature", "Nhiệt độ")
+        case .processes: return L10n.tr("Processes", "Tiến trình")
+        case .system: return L10n.tr("System", "Hệ thống")
         }
     }
 

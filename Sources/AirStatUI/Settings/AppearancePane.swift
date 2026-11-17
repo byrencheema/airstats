@@ -16,7 +16,7 @@ struct AppearancePane: View {
     var body: some View {
         Form {
             Section {
-                Picker("Theme", selection: settings.binding(\.general.appearance,
+                Picker(L10n.tr("Theme", "Chủ đề"), selection: settings.binding(\.general.appearance,
                                                             onChange: applyAppearance)) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(mode.label).tag(mode)
@@ -32,7 +32,7 @@ struct AppearancePane: View {
                 // how the whole app looks. Filed among the nine per-metric rows it
                 // read as a tenth metric called "All Metrics", and its reach over the
                 // rows beneath it was something you had to discover by using it.
-                ColorRow(label: "All Metrics",
+                ColorRow(label: L10n.tr("All Metrics", "Tất cả chỉ số"),
                          symbol: "circle.hexagongrid.fill",
                          current: theme.uniformColor.map(Color.init(themeColor:))
                              ?? Design.Palette.primaryText,
@@ -44,13 +44,14 @@ struct AppearancePane: View {
                          // different colours and not only nine matching ones.
                          isOverridden: !theme.metrics.isEmpty,
                          status: allMetricsStatus,
-                         defaultTitle: "Use Defaults",
+                         defaultTitle: L10n.tr("Use Defaults", "Dùng mặc định"),
                          set: { color in
                              settings.update { $0.theme.setAllColors(color) }
                          })
             } footer: {
-                SettingsFootnote("All Metrics sets every colour below at once. "
-                                 + "Each metric can still be changed on its own.")
+                SettingsFootnote(L10n.tr(
+                    "All Metrics sets every colour below at once. Each metric can still be changed on its own.",
+                    "Tất cả chỉ số sẽ đổi toàn bộ màu bên dưới cùng lúc. Bạn vẫn có thể chỉnh riêng từng mục."))
             }
 
             // A board rather than nine rows. One colour per metric is a palette, and a
@@ -69,24 +70,24 @@ struct AppearancePane: View {
                     ForEach(CollectorID.allCases, id: \.self) { id in colorChip(id) }
                 }
             } header: {
-                Text("Metric Colours")
+                Text(L10n.tr("Metric Colours", "Màu sắc chỉ số"))
             }
 
             Section {
-                Picker("Chart style", selection: settings.binding(\.charts.style)) {
+                Picker(L10n.tr("Chart style", "Kiểu biểu đồ"), selection: settings.binding(\.charts.style)) {
                     ForEach(ChartStyle.allCases, id: \.self) { style in
                         Text(style.label).tag(style)
                     }
                 }
-                Picker("Keep history for", selection: settings.binding(\.charts.historyDuration)) {
+                Picker(L10n.tr("Keep history for", "Lưu lịch sử trong"), selection: settings.binding(\.charts.historyDuration)) {
                     ForEach(ChartSettings.allowedDurations, id: \.self) { duration in
                         Text(SettingsLabels.duration(duration)).tag(duration)
                     }
                 }
-                Toggle("Show a 24-hour history in the panel",
+                Toggle(L10n.tr("Show a 24-hour history in the panel", "Hiện biểu đồ 24 giờ trong bảng"),
                        isOn: settings.binding(\.panel.showsHistoryChart))
             } header: {
-                Text("Charts")
+                Text(L10n.tr("Charts", "Biểu đồ"))
             }
 
         }
@@ -108,9 +109,9 @@ struct AppearancePane: View {
             Spacer(minLength: Design.Space.s)
             SwatchButton(current: Design.Palette.metric(id),
                          isOverridden: theme.color(for: id) != nil,
-                         defaultTitle: "Use Default",
-                         label: "\(id.label) colour",
-                         value: theme.color(for: id) != nil ? "Custom" : "Default",
+                         defaultTitle: L10n.tr("Use Default", "Dùng mặc định"),
+                         label: L10n.tr("\(id.label) colour", "Màu \(id.label)"),
+                         value: theme.color(for: id) != nil ? L10n.tr("Custom", "Tuỳ chỉnh") : L10n.tr("Default", "Mặc định"),
                          set: { color in
                              settings.update { $0.theme.setColor(color, for: id) }
                          })
@@ -121,7 +122,7 @@ struct AppearancePane: View {
     /// not the only answer here: nine rows can disagree, and calling that "Custom"
     /// would claim the swatch beside it is the colour they are all on.
     private var allMetricsStatus: String? {
-        theme.uniformColor == nil && !theme.metrics.isEmpty ? "Mixed" : nil
+        theme.uniformColor == nil && !theme.metrics.isEmpty ? L10n.tr("Mixed", "Hỗn hợp") : nil
     }
 
     /// The theme is process state rather than a stored value, so the store alone would

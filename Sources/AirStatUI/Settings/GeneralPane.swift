@@ -14,50 +14,55 @@ struct GeneralPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Open AirStats at login",
+                Picker(L10n.tr("Language", "Ngôn ngữ"), selection: settings.binding(\.general.language)) {
+                    ForEach(AppLanguage.allCases, id: \.self) { lang in
+                        Text(lang.label).tag(lang)
+                    }
+                }
+                Toggle(L10n.tr("Open AirStats at login", "Mở AirStats khi đăng nhập"),
                        isOn: settings.binding(\.general.launchAtLogin, onChange: applyLoginItem))
                 if let loginItemError {
                     SettingsCaution(loginItemError)
                 }
-                Toggle("Show icon in the Dock",
+                Toggle(L10n.tr("Show icon in the Dock", "Hiện biểu tượng trên Dock"),
                        isOn: settings.binding(\.general.showsDockIcon, onChange: applyDockIcon))
             } header: {
-                Text("Startup")
+                Text(L10n.tr("Startup", "Khởi động & Ngôn ngữ"))
             }
 
             Section {
-                Picker("Update interval", selection: settings.binding(\.general.updateInterval)) {
+                Picker(L10n.tr("Update interval", "Chu kỳ cập nhật"), selection: settings.binding(\.general.updateInterval)) {
                     ForEach(GeneralSettings.allowedIntervals, id: \.self) { interval in
                         Text(SettingsLabels.interval(interval)).tag(interval)
                     }
                 }
-                Toggle("Slow down when the menu bar is hidden",
+                Toggle(L10n.tr("Slow down when the menu bar is hidden", "Giảm tần suất khi thanh Menu bị ẩn"),
                        isOn: settings.binding(\.general.throttlesWhenOccluded))
-                Toggle("Pause sampling on Low Power Mode",
+                Toggle(L10n.tr("Pause sampling on Low Power Mode", "Tạm dừng khi bật Chế độ nguồn điện thấp"),
                        isOn: settings.binding(\.general.pausesOnLowPower))
             } header: {
-                Text("Sampling")
+                Text(L10n.tr("Sampling", "Lấy mẫu"))
             }
 
             Section {
-                Picker("Temperature", selection: settings.binding(\.general.temperatureUnit)) {
+                Picker(L10n.tr("Temperature", "Nhiệt độ"), selection: settings.binding(\.general.temperatureUnit)) {
                     ForEach(TemperatureUnit.allCases, id: \.self) { unit in
                         Text(unit.label).tag(unit)
                     }
                 }
-                Picker("Network rate", selection: settings.binding(\.general.networkRateUnit)) {
+                Picker(L10n.tr("Network rate", "Tốc độ mạng"), selection: settings.binding(\.general.networkRateUnit)) {
                     ForEach(NetworkRateUnit.allCases, id: \.self) { unit in
                         Text(unit.label).tag(unit)
                     }
                 }
-                Picker("Storage sizes", selection: settings.binding(\.general.byteUnitStyle)) {
+                Picker(L10n.tr("Storage sizes", "Dung lượng lưu trữ"), selection: settings.binding(\.general.byteUnitStyle)) {
                     ForEach(ByteUnitStyle.allCases, id: \.self) { style in
                         Text(style.label).tag(style)
                     }
                 }
-                Toggle("Show the percent sign", isOn: settings.binding(\.general.showsPercentSign))
+                Toggle(L10n.tr("Show the percent sign", "Hiển thị dấu phần trăm (%)"), isOn: settings.binding(\.general.showsPercentSign))
             } header: {
-                Text("Units")
+                Text(L10n.tr("Units", "Đơn vị"))
             }
 
             // Every update control in one place. The two automatic-update toggles were
@@ -71,41 +76,42 @@ struct GeneralPane: View {
                 // notes and the Install button.
                 HStack(spacing: Design.Space.l) {
                     if let pending = updater?.pending {
-                        Button(pending.isReadyToInstall ? "Restart" : "Install…") {
+                        Button(pending.isReadyToInstall ? L10n.tr("Restart", "Khởi động lại") : L10n.tr("Install…", "Cài đặt…")) {
                             updater?.installPending()
                         }
                         .accessibilityHint(pending.isReadyToInstall
-                                           ? "Relaunches AirStats into the new version"
-                                           : "Opens the updater to install it")
+                                           ? L10n.tr("Relaunches AirStats into the new version", "Khởi động lại AirStats vào phiên bản mới")
+                                           : L10n.tr("Opens the updater to install it", "Mở trình cập nhật để cài đặt"))
                     } else {
-                        Button("Check Now") { updater?.checkQuietly() }
+                        Button(L10n.tr("Check Now", "Kiểm tra ngay")) { updater?.checkQuietly() }
                             .disabled(updater?.canCheck != true)
-                            .accessibilityHint("Asks airstats.app whether a newer version exists")
+                            .accessibilityHint(L10n.tr("Asks airstats.app whether a newer version exists", "Kiểm tra phiên bản mới từ airstats.app"))
                     }
                     Spacer()
                     updateStatus
                 }
                 // Stored by Sparkle rather than in the settings file, so this reads and
                 // writes the updater itself. Only the offscreen renderer has none.
-                Toggle("Check for updates automatically", isOn: checksAutomatically)
+                Toggle(L10n.tr("Check for updates automatically", "Tự động kiểm tra cập nhật"), isOn: checksAutomatically)
                     .disabled(updater == nil)
                 // Sparkle offers the same choice the first time it installs something,
                 // and takes the answer as standing. Without this row the only way back
                 // is to wait for another release and refuse it there.
-                Toggle("Install updates automatically", isOn: installsAutomatically)
+                Toggle(L10n.tr("Install updates automatically", "Tự động cài đặt cập nhật"), isOn: installsAutomatically)
                     .disabled(updater == nil || !(updater?.checksAutomatically ?? false))
             } header: {
-                Text("Updates")
+                Text(L10n.tr("Updates", "Cập nhật"))
             }
 
             Section {
-                Toggle("Look up my public IP address",
+                Toggle(L10n.tr("Look up my public IP address", "Tra cứu địa chỉ IP công khai"),
                        isOn: settings.binding(\.general.fetchesPublicIP))
             } header: {
-                Text("Privacy")
+                Text(L10n.tr("Privacy", "Quyền riêng tư"))
             } footer: {
-                SettingsFootnote("Left off, the Network module shows your local "
-                                 + "addresses only and AirStats contacts nothing.")
+                SettingsFootnote(L10n.tr(
+                    "Left off, the Network module shows your local addresses only and AirStats contacts nothing.",
+                    "Khi tắt, mục Mạng chỉ hiển thị IP nội bộ và AirStats không gửi bất kỳ yêu cầu mạng nào."))
             }
         }
         .settingsFormStyle()
@@ -133,24 +139,25 @@ struct GeneralPane: View {
         if updater?.isChecking == true {
             HStack(spacing: Design.Space.s) {
                 ProgressView().controlSize(.small)
-                Text("Checking…")
+                Text(L10n.tr("Checking…", "Đang kiểm tra…"))
             }
             .foregroundStyle(.secondary)
         } else if let failure = updater?.lastCheckFailure {
-            Text("Couldn't check")
+            Text(L10n.tr("Couldn't check", "Không thể kiểm tra"))
                 .foregroundStyle(.secondary)
                 .help(failure)
                 .accessibilityValue(failure)
         } else if updater?.pending != nil || updater?.lastCheck != nil {
             VStack(alignment: .trailing, spacing: Design.Space.xxs) {
                 if let pending = updater?.pending {
-                    Text(pending.isReadyToInstall ? "AirStats \(pending.version) is ready"
-                                                  : "AirStats \(pending.version) is available")
+                    Text(pending.isReadyToInstall
+                         ? L10n.tr("AirStats \(pending.version) is ready", "AirStats \(pending.version) đã sẵn sàng")
+                         : L10n.tr("AirStats \(pending.version) is available", "Đã có AirStats \(pending.version)"))
                 } else {
-                    Text("Up to date")
+                    Text(L10n.tr("Up to date", "Đã mới nhất"))
                 }
                 if let checked = updater?.lastCheck {
-                    Text("Checked \(Self.checkedPhrase(checked))")
+                    Text(L10n.tr("Checked \(Self.checkedPhrase(checked))", "Đã kiểm tra \(Self.checkedPhrase(checked))"))
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }

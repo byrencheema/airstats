@@ -162,15 +162,19 @@ final class AppCoordinator {
     }
 
     private func showContextMenu() {
+        let lang = settingsStore.settings.general.language
         let menu = NSMenu()
-        menu.addItem(withTitle: "Settings…", action: #selector(menuShowSettings), keyEquivalent: ",")
+        menu.addItem(withTitle: L10n.tr("Settings…", "Cài đặt…", language: lang),
+                     action: #selector(menuShowSettings), keyEquivalent: ",")
             .target = self
-        let desktopWidgetItem = menu.addItem(withTitle: "Show Desktop Widget",
-                                       action: #selector(menuToggleDesktopWidget), keyEquivalent: "")
+        let desktopWidgetItem = menu.addItem(
+            withTitle: L10n.tr("Show Desktop Widget", "Hiện Widget màn hình", language: lang),
+            action: #selector(menuToggleDesktopWidget), keyEquivalent: "")
         desktopWidgetItem.target = self
         desktopWidgetItem.state = settingsStore.settings.desktopWidget.isEnabled ? .on : .off
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit AirStats", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: L10n.tr("Quit AirStats", "Thoát AirStats", language: lang),
+                     action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.presentMenu(menu)
     }
 

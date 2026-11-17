@@ -18,33 +18,42 @@ struct MenuBarPane: View {
     var body: some View {
         Form {
             Section {
-                Toggle("Show in the menu bar", isOn: settings.binding(\.menuBar.isVisible))
+                Toggle(L10n.tr("Show in the menu bar", "Hiển thị trên thanh Menu"),
+                       isOn: settings.binding(\.menuBar.isVisible))
             }
 
             Section {
                 MenuBarPreviewStrip(model: previewModel, isEmpty: previewModel.items.isEmpty)
                     .listRowInsets(EdgeInsets())
             } header: {
-                Text("Preview")
+                Text(L10n.tr("Preview", "Xem trước"))
             }
 
             Section {
                 readoutList
                 readoutListControls
             } header: {
-                Text("Readouts")
+                Text(L10n.tr("Readouts", "Chỉ số"))
             }
             .disabled(!isVisible)
 
             Section {
-                Toggle("Combine into one menu bar item",
+                Toggle(L10n.tr("Use icons as titles instead of text",
+                               "Dùng icon làm tiêu đề thay cho chữ"),
+                       isOn: settings.binding(\.menuBar.usesIconTitles))
+                Toggle(L10n.tr("Combine into one menu bar item",
+                               "Gộp thành một mục trên thanh Menu"),
                        isOn: settings.binding(\.menuBar.usesCombinedItem))
             } header: {
-                Text("Layout")
+                Text(L10n.tr("Layout", "Bố cục"))
             } footer: {
-                Text("One item keeps the readouts together and in order. Separate items "
-                     + "can be rearranged among your other menu bar icons, and macOS "
-                     + "hides them one at a time when the bar runs out of room.")
+                Text(L10n.tr(
+                    "One item keeps the readouts together and in order. Separate items "
+                    + "can be rearranged among your other menu bar icons, and macOS "
+                    + "hides them one at a time when the bar runs out of room.",
+                    "Gộp chung giữ các chỉ số cạnh nhau đúng thứ tự. Tách riêng cho phép bạn "
+                    + "kéo sắp xếp xen kẽ với các biểu tượng hệ thống khác và macOS sẽ ẩn "
+                    + "từng mục khi thanh Menu hết chỗ."))
                 .font(.callout)
                 .foregroundStyle(Design.Palette.secondaryText)
             }
@@ -100,7 +109,7 @@ struct MenuBarPane: View {
             RowMenu(title: item.metric.label,
                     width: Self.metricColumn,
                     label: "\(item.metric.label) metric") {
-                Picker("Metric", selection: metricBinding(for: item)) {
+                Picker(L10n.tr("Metric", "Chỉ số"), selection: metricBinding(for: item)) {
                     ForEach(MenuBarMetric.allCases, id: \.self) { metric in
                         Text(metric.label).tag(metric)
                     }
@@ -132,9 +141,9 @@ struct MenuBarPane: View {
             // list of the same metrics doing the same job.
             RowIconButton(systemName: "trash",
                           help: items.count <= 1
-                              ? "The last readout cannot be removed."
-                              : "Remove \(item.metric.label) from the menu bar",
-                          label: "Remove \(item.metric.label)") {
+                              ? L10n.tr("The last readout cannot be removed.", "Không thể xoá chỉ số cuối cùng.")
+                              : L10n.tr("Remove \(item.metric.label) from the menu bar", "Xoá \(item.metric.label) khỏi thanh Menu"),
+                          label: L10n.tr("Remove \(item.metric.label)", "Xoá \(item.metric.label)")) {
                 remove(item)
             }
             .disabled(items.count <= 1)
@@ -152,7 +161,7 @@ struct MenuBarPane: View {
     private func styleMenu(_ item: MenuBarItemConfig) -> some View {
         RowMenu(title: item.style.label,
                 label: "\(item.metric.label) display style") {
-            Picker("Display as", selection: styleBinding(for: item)) {
+            Picker(L10n.tr("Display as", "Kiểu hiển thị"), selection: styleBinding(for: item)) {
                 ForEach(item.metric.supportedStyles, id: \.self) { style in
                     Text(style.label).tag(style)
                 }
@@ -182,15 +191,15 @@ struct MenuBarPane: View {
                         // a readout this machine cannot serve may work on the next.
                         Text(availability.note(for: metric) == nil
                              ? metric.label
-                             : "\(metric.label) (unavailable here)")
+                             : L10n.tr("\(metric.label) (unavailable here)", "\(metric.label) (không khả dụng)"))
                     }
                 }
             } label: {
-                Label("Add Readout", systemImage: "plus")
+                Label(L10n.tr("Add Readout", "Thêm chỉ số"), systemImage: "plus")
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .accessibilityLabel("Add a readout")
+            .accessibilityLabel(L10n.tr("Add a readout", "Thêm một chỉ số"))
 
             Spacer()
         }
@@ -202,10 +211,13 @@ struct MenuBarPane: View {
     private func captionToggleTitle(for item: MenuBarItemConfig) -> String {
         if item.style == .bar {
             let label = MenuBarRenderModel.sideCaptionText(for: item.metric) ?? item.metric.label
-            return "Show \"\(label)\" beside the bar"
+            return L10n.tr("Show \"\(label)\" beside the bar", "Hiện \"\(label)\" bên cạnh thanh")
+        }
+        if settings.settings.menuBar.usesIconTitles {
+            return L10n.tr("Show icon above the value", "Hiện icon phía trên giá trị")
         }
         let label = MenuBarRenderModel.captionText(for: item.metric) ?? item.metric.label
-        return "Show \"\(label)\" above the value"
+        return L10n.tr("Show \"\(label)\" above the value", "Hiện \"\(label)\" phía trên giá trị")
     }
 
     // MARK: Model access

@@ -51,6 +51,9 @@ public struct MenuBarItemRender: Equatable, Sendable {
     /// Set when the metric is unavailable; the view greys the readout and shows a dash.
     public var isUnavailable: Bool
     public var symbolName: String?
+    /// Draw `symbolName` as the readout's title (above the value when stacked, or beside
+    /// a bare graph) instead of the text `caption`.
+    public var usesIconTitle: Bool
     public var accessibilityLabel: String
     /// Charge as 0...1, for the `.battery` style. Nil on every other readout.
     ///
@@ -126,6 +129,7 @@ public struct MenuBarItemRender: Equatable, Sendable {
                 tint: ThemeColor? = nil, caption: String?,
                 primary: MenuBarLine, secondary: MenuBarLine? = nil,
                 isUnavailable: Bool, symbolName: String?,
+                usesIconTitle: Bool = false,
                 accessibilityLabel: String,
                 batteryCharge: Double? = nil,
                 isBatteryCharging: Bool = false,
@@ -142,6 +146,7 @@ public struct MenuBarItemRender: Equatable, Sendable {
         self.secondary = secondary
         self.isUnavailable = isUnavailable
         self.symbolName = symbolName
+        self.usesIconTitle = usesIconTitle
         self.accessibilityLabel = accessibilityLabel
         self.batteryCharge = batteryCharge
         self.isBatteryCharging = isBatteryCharging
@@ -197,6 +202,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                formatter: MetricFormatter,
                                settings: Settings) -> MenuBarItemRender {
         let metric = config.metric
+        let lang = settings.general.language
         let dash = MetricFormatter.unavailable
         let widest = formatter.widestSample(for: metric)
 
@@ -205,7 +211,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         var unavailable = true
         // Named, not a bare "unavailable": VoiceOver reads the whole item as one string,
         // and three anonymous "unavailable"s in a row say nothing about what is missing.
-        var accessibilityValue = "\(metric.label) unavailable"
+        var accessibilityValue = L10n.tr("\(metric.label) unavailable",
+                                         "\(metric.label) không khả dụng", language: lang)
         // Set only by the two-number metrics; its presence is what makes the readout
         // stack rather than run on.
         var secondary: MenuBarLine?
@@ -214,6 +221,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         var battery: BatteryState?
         // Set only by the fraction metrics, whose bar style draws the value as a fill.
         var level: Double?
+        // Allows dynamic per-device icon resolution (e.g. connected Bluetooth device category).
+        var customSymbolName: String?
 
         switch metric {
         case .cpuUsage:
@@ -278,7 +287,9 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 valueText = formatter.networkRate(net.downloadBytesPerSecond)
                 uploadText = formatter.networkRate(net.uploadBytesPerSecond)
                 unavailable = false
-                accessibilityValue = "Network up \(uploadText), down \(valueText)"
+                accessibilityValue = L10n.tr("Network up \(uploadText), down \(valueText)",
+                                             "Mạng tải lên \(uploadText), tải xuống \(valueText)",
+                                             language: lang)
                 let online = net.connectionType != .none
                 networkStatus = .init(
                     isOnline: online,
@@ -286,7 +297,9 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                                           history, .networkDownload),
                     isSending: online && recentlyActive(net.uploadBytesPerSecond,
                                                         history, .networkUpload))
-                if !online { accessibilityValue = "Network offline" }
+                if !online {
+                    accessibilityValue = L10n.tr("Network offline", "Mạng ngoại tuyến", language: lang)
+                }
             }
             // Down and up share one scale so the two stacked graphs are comparable;
             // normalising each to its own peak would make a trickle of upload look
@@ -359,11 +372,11 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 // The indicator style takes the digits off the screen, so this is the
                 // only place the exact charge is still stated. It says everything the
                 // shape says: the number, that power is going in, that it is low.
-                accessibilityValue = "Battery \(valueText)"
+                accessibilityValue = L10n.tr("Battery \(valueText)", "Pin \(valueText)", language: lang)
                 if power.isCharging {
-                    accessibilityValue += ", charging"
+                    accessibilityValue += L10n.tr(", charging", ", đang sạc", language: lang)
                 } else if isLow {
-                    accessibilityValue += ", low"
+                    accessibilityValue += L10n.tr(", low", ", pin yếu", language: lang)
                 }
             }
             seriesKey = .batteryPercent
@@ -374,7 +387,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 if let remaining {
                     valueText = formatter.duration(remaining)
                     unavailable = false
-                    accessibilityValue = "Battery time \(valueText)"
+                    accessibilityValue = L10n.tr("Battery time \(valueText)",
+                                                 "Thời lượng pin \(valueText)", language: lang)
                 }
             }
 
@@ -382,7 +396,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let watts = snapshot.power.value?.systemWatts {
                 valueText = formatter.watts(watts)
                 unavailable = false
-                accessibilityValue = "System power \(valueText)"
+                accessibilityValue = L10n.tr("System power \(valueText)",
+                                             "Công suất hệ thống \(valueText)", language: lang)
             }
             seriesKey = .systemWatts
 
@@ -391,10 +406,11 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                 unavailable = false
                 if bt.isPoweredOn {
                     valueText = formatter.count(bt.connectedCount)
-                    accessibilityValue = "Bluetooth \(valueText) connected"
+                    accessibilityValue = L10n.tr("Bluetooth \(valueText) connected",
+                                                 "Bluetooth \(valueText) đang kết nối", language: lang)
                 } else {
-                    valueText = "Off"
-                    accessibilityValue = "Bluetooth off"
+                    valueText = L10n.tr("Off", "Tắt", language: lang)
+                    accessibilityValue = L10n.tr("Bluetooth off", "Bluetooth đã tắt", language: lang)
                 }
             }
 
@@ -402,7 +418,10 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             if let bt = snapshot.bluetooth.value, let lowest = bt.lowestBatteryDevice() {
                 valueText = formatter.percentValue(lowest.percent)
                 unavailable = false
-                accessibilityValue = "Bluetooth battery \(lowest.device.name) \(valueText)"
+                customSymbolName = lowest.device.category.symbolName
+                accessibilityValue = L10n.tr("Bluetooth battery \(lowest.device.name) \(valueText)",
+                                             "Pin Bluetooth \(lowest.device.name) \(valueText)",
+                                             language: lang)
             }
 
         case .fanSpeed:
@@ -422,12 +441,13 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         }
 
         let series = seriesKey.map { normalizedSeries(history, key: $0) } ?? []
-        return finish(config: config, caption: caption(for: config),
+        return finish(config: config, caption: caption(for: config, language: lang),
                       primary: MenuBarLine(valueText: valueText, widestText: widest,
                                            series: series),
                       secondary: nil,
                       unavailable: unavailable, accessibility: accessibilityValue,
-                      settings: settings, battery: battery,
+                      settings: settings, symbolNameOverride: customSymbolName,
+                      battery: battery,
                       level: level.map { min(max($0, 0), 1) })
     }
 
@@ -447,11 +467,17 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                unavailable: Bool,
                                accessibility: String,
                                settings: Settings,
+                               symbolNameOverride: String? = nil,
                                battery: BatteryState? = nil,
                                networkStatus: MenuBarItemRender.NetworkStatus? = nil,
                                level: Double? = nil,
                                pairOrder: MenuBarItemRender.PairOrder = .inline) -> MenuBarItemRender {
-        MenuBarItemRender(
+        let resolvedSymbol = symbolNameOverride ?? symbolName(for: config.metric)
+        let usesIconTitle = settings.menuBar.usesIconTitles
+            && caption != nil
+            && config.style != .bar
+            && resolvedSymbol != nil
+        return MenuBarItemRender(
             id: config.id,
             style: config.style,
             // Only a colour the user actually picked. The shipped metric colours stay
@@ -463,7 +489,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             primary: primary,
             secondary: secondary,
             isUnavailable: unavailable,
-            symbolName: symbolName(for: config.metric),
+            symbolName: resolvedSymbol,
+            usesIconTitle: usesIconTitle,
             accessibilityLabel: accessibility,
             batteryCharge: battery?.charge,
             isBatteryCharging: battery?.isCharging ?? false,
@@ -482,27 +509,30 @@ public struct MenuBarRenderModel: Equatable, Sendable {
     /// The exceptions are the two styles that already name their metric with a glyph:
     /// "CPU" beside a CPU icon says it twice, and "BATT" beside the system's own battery
     /// indicator says it to the one audience on earth that did not need telling.
-    private static func caption(for config: MenuBarItemConfig) -> String? {
+    private static func caption(for config: MenuBarItemConfig,
+                                language: AppLanguage = SettingsStore.currentLanguage) -> String? {
         guard config.style.supportsCaption, config.showsCaption else { return nil }
-        if config.style == .bar { return sideCaptionText(for: config.metric) }
-        return captionText(for: config.metric)
+        if config.style == .bar { return sideCaptionText(for: config.metric, language: language) }
+        return captionText(for: config.metric, language: language)
     }
 
     /// The caption stacked beside a bar, one letter to a row. Three rows is all a
     /// 22-point item has room for, so "PRESS" does not fit.
-    public static func sideCaptionText(for metric: MenuBarMetric) -> String? {
+    public static func sideCaptionText(for metric: MenuBarMetric,
+                                       language: AppLanguage = SettingsStore.currentLanguage) -> String? {
         switch metric {
         case .memoryPressure: return "PRS"
-        default: return captionText(for: metric)
+        default: return captionText(for: metric, language: language)
         }
     }
 
     /// The short label a metric is captioned with. Public so the settings pane can
     /// quote the exact string the menu bar will draw rather than describing it.
-    public static func captionText(for metric: MenuBarMetric) -> String? {
+    public static func captionText(for metric: MenuBarMetric,
+                                   language: AppLanguage = SettingsStore.currentLanguage) -> String? {
         switch metric {
         case .cpuUsage: return "CPU"
-        case .cpuTemperature: return "TEMP"
+        case .cpuTemperature: return L10n.tr("TEMP", "NHIỆT", language: language)
         case .cpuFrequency: return "FREQ"
         case .memoryUsage: return "MEM"
         case .memoryPressure: return "PRESS"
@@ -511,14 +541,14 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .networkUpload: return "NET ↑"
         case .networkDownload: return "NET ↓"
         case .diskActivity: return nil
-        case .diskFree: return "FREE"
-        case .battery: return "BATT"
-        case .batteryTime: return "LEFT"
-        case .systemPower: return "PWR"
+        case .diskFree: return L10n.tr("FREE", "TRỐNG", language: language)
+        case .battery: return L10n.tr("BATT", "PIN", language: language)
+        case .batteryTime: return L10n.tr("LEFT", "CÒN", language: language)
+        case .systemPower: return L10n.tr("PWR", "ĐIỆN", language: language)
         case .bluetoothDevices: return "BT"
         case .bluetoothBattery: return "BT"
-        case .fanSpeed: return "FAN"
-        case .uptime: return "UP"
+        case .fanSpeed: return L10n.tr("FAN", "QUẠT", language: language)
+        case .uptime: return L10n.tr("UP", "BẬT", language: language)
         }
     }
 

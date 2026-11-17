@@ -58,6 +58,34 @@ enum RenderCLI {
             // module can grow.
             case "--history":
                 settings.desktopWidget.showsHistoryChart = true
+            case "--icon-titles":
+                settings.menuBar.usesIconTitles = true
+            case "--lang":
+                index += 1
+                let raw = (arguments[safe: index] ?? "").lowercased()
+                switch raw {
+                case "en", "english":
+                    settings.general.language = .english
+                case "vi", "vietnamese":
+                    settings.general.language = .vietnamese
+                case "system":
+                    settings.general.language = .system
+                default:
+                    FileHandle.standardError.write(Data("--lang wants one of: system, english, vietnamese\n".utf8))
+                    exit(2)
+                }
+            case "--menu-metrics":
+                index += 1
+                let names = (arguments[safe: index] ?? "").split(separator: ",")
+                let parsed = names.compactMap { MenuBarMetric(rawValue: String($0)) }
+                guard parsed.count == names.count, !parsed.isEmpty else {
+                    FileHandle.standardError.write(Data("--menu-metrics wants a comma-separated list of metric names\n".utf8))
+                    exit(2)
+                }
+                var seen: Set<MenuBarMetric> = []
+                settings.menuBar.items = parsed.filter { seen.insert($0).inserted }.map {
+                    MenuBarItemConfig(metric: $0, isEnabled: true, showsCaption: true).sanitized()
+                }
             // A day still being collected is the state every launch starts in.
             case "--collected":
                 index += 1

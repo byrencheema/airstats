@@ -80,23 +80,25 @@ public enum OffscreenRenderer {
     }
 
     public static func render(_ request: Request, to directory: URL) throws -> URL {
-        let appearance = NSAppearance(named: request.isDark ? .darkAqua : .aqua)!
-        var image: NSImage?
+        try SettingsStore.withLanguage(request.settings.general.language) {
+            let appearance = NSAppearance(named: request.isDark ? .darkAqua : .aqua)!
+            var image: NSImage?
 
-        // Drawing appearance must be current for the whole render, or SwiftUI's
-        // semantic colours resolve against the process default instead of the
-        // appearance under test — which silently makes every dark render look light.
-        appearance.performAsCurrentDrawingAppearance {
-            image = renderImage(request, appearance: appearance)
-        }
+            // Drawing appearance must be current for the whole render, or SwiftUI's
+            // semantic colours resolve against the process default instead of the
+            // appearance under test — which silently makes every dark render look light.
+            appearance.performAsCurrentDrawingAppearance {
+                image = renderImage(request, appearance: appearance)
+            }
 
-        guard let image, let data = pngData(image, scale: request.scale) else {
-            throw RenderError.renderFailed(request.surface)
+            guard let image, let data = pngData(image, scale: request.scale) else {
+                throw RenderError.renderFailed(request.surface)
+            }
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent(request.fileName)
+            try data.write(to: url)
+            return url
         }
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent(request.fileName)
-        try data.write(to: url)
-        return url
     }
 
     private static func renderImage(_ request: Request, appearance: NSAppearance) -> NSImage? {
@@ -342,6 +344,6 @@ enum PreviewEngine {
     }
 
     private static func cacheKey(_ request: OffscreenRenderer.Request) -> String {
-        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)-\(request.collectedMinutes ?? -1)-\(request.withoutHistory)"
+        "\(request.surface.rawValue)-\(request.scenario.rawValue)-\(request.isDark)-\(request.collectedMinutes ?? -1)-\(request.withoutHistory)-\(request.settings.general.language.rawValue)"
     }
 }

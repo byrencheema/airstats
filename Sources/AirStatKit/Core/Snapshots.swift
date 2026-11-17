@@ -83,9 +83,9 @@ public enum MemoryPressureLevel: Int, Sendable, Equatable, Hashable, Codable, Co
 
     public var label: String {
         switch self {
-        case .normal: return "Normal"
-        case .warning: return "Warning"
-        case .critical: return "Critical"
+        case .normal: return L10n.tr("Normal", "Bình thường")
+        case .warning: return L10n.tr("Warning", "Cảnh báo")
+        case .critical: return L10n.tr("Critical", "Nghiêm trọng")
         }
     }
 }
@@ -213,11 +213,11 @@ public enum ConnectionType: String, Sendable, Equatable, Hashable, Codable {
         switch self {
         case .wifi: return "Wi-Fi"
         case .ethernet: return "Ethernet"
-        case .cellular: return "Cellular"
+        case .cellular: return L10n.tr("Cellular", "Di động")
         case .vpn: return "VPN"
         case .loopback: return "Loopback"
-        case .other: return "Other"
-        case .none: return "Offline"
+        case .other: return L10n.tr("Other", "Khác")
+        case .none: return L10n.tr("Offline", "Ngoại tuyến")
         }
     }
 }
@@ -514,17 +514,17 @@ public enum BluetoothDeviceCategory: String, Sendable, Equatable, Hashable, Coda
 
     public var label: String {
         switch self {
-        case .headphones: return "Headphones"
-        case .speaker: return "Speaker"
-        case .keyboard: return "Keyboard"
-        case .mouse: return "Mouse"
-        case .trackpad: return "Trackpad"
-        case .gamepad: return "Controller"
-        case .phone: return "Phone"
-        case .computer: return "Computer"
-        case .watch: return "Watch"
-        case .microphone: return "Microphone"
-        case .other: return "Bluetooth Device"
+        case .headphones: return L10n.tr("Headphones", "Tai nghe")
+        case .speaker: return L10n.tr("Speaker", "Loa")
+        case .keyboard: return L10n.tr("Keyboard", "Bàn phím")
+        case .mouse: return L10n.tr("Mouse", "Chuột")
+        case .trackpad: return L10n.tr("Trackpad", "Bàn di chuột")
+        case .gamepad: return L10n.tr("Controller", "Tay cầm")
+        case .phone: return L10n.tr("Phone", "Điện thoại")
+        case .computer: return L10n.tr("Computer", "Máy tính")
+        case .watch: return L10n.tr("Watch", "Đồng hồ")
+        case .microphone: return L10n.tr("Microphone", "Micrô")
+        case .other: return L10n.tr("Bluetooth Device", "Thiết bị Bluetooth")
         }
     }
 
@@ -540,6 +540,23 @@ public enum BluetoothDeviceCategory: String, Sendable, Equatable, Hashable, Coda
         case .computer: return "laptopcomputer"
         case .watch: return "applewatch"
         case .microphone: return "mic"
+        case .other: return "dot.radiowaves.left.and.right"
+        }
+    }
+
+    /// Filled variant for connected Bluetooth badge circles, matching macOS Control Center.
+    public var filledSymbolName: String {
+        switch self {
+        case .headphones: return "headphones"
+        case .speaker: return "hifispeaker.fill"
+        case .keyboard: return "keyboard.fill"
+        case .mouse: return "computermouse.fill"
+        case .trackpad: return "rectangle.and.hand.point.up.left.fill"
+        case .gamepad: return "gamecontroller.fill"
+        case .phone: return "iphone"
+        case .computer: return "laptopcomputer"
+        case .watch: return "applewatch"
+        case .microphone: return "mic.fill"
         case .other: return "dot.radiowaves.left.and.right"
         }
     }
@@ -637,10 +654,10 @@ public enum ThermalPressure: Int, Sendable, Equatable, Hashable, Codable, Compar
 
     public var label: String {
         switch self {
-        case .nominal: return "Nominal"
-        case .fair: return "Fair"
-        case .serious: return "Serious"
-        case .critical: return "Critical"
+        case .nominal: return L10n.tr("Nominal", "Bình thường")
+        case .fair: return L10n.tr("Fair", "Trung bình")
+        case .serious: return L10n.tr("Serious", "Cao")
+        case .critical: return L10n.tr("Critical", "Nguy cấp")
         }
     }
 }
