@@ -28,6 +28,8 @@
 	<true/>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>AirStats reads connected Bluetooth peripherals to display their connection status and battery levels.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
