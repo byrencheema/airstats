@@ -246,6 +246,15 @@ public final class MenuBarContentView: NSView {
         /// and the number share this one slot instead of taking a slot each, so the
         /// item is as wide as the wider of the two rather than as wide as their sum.
         var stack: CGFloat = 0
+        /// Two paired value lines stacked vertically (Upload over Download), sharing
+        /// one leading glyph slot and one trailing right-aligned value slot.
+        var pairStackGlyph: CGFloat = 0
+        var pairStackValue: CGFloat = 0
+
+        var pairStack: CGFloat {
+            guard pairStackValue > 0 else { return 0 }
+            return pairStackGlyph > 0 ? pairStackGlyph + Layout.glyphGap + pairStackValue : pairStackValue
+        }
 
         var width: CGFloat {
             var total: CGFloat = 0
@@ -263,6 +272,7 @@ public final class MenuBarContentView: NSView {
             append(statusDot, after: Layout.partGap)
             append(graph, after: Layout.partGap)
             append(stack, after: Layout.partGap)
+            append(pairStack, after: Layout.partGap)
             append(primaryGlyph, after: Layout.partGap)
             append(primaryValue, after: primaryGlyph > 0 ? Layout.glyphGap : Layout.partGap)
             append(secondaryGlyph, after: Layout.pairGap)
@@ -345,6 +355,14 @@ public final class MenuBarContentView: NSView {
             let glyph = glyphWidth(item.primary, role: .stackedValue)
             let bottom = glyph > 0 ? glyph + Layout.glyphGap + value : value
             geometry.stack = max(width(caption, role: .stackedCaption), bottom)
+            return geometry
+        }
+
+        if item.pairOrder == .secondaryOverPrimary, let secondary = item.secondary {
+            geometry.pairStackGlyph = max(glyphWidth(secondary, role: .stackedPair),
+                                          glyphWidth(item.primary, role: .stackedPair))
+            geometry.pairStackValue = max(reservedWidth(secondary, model: model, role: .stackedPair),
+                                          reservedWidth(item.primary, model: model, role: .stackedPair))
             return geometry
         }
 
@@ -484,6 +502,15 @@ public final class MenuBarContentView: NSView {
             x += geometry.stack
         }
 
+        if geometry.pairStack > 0, let secondary = item.secondary {
+            gap(Layout.partGap)
+            drawPairStack(top: secondary, bottom: item.primary, in: x,
+                          glyphSlot: geometry.pairStackGlyph,
+                          valueSlot: geometry.pairStackValue,
+                          colors: colors, scale: scale, context: context)
+            x += geometry.pairStack
+        }
+
         if geometry.primaryValue > 0 {
             gap(Layout.partGap)
             if geometry.primaryGlyph > 0, let glyph = item.primary.glyph {
@@ -565,6 +592,34 @@ public final class MenuBarContentView: NSView {
         }
         drawText(valueText, role: .stackedValue, x: valueX, baseline: valueBaseline,
                  color: colors.value, scale: scale, context: context)
+    }
+
+    /// Draws two paired lines (Upload over Download), with their direction arrows
+    /// sharing a leading column and their formatted rates right-aligned in a shared
+    /// value column so neither row shifts as numbers cross unit boundaries.
+    private func drawPairStack(top: MenuBarLine, bottom: MenuBarLine, in x: CGFloat,
+                               glyphSlot: CGFloat, valueSlot: CGFloat,
+                               colors: ItemColors, scale: CGFloat, context: CGContext) {
+        let cap = fonts[.stackedPair].capHeight
+        let total = cap * 2 + Design.MenuBar.stackedPairRowGap
+        let topBaseline = bounds.midY + total / 2 - cap
+        let bottomBaseline = bounds.midY - total / 2
+
+        for (line, baseline) in [(top, topBaseline), (bottom, bottomBaseline)] {
+            var rowX = x
+            if glyphSlot > 0 {
+                if let glyph = line.glyph {
+                    let glyphW = width(glyph, role: .stackedPair)
+                    drawText(glyph, role: .stackedPair, x: rowX + (glyphSlot - glyphW) / 2,
+                             baseline: baseline, color: colors.glyph, scale: scale, context: context)
+                }
+                rowX += glyphSlot + Layout.glyphGap
+            }
+            let valueW = width(line.valueText, role: .stackedPair)
+            drawText(line.valueText, role: .stackedPair,
+                     x: rowX + valueSlot - valueW, baseline: baseline,
+                     color: colors.value, scale: scale, context: context)
+        }
     }
 
     /// What one item paints each of its parts with.
@@ -684,7 +739,7 @@ public final class MenuBarContentView: NSView {
                 : colors.mark.withAlphaComponent(alpha * Layout.statusDotIdleAlpha).cgColor
         }
 
-        for (y, lit) in [(top, status?.isReceiving ?? false), (bottom, status?.isSending ?? false)] {
+        for (y, lit) in [(top, status?.isSending ?? false), (bottom, status?.isReceiving ?? false)] {
             let rect = snapped(CGRect(x: x, y: y, width: diameter, height: diameter), scale: scale)
             context.setFillColor(ink(lit))
             context.fillEllipse(in: rect)
@@ -932,10 +987,13 @@ public final class MenuBarContentView: NSView {
             return
         }
         let half = (box.height - Design.Space.hairline) / 2
-        drawGraph(item.primary.series,
+        let (topSeries, bottomSeries) = item.pairOrder == .secondaryOverPrimary
+            ? (secondary.series, item.primary.series)
+            : (item.primary.series, secondary.series)
+        drawGraph(topSeries,
                   in: CGRect(x: box.minX, y: box.maxY - half, width: box.width, height: half),
                   color: color, scale: scale, context: context)
-        drawGraph(secondary.series,
+        drawGraph(bottomSeries,
                   in: CGRect(x: box.minX, y: box.minY, width: box.width, height: half),
                   color: color, scale: scale, context: context)
     }
@@ -1174,6 +1232,8 @@ public final class MenuBarContentView: NSView {
         /// number instead of beside it.
         case stackedValue
         case stackedCaption
+        /// Two equal value rows stacked in one column (Upload over Download).
+        case stackedPair
         /// One letter to a row beside a bar.
         case sideLabel
         /// The digits inside the battery shell. Always monospaced and always medium,
@@ -1187,6 +1247,7 @@ public final class MenuBarContentView: NSView {
         let caption: NSFont
         let stackedValue: NSFont
         let stackedCaption: NSFont
+        let stackedPair: NSFont
         let sideLabel: NSFont
         let batteryValue: NSFont
 
@@ -1204,6 +1265,10 @@ public final class MenuBarContentView: NSView {
                 : .systemFont(ofSize: stacked, weight: .regular)
             stackedCaption = .systemFont(ofSize: Design.MenuBar.stackedCaptionFontSize,
                                          weight: .medium)
+            let pairSize = Design.MenuBar.stackedPairFontSize
+            stackedPair = monospacedDigits
+                ? .monospacedDigitSystemFont(ofSize: pairSize, weight: .regular)
+                : .systemFont(ofSize: pairSize, weight: .regular)
             sideLabel = .systemFont(ofSize: Design.MenuBar.sideLabelFontSize, weight: .medium)
         }
 
@@ -1213,6 +1278,7 @@ public final class MenuBarContentView: NSView {
             case .caption: return caption
             case .stackedValue: return stackedValue
             case .stackedCaption: return stackedCaption
+            case .stackedPair: return stackedPair
             case .sideLabel: return sideLabel
             case .batteryValue: return batteryValue
             }

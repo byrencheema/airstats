@@ -16,6 +16,7 @@ extension PanelModuleView {
         case .network:   networkDetail
         case .disk:      diskDetail
         case .battery:   batteryDetail
+        case .bluetooth: bluetoothDetail
         case .thermal:   thermalDetail
         case .processes: processesDetail
         case .system:    systemDetail
@@ -349,55 +350,9 @@ extension PanelModuleView {
                 }
                 let entries = powerEntries(power)
                 if !entries.isEmpty { PanelDetailGrid(entries: entries) }
-                ForEach(power.accessories) { accessory in
-                    accessoryRow(accessory)
-                }
                 history(available: power.hasBattery && power.percentage != nil)
             }
         }
-    }
-
-    /// Laid out like a disk volume, name over its bar, rather than as a bar row:
-    /// a bar row keeps 58 points for the label, and "AirPods Pro" with three part
-    /// figures beside it needs the whole width.
-    private func accessoryRow(_ accessory: AccessoryBattery) -> some View {
-        VStack(alignment: .leading, spacing: Design.Space.xs) {
-            HStack(spacing: Design.Space.xs) {
-                Text(accessory.name)
-                    .font(Design.Text.label)
-                    .foregroundStyle(Design.Palette.primaryText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: Design.Space.m)
-                Text(accessoryValue(accessory))
-                    .font(Design.Text.caption.monospacedDigit())
-                    .foregroundStyle(Design.Palette.secondaryText)
-                    .lineLimit(1)
-            }
-            CapacityBar(fraction: accessory.percent / 100, tint: PanelModuleView.barTint)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    /// "64%", or for earbuds each part in turn, "L 64%  R 71%  Case 90%", with
-    /// "charging" after whatever is on power. The parts are what the user needs to
-    /// know, since one flat bud is the one that gets swapped into the case.
-    private func accessoryValue(_ accessory: AccessoryBattery) -> String {
-
-        guard !accessory.parts.isEmpty else {
-            let charge = formatter.percentValue(accessory.percent)
-            return accessory.isCharging ? "\(charge) · charging" : charge
-        }
-        return accessory.parts.map { part in
-            let label: String
-            switch part.name.lowercased() {
-            case "left": label = "L"
-            case "right": label = "R"
-            default: label = part.name
-            }
-            let charge = formatter.percentValue(part.percent)
-            return part.isCharging ? "\(label) \(charge)⚡︎" : "\(label) \(charge)"
-        }.joined(separator: "  ")
     }
 
     private func adapterSummary(_ power: PowerSnapshot) -> String? {
@@ -433,6 +388,109 @@ extension PanelModuleView {
             entries.append(PanelDetailEntry("Low Power", "On"))
         }
         return entries
+    }
+
+    // MARK: Bluetooth
+
+    private var bluetoothDetail: some View {
+        section(engine.bluetooth) { bt in
+            VStack(alignment: .leading, spacing: Design.Space.xs) {
+                if !bt.isPoweredOn {
+                    ReadoutRow("State", "Turned off", isDimmed: true)
+                } else if bt.devices.isEmpty {
+                    Text("No paired devices")
+                        .font(Design.Text.caption)
+                        .foregroundStyle(Design.Palette.tertiaryText)
+                }
+                ForEach(bt.connectedDevices) { device in
+                    bluetoothConnectedRow(device)
+                }
+                if !bt.disconnectedDevices.isEmpty {
+                    VStack(alignment: .leading, spacing: Design.Space.xxs) {
+                        ForEach(bt.disconnectedDevices) { device in
+                            bluetoothDisconnectedRow(device)
+                        }
+                    }
+                    .padding(.top, bt.connectedDevices.isEmpty && bt.isPoweredOn ? 0 : Design.Space.xxs)
+                }
+            }
+        }
+    }
+
+    private func bluetoothConnectedRow(_ device: BluetoothDevice) -> some View {
+        let status = bluetoothConnectedValue(device)
+        return VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.s) {
+                Image(systemName: device.category.symbolName)
+                    .font(Design.Text.caption)
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .frame(width: Design.Space.l, alignment: .center)
+                Text(device.name)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.primaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: Design.Space.m)
+                Text(status)
+                    .font(Design.Text.caption.monospacedDigit())
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .lineLimit(1)
+            }
+            if let percent = device.batteryPercent {
+                CapacityBar(fraction: percent / 100, tint: PanelModuleView.barTint)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(device.name)
+        .accessibilityValue("Connected, \(status)")
+    }
+
+    private func bluetoothDisconnectedRow(_ device: BluetoothDevice) -> some View {
+        HStack(spacing: Design.Space.s) {
+            Image(systemName: device.category.symbolName)
+                .font(Design.Text.caption)
+                .foregroundStyle(Design.Palette.secondaryText)
+                .frame(width: Design.Space.l, alignment: .center)
+            Text(device.name)
+                .font(Design.Text.label)
+                .foregroundStyle(Design.Palette.secondaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: Design.Space.m)
+            Text("Not connected")
+                .font(Design.Text.caption)
+                .foregroundStyle(Design.Palette.tertiaryText)
+                .lineLimit(1)
+        }
+        .opacity(0.55)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(device.name)
+        .accessibilityValue("Not connected")
+    }
+
+    /// Individual bud and case charges for multi-part earbuds, the percentage for a
+    /// single-battery accessory, or "Connected" when the peripheral reports no battery.
+    private func bluetoothConnectedValue(_ device: BluetoothDevice) -> String {
+        if !device.parts.isEmpty {
+            return device.parts.map { part in
+                let label: String
+                switch part.name.lowercased() {
+                case "left": label = "L"
+                case "right": label = "R"
+                default: label = part.name
+                }
+                let charge = formatter.percentValue(part.percent)
+                return part.isCharging ? "\(label) \(charge)⚡︎" : "\(label) \(charge)"
+            }.joined(separator: "  ")
+        }
+        if let percent = device.batteryPercent {
+            let charge = formatter.percentValue(percent)
+            return device.isCharging ? "\(charge) · charging" : charge
+        }
+        if let rssi = device.rssi {
+            return "\(rssi) dBm · Connected"
+        }
+        return "Connected"
     }
 
     // MARK: Thermal

@@ -746,7 +746,7 @@ extension PanelModule {
         case .disk: return ModuleHistory(.diskRead, secondary: .diskWrite, glyphs: ("R", "W"))
         case .battery: return ModuleHistory(.batteryPercent, shading: .batteryPlugged)
         case .thermal: return ModuleHistory(.cpuTemperature, domain: 30...100)
-        case .processes, .system: return nil
+        case .bluetooth, .processes, .system: return nil
         }
     }
 }

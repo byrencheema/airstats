@@ -127,7 +127,9 @@ public final class PowerCollector: MetricSource {
     }
 
     static func readAccessories() -> [AccessoryBattery] {
-        guard let blob = IOPSCopyPowerSourcesByType(Self.accessorySourceType)?.takeRetainedValue(),
+        let blob = IOPSCopyPowerSourcesByType(Self.accessorySourceType)?.takeRetainedValue()
+            ?? IOPSCopyPowerSourcesByType(Self.allSourcesType)?.takeRetainedValue()
+        guard let blob,
               let handles = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef]
         else { return [] }
         let sources = handles.compactMap {
@@ -136,8 +138,11 @@ public final class PowerCollector: MetricSource {
         return accessories(from: sources)
     }
 
-    /// `kIOPSSourceForAccessories` in IOKit's private key header.
-    private static let accessorySourceType: Int32 = 3
+    /// `IOPSCopyPowerSourcesByType` source selectors on macOS 14+: `0` returns every
+    /// source (`pmset -g accps`), `1` and `3` return only the internal battery, and `4`
+    /// returns accessory sources alone without copying the internal battery dictionary.
+    private static let allSourcesType: Int32 = 0
+    private static let accessorySourceType: Int32 = 4
 
     /// Folds the accessory sources into one accessory per device.
     ///
@@ -155,6 +160,7 @@ public final class PowerCollector: MetricSource {
             let part: String?
             let group: String?
             let category: String?
+            let transport: String?
         }
         let entries: [Entry] = sources.compactMap { source in
             // The list can carry the Mac's own battery and a UPS alongside the
@@ -174,7 +180,8 @@ public final class PowerCollector: MetricSource {
             return Entry(name: name, percent: percent, isCharging: charging,
                          identifier: identifier, part: source["Part Identifier"] as? String,
                          group: source["Group Identifier"] as? String,
-                         category: source["Accessory Category"] as? String)
+                         category: source["Accessory Category"] as? String,
+                         transport: source["Transport Type"] as? String)
         }
 
         var order: [String] = []
@@ -190,7 +197,8 @@ public final class PowerCollector: MetricSource {
             if members.count == 1, members[0].group == nil {
                 let one = members[0]
                 return AccessoryBattery(id: one.identifier, name: one.name, category: one.category,
-                                        percent: one.percent, isCharging: one.isCharging)
+                                        transport: one.transport, percent: one.percent,
+                                        isCharging: one.isCharging)
             }
             let combined = members.first { $0.part == "Combined" }
             let parts = members.filter { $0.part != "Combined" }.map {
@@ -202,7 +210,7 @@ public final class PowerCollector: MetricSource {
             let buds = parts.filter { $0.name.caseInsensitiveCompare("Case") != .orderedSame }
             let headline = combined?.percent ?? (buds.isEmpty ? parts : buds).map(\.percent).min() ?? named.percent
             return AccessoryBattery(id: named.identifier, name: named.name, category: named.category,
-                                    percent: headline,
+                                    transport: named.transport, percent: headline,
                                     isCharging: combined?.isCharging ?? parts.contains { $0.isCharging },
                                     parts: parts)
         }

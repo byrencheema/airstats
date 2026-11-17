@@ -236,6 +236,13 @@ extension PanelSummary {
             }
             return PanelSummary(value: formatter.percentValue(percentage),
                                 caption: power.isCharging ? "charging" : nil)
+        case .bluetooth:
+            guard let bt = engine.bluetooth.value else { return PanelSummary() }
+            guard bt.isPoweredOn else {
+                return PanelSummary(value: "Off", emphasis: .state)
+            }
+            return PanelSummary(value: formatter.count(bt.connectedCount),
+                                caption: "active")
         case .thermal:
             guard let thermal = engine.thermal.value else { return PanelSummary() }
             guard let celsius = thermal.cpuCelsius else {

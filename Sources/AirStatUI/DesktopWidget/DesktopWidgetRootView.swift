@@ -214,14 +214,14 @@ private struct DesktopWidgetModuleView: View {
         case .cpu, .memory, .system: return 3
         case .processes: return 4
         case .network, .disk: return 2
-        case .gpu, .battery, .thermal: return 1
+        case .gpu, .battery, .bluetooth, .thermal: return 1
         }
     }
 
     // MARK: Snapshot → readout
 
     /// Every module collapses to the same shape, so the desktop widget has exactly one
-    /// layout to get right instead of nine.
+    /// layout to get right instead of ten.
     private var readout: MetricState<DesktopWidgetReadout> {
         switch module {
         case .cpu: return cpuReadout
@@ -230,6 +230,7 @@ private struct DesktopWidgetModuleView: View {
         case .network: return networkReadout
         case .disk: return diskReadout
         case .battery: return batteryReadout
+        case .bluetooth: return bluetoothReadout
         case .thermal: return thermalReadout
         case .processes: return processReadout
         case .system: return systemReadout
@@ -352,6 +353,38 @@ private struct DesktopWidgetModuleView: View {
             return power.isPluggedIn ? "Plugged in" : "On battery"
         }
         return "\(formatter.duration(empty)) left"
+    }
+
+    private var bluetoothReadout: MetricState<DesktopWidgetReadout> {
+        engine.bluetooth.map { bt in
+            guard bt.isPoweredOn else {
+                var readout = DesktopWidgetReadout(module: module, value: "Off")
+                readout.details = [DesktopWidgetDetail("state", "Radio", "Turned off")]
+                return readout
+            }
+            var readout = DesktopWidgetReadout(module: module,
+                                               value: formatter.count(bt.connectedCount))
+
+            var details: [DesktopWidgetDetail] = bt.connectedDevices.prefix(4).map { device in
+                let value: String
+                if let percent = device.batteryPercent {
+                    let charge = formatter.percentValue(percent)
+                    value = device.isCharging ? "\(charge) ⚡︎" : charge
+                } else {
+                    value = "Connected"
+                }
+                return DesktopWidgetDetail("bt-\(device.id)", device.name, value)
+            }
+            let remainingSlots = max(0, 6 - details.count)
+            for device in bt.disconnectedDevices.prefix(remainingSlots) {
+                details.append(DesktopWidgetDetail("bt-\(device.id)", device.name, "Offline"))
+            }
+            if details.isEmpty {
+                details = [DesktopWidgetDetail("none", "Devices", "None paired")]
+            }
+            readout.details = details
+            return readout
+        }
     }
 
     private var thermalReadout: MetricState<DesktopWidgetReadout> {

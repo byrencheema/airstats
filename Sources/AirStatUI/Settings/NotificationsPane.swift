@@ -179,7 +179,8 @@ struct NotificationsPane: View {
 
     private func unitName(_ metric: ThresholdMetric) -> String {
         switch metric {
-        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull: return "percent"
+        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull, .bluetoothBatteryLow:
+            return "percent"
         case .diskFree: return "gigabytes"
         case .cpuTemperature: return "degrees"
         case .thermalPressure: return "level"
@@ -188,7 +189,8 @@ struct NotificationsPane: View {
 
     private func range(for metric: ThresholdMetric) -> ClosedRange<Double> {
         switch metric {
-        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull: return 1...100
+        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull, .bluetoothBatteryLow:
+            return 1...100
         case .diskFree: return 1...500
         case .cpuTemperature: return 40...110
         case .thermalPressure: return 0...3

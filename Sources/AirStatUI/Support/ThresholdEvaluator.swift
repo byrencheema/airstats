@@ -102,6 +102,10 @@ struct ThresholdEvaluator {
                 readings[.batteryLow] = percentage
             }
         }
+        if let bluetooth = snapshot.bluetooth.value,
+           let lowest = bluetooth.lowestBatteryPercent(dischargingOnly: true) {
+            readings[.bluetoothBatteryLow] = lowest
+        }
         if let thermal = snapshot.thermal.value {
             if let cpuCelsius = thermal.cpuCelsius { readings[.cpuTemperature] = cpuCelsius }
             readings[.thermalPressure] = Double(thermal.pressure.rawValue)
@@ -117,7 +121,7 @@ extension ThresholdMetric {
     /// are alarming as they fall, everything else as it climbs.
     var firesWhenBelow: Bool {
         switch self {
-        case .diskFree, .batteryLow: return true
+        case .diskFree, .batteryLow, .bluetoothBatteryLow: return true
         case .cpuUsage, .memoryPressure, .batteryFull, .cpuTemperature, .thermalPressure: return false
         }
     }
@@ -141,12 +145,15 @@ extension ThresholdAlert {
         case .diskFree: return "Startup disk is running out of space"
         case .batteryLow: return "Battery is low"
         case .batteryFull: return "Battery is charged"
+        case .bluetoothBatteryLow: return "Bluetooth battery is low"
         case .cpuTemperature: return "CPU is running hot"
         case .thermalPressure: return "This Mac is under thermal pressure"
         }
     }
 
-    var body: String {
+    var body: String { body(in: nil) }
+
+    func body(in snapshot: SystemSnapshot?) -> String {
         switch metric {
         case .cpuUsage:
             return "CPU is at \(percent(value)), above your \(percent(threshold)) threshold."
@@ -158,6 +165,11 @@ extension ThresholdAlert {
             return "Battery is at \(percent(value)), below your \(percent(threshold)) threshold."
         case .batteryFull:
             return "Battery is at \(percent(value)). You can unplug."
+        case .bluetoothBatteryLow:
+            let deviceName = snapshot?.bluetooth.value?
+                .lowestBatteryDevice(dischargingOnly: true)?.device.name
+                ?? "Bluetooth device"
+            return "\(deviceName) is at \(percent(value)), below your \(percent(threshold)) threshold."
         case .cpuTemperature:
             return "CPU is at \(degrees(value)), above your \(degrees(threshold)) threshold."
         case .thermalPressure:

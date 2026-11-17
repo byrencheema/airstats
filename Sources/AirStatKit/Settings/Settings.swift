@@ -86,6 +86,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
     case networkThroughput, networkUpload, networkDownload
     case diskActivity, diskFree
     case battery, batteryTime, systemPower
+    case bluetoothDevices, bluetoothBattery
     case fanSpeed
     case uptime
 
@@ -105,6 +106,8 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
         case .battery: return "Battery"
         case .batteryTime: return "Battery Time Remaining"
         case .systemPower: return "System Power"
+        case .bluetoothDevices: return "Bluetooth Devices"
+        case .bluetoothBattery: return "Bluetooth Battery"
         case .fanSpeed: return "Fan Speed"
         case .uptime: return "Uptime"
         }
@@ -120,6 +123,7 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
         case .networkThroughput, .networkUpload, .networkDownload: return .network
         case .diskActivity, .diskFree: return .disk
         case .battery, .batteryTime, .systemPower: return .power
+        case .bluetoothDevices, .bluetoothBattery: return .bluetooth
         case .uptime: return .system
         }
     }
@@ -132,7 +136,8 @@ public enum MenuBarMetric: String, Sendable, Codable, CaseIterable, Equatable, H
     /// metric no longer supports.
     public var supportedStyles: [MenuBarDisplayStyle] {
         switch self {
-        case .uptime, .batteryTime, .cpuFrequency, .diskFree:
+        case .uptime, .batteryTime, .cpuFrequency, .diskFree,
+             .bluetoothDevices, .bluetoothBattery:
             return [.text, .iconAndText]
         case .battery:
             // The only metric the system's own indicator can draw, and the one it
@@ -323,7 +328,7 @@ public struct MenuBarSettings: Sendable, Codable, Equatable {
 // MARK: - Panel
 
 public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
-    case cpu, memory, gpu, network, disk, battery, thermal, processes, system
+    case cpu, memory, gpu, network, disk, battery, bluetooth, thermal, processes, system
 
     public var label: String {
         switch self {
@@ -333,6 +338,7 @@ public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Has
         case .network: return "Network"
         case .disk: return "Disk"
         case .battery: return "Battery"
+        case .bluetooth: return "Bluetooth"
         case .thermal: return "Temperature"
         case .processes: return "Top Processes"
         case .system: return "System"
@@ -347,6 +353,7 @@ public enum PanelModule: String, Sendable, Codable, CaseIterable, Equatable, Has
         case .network: return .network
         case .disk: return .disk
         case .battery: return .power
+        case .bluetooth: return .bluetooth
         case .thermal: return .thermal
         case .processes: return .processes
         case .system: return .system
@@ -650,7 +657,8 @@ public struct DesktopWidgetSettings: Sendable, Codable, Equatable {
 // MARK: - Notifications
 
 public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable, Hashable {
-    case cpuUsage, memoryPressure, diskFree, batteryLow, batteryFull, cpuTemperature, thermalPressure
+    case cpuUsage, memoryPressure, diskFree, batteryLow, batteryFull, bluetoothBatteryLow
+    case cpuTemperature, thermalPressure
 
     public var label: String {
         switch self {
@@ -659,6 +667,7 @@ public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable,
         case .diskFree: return "Startup disk free space below"
         case .batteryLow: return "Battery drops below"
         case .batteryFull: return "Battery reaches"
+        case .bluetoothBatteryLow: return "Bluetooth battery drops below"
         case .cpuTemperature: return "CPU temperature above"
         case .thermalPressure: return "Thermal pressure reaches"
         }
@@ -666,7 +675,7 @@ public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable,
 
     public var unitSuffix: String {
         switch self {
-        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull: return "%"
+        case .cpuUsage, .memoryPressure, .batteryLow, .batteryFull, .bluetoothBatteryLow: return "%"
         case .diskFree: return "GB"
         case .cpuTemperature: return "°"
         case .thermalPressure: return ""
@@ -680,6 +689,7 @@ public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable,
         case .diskFree: return 10
         case .batteryLow: return 20
         case .batteryFull: return 100
+        case .bluetoothBatteryLow: return 20
         case .cpuTemperature: return 95
         case .thermalPressure: return 2
         }
@@ -691,6 +701,7 @@ public enum ThresholdMetric: String, Sendable, Codable, CaseIterable, Equatable,
         case .memoryPressure: return .memory
         case .diskFree: return .disk
         case .batteryLow, .batteryFull: return .power
+        case .bluetoothBatteryLow: return .bluetooth
         case .cpuTemperature, .thermalPressure: return .thermal
         }
     }

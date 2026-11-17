@@ -107,6 +107,7 @@ public enum Design {
             case .network: return Color(nsColor: .systemTeal)
             case .disk: return Color(nsColor: .systemIndigo)
             case .power: return Color(nsColor: .systemGreen)
+            case .bluetooth: return Color(nsColor: .systemBlue)
             case .thermal: return Color(nsColor: .systemOrange)
             case .processes: return Color(nsColor: .systemGray)
             case .system: return Color(nsColor: .systemGray)
@@ -194,6 +195,9 @@ public enum Design {
         /// edges; at these, 12.6pt, which sits comfortably.
         public static let stackedValueFontSize: CGFloat = 10
         public static let stackedCaptionFontSize: CGFloat = 8
+        /// Two equal value rows stacked inside the 22pt bar (Upload over Download).
+        public static let stackedPairFontSize: CGFloat = 9
+        public static let stackedPairRowGap: CGFloat = 2
         /// The letters stacked beside a bar, one to a row. One size below the stacked
         /// caption because three rows of it plus the air between them have to fit a
         /// 22-point item: at 8 the rows touched, and the only room to make was in the

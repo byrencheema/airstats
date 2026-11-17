@@ -20,6 +20,7 @@ let package = Package(
             name: "AirStatKit",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
+                .linkedFramework("IOBluetooth"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreWLAN"),
                 .linkedFramework("Metal"),

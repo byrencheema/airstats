@@ -186,6 +186,7 @@ struct HistoryAxisTests {
     func moduleSeries() {
         let charted = PanelModule.allCases.compactMap(\.historySeries)
         #expect(charted.count == 7)
+        #expect(PanelModule.bluetooth.historySeries == nil)
         #expect(PanelModule.processes.historySeries == nil)
         #expect(PanelModule.system.historySeries == nil)
         #expect(PanelModule.thermal.historySeries?.domain == 30...100)

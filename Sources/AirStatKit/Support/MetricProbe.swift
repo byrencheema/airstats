@@ -39,6 +39,7 @@ public enum MetricProbe {
         let network = NetworkCollector()
         let disk = DiskCollector()
         let power = PowerCollector()
+        let bluetooth = BluetoothCollector()
         let thermal = ThermalCollector()
         let processes = ProcessCollector()
         let system = SystemInfoCollector()
@@ -51,7 +52,8 @@ public enum MetricProbe {
         }
         startIfNeeded(cpu); startIfNeeded(memory); startIfNeeded(gpu)
         startIfNeeded(network); startIfNeeded(disk); startIfNeeded(power)
-        startIfNeeded(thermal); startIfNeeded(processes); startIfNeeded(system)
+        startIfNeeded(bluetooth); startIfNeeded(thermal); startIfNeeded(processes)
+        startIfNeeded(system)
 
         emit("AirStats metric probe")
         emit("collectors: \(options.collectors.map(\.rawValue).sorted().joined(separator: ", "))")
@@ -96,12 +98,13 @@ public enum MetricProbe {
             sample(network, describe: describeNetwork)
             sample(disk, describe: describeDisk)
             sample(power, describe: describePower)
+            sample(bluetooth, describe: describeBluetooth)
             sample(thermal, describe: describeThermal)
             sample(processes, describe: describeProcesses)
         }
 
         cpu.stop(); memory.stop(); gpu.stop(); network.stop(); disk.stop()
-        power.stop(); thermal.stop(); processes.stop(); system.stop()
+        power.stop(); bluetooth.stop(); thermal.stop(); processes.stop(); system.stop()
 
         emit()
         emit(String(repeating: "─", count: 68))
@@ -244,6 +247,22 @@ public enum MetricProbe {
             "system power \(fmt.watts(s.systemWatts))",
             "low power    \(s.isLowPowerMode)   optimized-hold=\(s.isOptimizedChargingPaused)",
         ]
+    }
+
+    private static func describeBluetooth(_ s: BluetoothSnapshot) -> [String] {
+        var lines = [
+            "radio        \(s.isPoweredOn ? "on" : "off")  connected=\(s.connectedCount)  paired=\(s.devices.count)",
+        ]
+        for device in s.devices {
+            let state = device.isConnected ? "connected" : "disconnected"
+            let battery = device.batteryPercent.map { String(format: "%.0f%%", $0) } ?? "—"
+            let charging = device.isCharging ? " charging" : ""
+            let rssi = device.rssi.map { " rssi=\($0)dBm" } ?? ""
+            lines.append("  \(device.name.padding(toLength: 22, withPad: " ", startingAt: 0)) "
+                         + "\(state.padding(toLength: 13, withPad: " ", startingAt: 0)) "
+                         + "battery=\(battery)\(charging)  type=\(device.category.rawValue)\(rssi)")
+        }
+        return lines
     }
 
     private static func describeThermal(_ s: ThermalSnapshot) -> [String] {

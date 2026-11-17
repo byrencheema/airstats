@@ -205,6 +205,7 @@ struct MetricAvailability {
         case .network: state = snapshot.network.failure
         case .disk: state = snapshot.disk.failure
         case .power: state = snapshot.power.failure
+        case .bluetooth: state = snapshot.bluetooth.failure
         case .thermal: state = snapshot.thermal.failure
         case .processes: state = snapshot.processes.failure
         case .system: state = snapshot.system.failure

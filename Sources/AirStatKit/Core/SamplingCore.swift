@@ -128,6 +128,7 @@ public final class SamplingCore: @unchecked Sendable {
     private let networkSlot: SourceSlot<NetworkCollector>
     private let diskSlot: SourceSlot<DiskCollector>
     private let powerSlot: SourceSlot<PowerCollector>
+    private let bluetoothSlot: SourceSlot<BluetoothCollector>
     private let thermalSlot: SourceSlot<ThermalCollector>
     private let processSlot: SourceSlot<ProcessCollector>
     private let systemSlot: SourceSlot<SystemInfoCollector>
@@ -182,6 +183,7 @@ public final class SamplingCore: @unchecked Sendable {
         self.networkSlot = SourceSlot(NetworkCollector())
         self.diskSlot = SourceSlot(DiskCollector())
         self.powerSlot = SourceSlot(PowerCollector())
+        self.bluetoothSlot = SourceSlot(BluetoothCollector())
         self.thermalSlot = SourceSlot(ThermalCollector())
         self.processSlot = SourceSlot(ProcessCollector())
         self.systemSlot = SourceSlot(SystemInfoCollector())
@@ -297,8 +299,8 @@ public final class SamplingCore: @unchecked Sendable {
 
     private func forEachSlot(_ body: (any SlotErasing) -> Void) {
         body(cpuSlot); body(memorySlot); body(gpuSlot); body(networkSlot)
-        body(diskSlot); body(powerSlot); body(thermalSlot); body(processSlot)
-        body(systemSlot)
+        body(diskSlot); body(powerSlot); body(bluetoothSlot); body(thermalSlot)
+        body(processSlot); body(systemSlot)
     }
 
     private func rescheduleTimerLocked() {
@@ -362,6 +364,7 @@ public final class SamplingCore: @unchecked Sendable {
         run(networkSlot)
         run(diskSlot)
         run(powerSlot)
+        run(bluetoothSlot)
         run(thermalSlot)
         // Processes are by far the most expensive source; only ever sampled when
         // the panel that displays them is actually on screen, or twice in a minute
@@ -381,6 +384,7 @@ public final class SamplingCore: @unchecked Sendable {
             network: networkSlot.state,
             disk: diskSlot.state,
             power: powerSlot.state,
+            bluetooth: bluetoothSlot.state,
             thermal: thermalSlot.state,
             processes: processSlot.state,
             processesSampled: processSlot.sampled(at: now),

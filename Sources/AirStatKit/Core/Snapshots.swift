@@ -486,20 +486,145 @@ public struct AccessoryBattery: Sendable, Equatable, Identifiable {
     public var name: String
     /// The reported category, "Headphones" or "Mouse", when there is one.
     public var category: String?
+    /// The reported transport, such as "Bluetooth LE" or "USB", when published.
+    public var transport: String?
     /// The headline charge: the combined figure when one is reported, otherwise the
     /// lowest part, since the accessory stops working when its emptiest part does.
     public var percent: Double
     public var isCharging: Bool
     public var parts: [Part]
 
-    public init(id: String, name: String, category: String? = nil, percent: Double,
-                isCharging: Bool = false, parts: [Part] = []) {
+    public init(id: String, name: String, category: String? = nil, transport: String? = nil,
+                percent: Double, isCharging: Bool = false, parts: [Part] = []) {
         self.id = id
         self.name = name
         self.category = category
+        self.transport = transport
         self.percent = percent
         self.isCharging = isCharging
         self.parts = parts
+    }
+}
+
+// MARK: - Bluetooth
+
+public enum BluetoothDeviceCategory: String, Sendable, Equatable, Hashable, Codable {
+    case headphones, speaker, keyboard, mouse, trackpad, gamepad
+    case phone, computer, watch, microphone, other
+
+    public var label: String {
+        switch self {
+        case .headphones: return "Headphones"
+        case .speaker: return "Speaker"
+        case .keyboard: return "Keyboard"
+        case .mouse: return "Mouse"
+        case .trackpad: return "Trackpad"
+        case .gamepad: return "Controller"
+        case .phone: return "Phone"
+        case .computer: return "Computer"
+        case .watch: return "Watch"
+        case .microphone: return "Microphone"
+        case .other: return "Bluetooth Device"
+        }
+    }
+
+    public var symbolName: String {
+        switch self {
+        case .headphones: return "headphones"
+        case .speaker: return "hifispeaker"
+        case .keyboard: return "keyboard"
+        case .mouse: return "computermouse"
+        case .trackpad: return "rectangle.and.hand.point.up.left"
+        case .gamepad: return "gamecontroller"
+        case .phone: return "iphone"
+        case .computer: return "laptopcomputer"
+        case .watch: return "applewatch"
+        case .microphone: return "mic"
+        case .other: return "dot.radiowaves.left.and.right"
+        }
+    }
+}
+
+/// One paired or connected Bluetooth peripheral.
+///
+/// Connection state comes from `IOBluetooth` and battery charge from `IOPowerSources`
+/// (with `IOBluetooth` battery properties as a fallback), so a device that reports no
+/// charge still appears with its real link state and `batteryPercent == nil` rather
+/// than vanishing or showing zero.
+public struct BluetoothDevice: Sendable, Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var address: String?
+    public var category: BluetoothDeviceCategory
+    public var isConnected: Bool
+    /// 0...100 when reported; nil when disconnected or when the device does not publish a charge.
+    public var batteryPercent: Double?
+    public var isCharging: Bool
+    public var parts: [AccessoryBattery.Part]
+    /// Link RSSI in dBm when connected and reported by the controller; nil otherwise.
+    public var rssi: Int?
+
+    public init(id: String, name: String, address: String? = nil,
+                category: BluetoothDeviceCategory = .other,
+                isConnected: Bool, batteryPercent: Double? = nil,
+                isCharging: Bool = false, parts: [AccessoryBattery.Part] = [],
+                rssi: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.category = category
+        self.isConnected = isConnected
+        self.batteryPercent = batteryPercent
+        self.isCharging = isCharging
+        self.parts = parts
+        self.rssi = rssi
+    }
+
+    /// The charge to watch for low-battery alerts: for multi-part earbuds, the lowest
+    /// discharging bud (ignoring the case); for a single-battery device, its own charge
+    /// while not on power.
+    public func effectiveBatteryPercent(dischargingOnly: Bool) -> Double? {
+        guard isConnected else { return nil }
+        if !parts.isEmpty {
+            let buds = parts.filter { $0.name.caseInsensitiveCompare("Case") != .orderedSame }
+            let candidates = (buds.isEmpty ? parts : buds)
+                .filter { !dischargingOnly || !$0.isCharging }
+            if let lowest = candidates.map(\.percent).min() { return lowest }
+            return dischargingOnly ? nil : batteryPercent
+        }
+        if dischargingOnly && isCharging { return nil }
+        return batteryPercent
+    }
+}
+
+public struct BluetoothSnapshot: Sendable, Equatable {
+    /// True when the Mac's Bluetooth controller is turned on.
+    public var isPoweredOn: Bool
+    /// Connected devices first, followed by paired devices that are not connected.
+    public var devices: [BluetoothDevice]
+
+    public init(isPoweredOn: Bool = true, devices: [BluetoothDevice] = []) {
+        self.isPoweredOn = isPoweredOn
+        self.devices = devices
+    }
+
+    public var connectedDevices: [BluetoothDevice] { devices.filter(\.isConnected) }
+    public var disconnectedDevices: [BluetoothDevice] { devices.filter { !$0.isConnected } }
+    public var connectedCount: Int { connectedDevices.count }
+
+    /// Connected device carrying the lowest battery reading, if any reports one.
+    public func lowestBatteryDevice(dischargingOnly: Bool = false) -> (device: BluetoothDevice, percent: Double)? {
+        guard isPoweredOn else { return nil }
+        return connectedDevices
+            .compactMap { device in
+                device.effectiveBatteryPercent(dischargingOnly: dischargingOnly)
+                    .map { (device, $0) }
+            }
+            .min { $0.percent < $1.percent }
+    }
+
+    public func lowestBatteryPercent(dischargingOnly: Bool = false) -> Double? {
+        lowestBatteryDevice(dischargingOnly: dischargingOnly)?.percent
     }
 }
 
@@ -712,6 +837,7 @@ public struct SystemSnapshot: Sendable, Equatable {
     public var network: MetricState<NetworkSnapshot>
     public var disk: MetricState<DiskSnapshot>
     public var power: MetricState<PowerSnapshot>
+    public var bluetooth: MetricState<BluetoothSnapshot>
     public var thermal: MetricState<ThermalSnapshot>
     public var processes: MetricState<ProcessSnapshot>
     /// Whether `processes` was collected in this very sample. The process slot keeps
@@ -730,6 +856,7 @@ public struct SystemSnapshot: Sendable, Equatable {
                 network: MetricState<NetworkSnapshot> = .pending,
                 disk: MetricState<DiskSnapshot> = .pending,
                 power: MetricState<PowerSnapshot> = .pending,
+                bluetooth: MetricState<BluetoothSnapshot> = .pending,
                 thermal: MetricState<ThermalSnapshot> = .pending,
                 processes: MetricState<ProcessSnapshot> = .pending,
                 processesSampled: Bool = false,
@@ -742,6 +869,7 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.network = network
         self.disk = disk
         self.power = power
+        self.bluetooth = bluetooth
         self.thermal = thermal
         self.processes = processes
         self.processesSampled = processesSampled

@@ -80,6 +80,15 @@ public struct MenuBarItemRender: Equatable, Sendable {
     /// are a fraction of a known ceiling, and carried for the reason the battery
     /// charge is: the view draws what it is handed.
     public var level: Double?
+    /// How `primary` and `secondary` are arranged when both are present.
+    public var pairOrder: PairOrder
+
+    public enum PairOrder: Equatable, Sendable {
+        /// Side by side on one baseline (`primary` then `secondary`).
+        case inline
+        /// Stacked on two compact lines: `secondary` on top, `primary` underneath.
+        case secondaryOverPrimary
+    }
 
     /// Two lights, download over upload.
     public struct NetworkStatus: Equatable, Sendable {
@@ -123,7 +132,8 @@ public struct MenuBarItemRender: Equatable, Sendable {
                 isBatteryLow: Bool = false,
                 batteryValueText: String? = nil,
                 networkStatus: NetworkStatus? = nil,
-                level: Double? = nil) {
+                level: Double? = nil,
+                pairOrder: PairOrder = .inline) {
         self.id = id
         self.style = style
         self.tint = tint
@@ -139,6 +149,7 @@ public struct MenuBarItemRender: Equatable, Sendable {
         self.batteryValueText = batteryValueText
         self.networkStatus = networkStatus
         self.level = level
+        self.pairOrder = pairOrder
     }
 
 }
@@ -255,22 +266,19 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             seriesKey = .gpuUtilization
 
         case .networkThroughput:
-            // Compact form ("2.4MB") rather than the full one ("2.4 MB/s"). Two full
-            // rates side by side are 130 points of menu bar for one readout; the arrow
-            // already says this is a flow, and the panel and the accessibility label
-            // both still carry the units in full.
-            let rateWidest = MenuBarRenderModel.widestCompactNetworkRate(formatter)
+            // Upload sits above Download in one shared column, halving the horizontal
+            // footprint on notched displays while leaving room for full rate units.
+            let rateWidest = MenuBarRenderModel.widestNetworkRate(formatter)
             var uploadText = dash
             // The two lights, for the `.statusDot` style. Up means a primary
             // interface with a route out, the same test the panel's connection row
             // uses, and a direction is lit while it is moving or was within the hold.
             var networkStatus: MenuBarItemRender.NetworkStatus?
             if let net = snapshot.network.value {
-                valueText = formatter.networkRate(net.downloadBytesPerSecond, compact: true)
-                uploadText = formatter.networkRate(net.uploadBytesPerSecond, compact: true)
+                valueText = formatter.networkRate(net.downloadBytesPerSecond)
+                uploadText = formatter.networkRate(net.uploadBytesPerSecond)
                 unavailable = false
-                accessibilityValue = "Network down \(formatter.networkRate(net.downloadBytesPerSecond)), "
-                    + "up \(formatter.networkRate(net.uploadBytesPerSecond))"
+                accessibilityValue = "Network up \(uploadText), down \(valueText)"
                 let online = net.connectionType != .none
                 networkStatus = .init(
                     isOnline: online,
@@ -291,7 +299,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                                widestText: rateWidest, series: pair.0),
                           secondary: secondary,
                           unavailable: unavailable, accessibility: accessibilityValue,
-                          settings: settings, networkStatus: networkStatus)
+                          settings: settings, networkStatus: networkStatus,
+                          pairOrder: .secondaryOverPrimary)
 
         case .networkUpload:
             if let net = snapshot.network.value {
@@ -377,6 +386,25 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             }
             seriesKey = .systemWatts
 
+        case .bluetoothDevices:
+            if let bt = snapshot.bluetooth.value {
+                unavailable = false
+                if bt.isPoweredOn {
+                    valueText = formatter.count(bt.connectedCount)
+                    accessibilityValue = "Bluetooth \(valueText) connected"
+                } else {
+                    valueText = "Off"
+                    accessibilityValue = "Bluetooth off"
+                }
+            }
+
+        case .bluetoothBattery:
+            if let bt = snapshot.bluetooth.value, let lowest = bt.lowestBatteryDevice() {
+                valueText = formatter.percentValue(lowest.percent)
+                unavailable = false
+                accessibilityValue = "Bluetooth battery \(lowest.device.name) \(valueText)"
+            }
+
         case .fanSpeed:
             if let fan = snapshot.thermal.value?.fans.first {
                 valueText = formatter.rpm(fan.currentRPM)
@@ -421,7 +449,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                settings: Settings,
                                battery: BatteryState? = nil,
                                networkStatus: MenuBarItemRender.NetworkStatus? = nil,
-                               level: Double? = nil) -> MenuBarItemRender {
+                               level: Double? = nil,
+                               pairOrder: MenuBarItemRender.PairOrder = .inline) -> MenuBarItemRender {
         MenuBarItemRender(
             id: config.id,
             style: config.style,
@@ -441,7 +470,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             isBatteryLow: battery?.isLow ?? false,
             batteryValueText: battery?.valueText,
             networkStatus: networkStatus,
-            level: level
+            level: level,
+            pairOrder: pairOrder
         )
     }
 
@@ -485,6 +515,8 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .battery: return "BATT"
         case .batteryTime: return "LEFT"
         case .systemPower: return "PWR"
+        case .bluetoothDevices: return "BT"
+        case .bluetoothBattery: return "BT"
         case .fanSpeed: return "FAN"
         case .uptime: return "UP"
         }
@@ -562,11 +594,11 @@ public struct MenuBarRenderModel: Equatable, Sendable {
     /// The widest string the compact rate form can produce, generated *through* the
     /// formatter so it follows the user's bits-versus-bytes and binary-versus-decimal
     /// choices instead of assuming them.
-    private static func widestCompactNetworkRate(_ formatter: MetricFormatter) -> String {
+    private static func widestNetworkRate(_ formatter: MetricFormatter) -> String {
         let probe = formatter.networkUnit == .bits
             ? 999 * 1_000_000 / 8.0
             : 999 * pow(formatter.byteStyle.base, 2)
-        return formatter.networkRate(probe, compact: true)
+        return formatter.networkRate(probe)
     }
 
     private static func widestCompactDiskRate(_ formatter: MetricFormatter) -> String {
@@ -583,6 +615,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         case .diskActivity, .diskFree: return "internaldrive"
         case .battery, .batteryTime: return "battery.100"
         case .systemPower: return "bolt"
+        case .bluetoothDevices, .bluetoothBattery: return "dot.radiowaves.left.and.right"
         case .fanSpeed: return "fan"
         case .uptime: return "clock"
         }

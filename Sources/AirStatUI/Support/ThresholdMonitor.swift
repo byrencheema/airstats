@@ -109,7 +109,7 @@ public final class ThresholdMonitor {
         // warning in Notification Centre.
         authority.post(identifier: "threshold.\(alert.ruleID.uuidString)",
                        title: alert.title,
-                       body: alert.body)
+                       body: alert.body(in: engine.snapshot))
         WindowLog.log("notification posted metric=\(alert.metric.rawValue) value=\(alert.value) threshold=\(alert.threshold)")
     }
 }
