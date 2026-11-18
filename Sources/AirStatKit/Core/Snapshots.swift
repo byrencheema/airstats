@@ -614,6 +614,41 @@ public struct BluetoothDevice: Sendable, Equatable, Identifiable {
     }
 }
 
+/// Identifies a specific Bluetooth peripheral chosen for a `.bluetoothBattery` readout.
+///
+/// Matches by `id` / `address` first and falls back to a case-insensitive `name` match
+/// so multi-slot BLE keyboards and mice that rotate one address byte across host slots
+/// continue matching without manual re-selection.
+public struct BluetoothDeviceTarget: Sendable, Codable, Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var category: BluetoothDeviceCategory
+
+    public init(id: String, name: String, category: BluetoothDeviceCategory = .other) {
+        self.id = id
+        self.name = name
+        self.category = category
+    }
+
+    public init(device: BluetoothDevice) {
+        self.id = device.id
+        self.name = device.name
+        self.category = device.category
+    }
+
+    public func matches(_ device: BluetoothDevice) -> Bool {
+        let targetID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !targetID.isEmpty {
+            if device.id.caseInsensitiveCompare(targetID) == .orderedSame { return true }
+            if let address = device.address,
+               address.caseInsensitiveCompare(targetID) == .orderedSame { return true }
+        }
+        let targetName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let deviceName = device.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !targetName.isEmpty && deviceName.caseInsensitiveCompare(targetName) == .orderedSame
+    }
+}
+
 public struct BluetoothSnapshot: Sendable, Equatable {
     /// True when the Mac's Bluetooth controller is turned on.
     public var isPoweredOn: Bool
@@ -628,6 +663,45 @@ public struct BluetoothSnapshot: Sendable, Equatable {
     public var connectedDevices: [BluetoothDevice] { devices.filter(\.isConnected) }
     public var disconnectedDevices: [BluetoothDevice] { devices.filter { !$0.isConnected } }
     public var connectedCount: Int { connectedDevices.count }
+
+    /// Resolves a configured `BluetoothDeviceTarget` against the current snapshot,
+    /// preferring an exact `id`/`address` match among connected devices, then a
+    /// case-insensitive `name` match among connected devices, before checking
+    /// disconnected pairings.
+    public func matchingDevice(for target: BluetoothDeviceTarget) -> BluetoothDevice? {
+        let targetID = target.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let targetName = target.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !targetID.isEmpty,
+           let byID = connectedDevices.first(where: {
+               $0.id.caseInsensitiveCompare(targetID) == .orderedSame
+               || ($0.address?.caseInsensitiveCompare(targetID) == .orderedSame)
+           }) {
+            return byID
+        }
+        if !targetName.isEmpty,
+           let byName = connectedDevices.first(where: {
+               $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                   .caseInsensitiveCompare(targetName) == .orderedSame
+           }) {
+            return byName
+        }
+        if !targetID.isEmpty,
+           let disconnectedByID = disconnectedDevices.first(where: {
+               $0.id.caseInsensitiveCompare(targetID) == .orderedSame
+               || ($0.address?.caseInsensitiveCompare(targetID) == .orderedSame)
+           }) {
+            return disconnectedByID
+        }
+        if !targetName.isEmpty,
+           let disconnectedByName = disconnectedDevices.first(where: {
+               $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                   .caseInsensitiveCompare(targetName) == .orderedSame
+           }) {
+            return disconnectedByName
+        }
+        return nil
+    }
 
     /// Connected device carrying the lowest battery reading, if any reports one.
     public func lowestBatteryDevice(dischargingOnly: Bool = false) -> (device: BluetoothDevice, percent: Double)? {

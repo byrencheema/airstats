@@ -423,14 +423,23 @@ extension PanelModuleView {
 
     private func bluetoothConnectedRow(_ device: BluetoothDevice) -> some View {
         let status = bluetoothConnectedValue(device)
+        let isPinned = isDevicePinnedInMenuBar(device)
         return VStack(alignment: .leading, spacing: Design.Space.xs) {
             HStack(spacing: Design.Space.s) {
                 BluetoothDeviceBadge(category: device.category, isConnected: true)
-                Text(device.name)
-                    .font(Design.Text.label)
-                    .foregroundStyle(Design.Palette.primaryText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: Design.Space.xxs) {
+                    Text(device.name)
+                        .font(Design.Text.label)
+                        .foregroundStyle(Design.Palette.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    if isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 8.5, weight: .semibold))
+                            .foregroundStyle(Design.Palette.tertiaryText)
+                            .help(L10n.tr("Pinned to the menu bar", "Đã ghim lên thanh Menu"))
+                    }
+                }
                 Spacer(minLength: Design.Space.m)
                 HStack(spacing: Design.Space.xs) {
                     Text(status)
@@ -450,19 +459,30 @@ extension PanelModuleView {
                 CapacityBar(fraction: percent / 100, tint: PanelModuleView.barTint)
             }
         }
+        .contentShape(Rectangle())
+        .contextMenu { bluetoothPinMenu(for: device, isPinned: isPinned) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(device.name)
         .accessibilityValue(L10n.tr("Connected, \(status)", "Đã kết nối, \(status)"))
     }
 
     private func bluetoothDisconnectedRow(_ device: BluetoothDevice) -> some View {
-        HStack(spacing: Design.Space.s) {
+        let isPinned = isDevicePinnedInMenuBar(device)
+        return HStack(spacing: Design.Space.s) {
             BluetoothDeviceBadge(category: device.category, isConnected: false)
-            Text(device.name)
-                .font(Design.Text.label)
-                .foregroundStyle(Design.Palette.secondaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            HStack(spacing: Design.Space.xxs) {
+                Text(device.name)
+                    .font(Design.Text.label)
+                    .foregroundStyle(Design.Palette.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: 8.5, weight: .semibold))
+                        .foregroundStyle(Design.Palette.tertiaryText)
+                        .help(L10n.tr("Pinned to the menu bar", "Đã ghim lên thanh Menu"))
+                }
+            }
             Spacer(minLength: Design.Space.m)
             Text(L10n.tr("Not connected", "Chưa kết nối"))
                 .font(Design.Text.caption)
@@ -470,9 +490,69 @@ extension PanelModuleView {
                 .lineLimit(1)
         }
         .opacity(0.65)
+        .contentShape(Rectangle())
+        .contextMenu { bluetoothPinMenu(for: device, isPinned: isPinned) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(device.name)
         .accessibilityValue(L10n.tr("Not connected", "Chưa kết nối"))
+    }
+
+    @ViewBuilder
+    private func bluetoothPinMenu(for device: BluetoothDevice, isPinned: Bool) -> some View {
+        if isPinned {
+            Button {
+                toggleMenuBarPin(for: device)
+            } label: {
+                Label(L10n.tr("Remove Battery from Menu Bar", "Bỏ ghim pin khỏi thanh Menu"),
+                      systemImage: "pin.slash")
+            }
+        } else {
+            Button {
+                toggleMenuBarPin(for: device)
+            } label: {
+                Label(L10n.tr("Show Battery in Menu Bar", "Ghim pin lên thanh Menu"),
+                      systemImage: "pin")
+            }
+        }
+    }
+
+    private func isDevicePinnedInMenuBar(_ device: BluetoothDevice) -> Bool {
+        settings.settings.menuBar.items.contains { item in
+            item.isEnabled
+                && item.metric == .bluetoothBattery
+                && (item.bluetoothDevice?.matches(device) == true)
+        }
+    }
+
+    private func toggleMenuBarPin(for device: BluetoothDevice) {
+        settings.update { s in
+            if let index = s.menuBar.items.firstIndex(where: {
+                $0.metric == .bluetoothBattery && ($0.bluetoothDevice?.matches(device) == true)
+            }) {
+                if s.menuBar.items[index].isEnabled {
+                    let hasOtherEnabled = s.menuBar.items.enumerated().contains { idx, item in
+                        idx != index && item.isEnabled
+                    }
+                    if s.menuBar.items.count > 1 && hasOtherEnabled {
+                        s.menuBar.items.remove(at: index)
+                    } else {
+                        s.menuBar.items[index].bluetoothDevice = nil
+                    }
+                } else {
+                    s.menuBar.items[index].isEnabled = true
+                    s.menuBar.items[index].bluetoothDevice = BluetoothDeviceTarget(device: device)
+                }
+            } else {
+                let config = MenuBarItemConfig(
+                    metric: .bluetoothBattery,
+                    style: .text,
+                    isEnabled: true,
+                    showsCaption: true,
+                    bluetoothDevice: BluetoothDeviceTarget(device: device)
+                )
+                s.menuBar.items.append(config)
+            }
+        }
     }
 
     private func batterySymbolName(percent: Double, isCharging: Bool) -> String {

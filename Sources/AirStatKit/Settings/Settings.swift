@@ -208,14 +208,19 @@ public struct MenuBarItemConfig: Sendable, Codable, Equatable, Hashable, Identif
     public var isEnabled: Bool
     /// Draw the metric's name above its number.
     public var showsCaption: Bool
+    /// Specific Bluetooth peripheral to display for `.bluetoothBattery`, or `nil` for
+    /// automatic lowest-battery selection.
+    public var bluetoothDevice: BluetoothDeviceTarget?
 
     public init(id: UUID = UUID(), metric: MenuBarMetric, style: MenuBarDisplayStyle = .text,
-                isEnabled: Bool = true, showsCaption: Bool = true) {
+                isEnabled: Bool = true, showsCaption: Bool = true,
+                bluetoothDevice: BluetoothDeviceTarget? = nil) {
         self.id = id
         self.metric = metric
         self.style = style
         self.isEnabled = isEnabled
         self.showsCaption = showsCaption
+        self.bluetoothDevice = bluetoothDevice
     }
 
     /// Clamp a decoded config back into a coherent state — an old build may have
@@ -225,11 +230,14 @@ public struct MenuBarItemConfig: Sendable, Codable, Equatable, Hashable, Identif
         if !metric.supportedStyles.contains(style) {
             copy.style = metric.supportedStyles.first ?? .text
         }
+        if copy.metric != .bluetoothBattery {
+            copy.bluetoothDevice = nil
+        }
         return copy
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, metric, style, isEnabled, showsCaption
+        case id, metric, style, isEnabled, showsCaption, bluetoothDevice
     }
 
     /// A file written by an older build carries a `graphWidth` and may carry a style
@@ -242,6 +250,7 @@ public struct MenuBarItemConfig: Sendable, Codable, Equatable, Hashable, Identif
         style = c.value(.style, or: MenuBarDisplayStyle.text)
         isEnabled = c.value(.isEnabled, or: true)
         showsCaption = c.value(.showsCaption, or: true)
+        bluetoothDevice = try? c.decodeIfPresent(BluetoothDeviceTarget.self, forKey: .bluetoothDevice)
     }
 }
 

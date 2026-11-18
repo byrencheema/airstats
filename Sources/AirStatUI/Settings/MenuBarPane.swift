@@ -96,61 +96,179 @@ struct MenuBarPane: View {
     /// all. The style also sat in the row already, right-aligned exactly where a popup
     /// menu's value sits, as text that did not respond to a click.
     private func readoutRow(_ item: MenuBarItemConfig, index: Int) -> some View {
-        HStack(spacing: Design.Space.m) {
-            Toggle("", isOn: enabledBinding(for: item))
-                .toggleStyle(.checkbox)
-                .labelsHidden()
-                .disabled(isLastEnabled(item))
-                .help(isLastEnabled(item)
-                      ? "At least one readout must stay visible so the menu bar item remains clickable."
-                      : "Show \(item.metric.label) in the menu bar")
-                .accessibilityLabel("Show \(item.metric.label)")
+        VStack(alignment: .leading, spacing: Design.Space.xs) {
+            HStack(spacing: Design.Space.m) {
+                Toggle("", isOn: enabledBinding(for: item))
+                    .toggleStyle(.checkbox)
+                    .labelsHidden()
+                    .disabled(isLastEnabled(item))
+                    .help(isLastEnabled(item)
+                          ? "At least one readout must stay visible so the menu bar item remains clickable."
+                          : "Show \(item.metric.label) in the menu bar")
+                    .accessibilityLabel("Show \(item.metric.label)")
 
-            RowMenu(title: item.metric.label,
-                    width: Self.metricColumn,
-                    label: "\(item.metric.label) metric") {
-                Picker(L10n.tr("Metric", "Chỉ số"), selection: metricBinding(for: item)) {
-                    ForEach(MenuBarMetric.allCases, id: \.self) { metric in
-                        Text(metric.label).tag(metric)
+                RowMenu(title: item.metric.label,
+                        width: Self.metricColumn,
+                        label: "\(item.metric.label) metric") {
+                    Picker(L10n.tr("Metric", "Chỉ số"), selection: metricBinding(for: item)) {
+                        ForEach(MenuBarMetric.allCases, id: \.self) { metric in
+                            Text(metric.label).tag(metric)
+                        }
                     }
+                    .pickerStyle(.inline)
                 }
-                .pickerStyle(.inline)
+
+                Spacer(minLength: Design.Space.s)
+
+                // The badge stands in for the style control rather than joining it: a
+                // readout this Mac cannot serve has no style worth choosing, and the two
+                // together do not fit the row.
+                if let reason = availability.note(for: item.metric) {
+                    UnavailableBadge(reason: reason)
+                } else {
+                    styleMenu(item)
+                }
+
+                ReorderControls(canMoveUp: index > 0,
+                                canMoveDown: index < items.count - 1,
+                                itemLabel: item.metric.label) { offset in
+                    move(item, by: offset)
+                }
+
+                // Deleting belongs on the row it deletes. As a button under the list it
+                // acted on "the selected readout", and the only thing naming that readout
+                // was a tint on one row — a destructive control whose target you had to
+                // infer. It also matches the desktop widget's module list, which is the same
+                // list of the same metrics doing the same job.
+                RowIconButton(systemName: "trash",
+                              help: items.count <= 1
+                                  ? L10n.tr("The last readout cannot be removed.", "Không thể xoá chỉ số cuối cùng.")
+                                  : L10n.tr("Remove \(item.metric.label) from the menu bar", "Xoá \(item.metric.label) khỏi thanh Menu"),
+                              label: L10n.tr("Remove \(item.metric.label)", "Xoá \(item.metric.label)")) {
+                    remove(item)
+                }
+                .disabled(items.count <= 1)
             }
 
-            Spacer(minLength: Design.Space.s)
-
-            // The badge stands in for the style control rather than joining it: a
-            // readout this Mac cannot serve has no style worth choosing, and the two
-            // together do not fit the row.
-            if let reason = availability.note(for: item.metric) {
-                UnavailableBadge(reason: reason)
-            } else {
-                styleMenu(item)
+            if item.metric == .bluetoothBattery, availability.note(for: item.metric) == nil {
+                bluetoothDeviceSubrow(item)
             }
-
-            ReorderControls(canMoveUp: index > 0,
-                            canMoveDown: index < items.count - 1,
-                            itemLabel: item.metric.label) { offset in
-                move(item, by: offset)
-            }
-
-            // Deleting belongs on the row it deletes. As a button under the list it
-            // acted on "the selected readout", and the only thing naming that readout
-            // was a tint on one row — a destructive control whose target you had to
-            // infer. It also matches the desktop widget's module list, which is the same
-            // list of the same metrics doing the same job.
-            RowIconButton(systemName: "trash",
-                          help: items.count <= 1
-                              ? L10n.tr("The last readout cannot be removed.", "Không thể xoá chỉ số cuối cùng.")
-                              : L10n.tr("Remove \(item.metric.label) from the menu bar", "Xoá \(item.metric.label) khỏi thanh Menu"),
-                          label: L10n.tr("Remove \(item.metric.label)", "Xoá \(item.metric.label)")) {
-                remove(item)
-            }
-            .disabled(items.count <= 1)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(item.metric.label)
         .accessibilityValue("\(item.isEnabled ? "Shown" : "Hidden"), \(item.style.label) style")
+    }
+
+    private func bluetoothDeviceSubrow(_ item: MenuBarItemConfig) -> some View {
+        let options = bluetoothDeviceOptions(for: item)
+        return HStack(spacing: Design.Space.xs) {
+            Image(systemName: bluetoothTargetSymbol(for: item))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Design.Palette.secondaryText)
+                .frame(width: 16, alignment: .center)
+            Text(L10n.tr("Device:", "Thiết bị:"))
+                .font(Design.Text.caption)
+                .foregroundStyle(Design.Palette.secondaryText)
+            RowMenu(title: bluetoothTargetTitle(for: item),
+                    label: L10n.tr("Bluetooth device", "Thiết bị Bluetooth")) {
+                Picker(L10n.tr("Device", "Thiết bị"), selection: bluetoothDeviceBinding(for: item)) {
+                    Text(L10n.tr("Lowest Battery (Auto)", "Tự động (thiết bị pin thấp nhất)"))
+                        .tag(BluetoothDeviceTarget?.none)
+                    if !options.isEmpty {
+                        Divider()
+                        ForEach(options, id: \.tag) { option in
+                            Label(option.title, systemImage: option.symbol)
+                                .tag(Optional(option.tag))
+                        }
+                    }
+                }
+                .pickerStyle(.inline)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 26)
+    }
+
+    private struct BluetoothDeviceOption: Hashable {
+        var tag: BluetoothDeviceTarget
+        var title: String
+        var symbol: String
+    }
+
+    private var bluetoothSnapshot: BluetoothSnapshot? {
+        SettingsPreview.snapshot(engine).bluetooth.value
+    }
+
+    private func bluetoothDeviceOptions(for item: MenuBarItemConfig) -> [BluetoothDeviceOption] {
+        let formatter = MetricFormatter(settings: settings.settings.general)
+        let devices = bluetoothSnapshot?.devices ?? []
+        let saved = item.bluetoothDevice
+        var matchedSaved = false
+        var result: [BluetoothDeviceOption] = devices.map { device in
+            let tag: BluetoothDeviceTarget
+            if let saved, saved.matches(device) {
+                matchedSaved = true
+                tag = saved
+            } else {
+                tag = BluetoothDeviceTarget(device: device)
+            }
+            let status: String
+            if device.isConnected {
+                if let percent = device.effectiveBatteryPercent(dischargingOnly: false) {
+                    status = formatter.percentValue(percent)
+                } else {
+                    status = L10n.tr("Connected", "Đã kết nối")
+                }
+            } else {
+                status = L10n.tr("Not connected", "Chưa kết nối")
+            }
+            return BluetoothDeviceOption(
+                tag: tag,
+                title: "\(device.name) — \(status)",
+                symbol: device.category.symbolName
+            )
+        }
+        if let saved, !matchedSaved {
+            result.insert(
+                BluetoothDeviceOption(
+                    tag: saved,
+                    title: "\(saved.name) — \(L10n.tr("Not connected", "Chưa kết nối"))",
+                    symbol: saved.category.symbolName
+                ),
+                at: 0
+            )
+        }
+        return result
+    }
+
+    private func bluetoothTargetSymbol(for item: MenuBarItemConfig) -> String {
+        if let target = item.bluetoothDevice {
+            if let matched = bluetoothSnapshot?.matchingDevice(for: target) {
+                return matched.category.symbolName
+            }
+            return target.category.symbolName
+        }
+        if let lowest = bluetoothSnapshot?.lowestBatteryDevice() {
+            return lowest.device.category.symbolName
+        }
+        return "dot.radiowaves.left.and.right"
+    }
+
+    private func bluetoothTargetTitle(for item: MenuBarItemConfig) -> String {
+        guard let target = item.bluetoothDevice else {
+            return L10n.tr("Lowest Battery (Auto)", "Tự động (pin thấp nhất)")
+        }
+        let formatter = MetricFormatter(settings: settings.settings.general)
+        if let matched = bluetoothSnapshot?.matchingDevice(for: target) {
+            if matched.isConnected {
+                if let percent = matched.effectiveBatteryPercent(dischargingOnly: false) {
+                    return "\(matched.name) (\(formatter.percentValue(percent)))"
+                }
+                return matched.name
+            }
+            return "\(matched.name) (\(L10n.tr("Not connected", "Chưa kết nối")))"
+        }
+        return "\(target.name) (\(L10n.tr("Not connected", "Chưa kết nối")))"
     }
 
     /// The style popup, carrying the caption toggle with it.
@@ -213,7 +331,7 @@ struct MenuBarPane: View {
             let label = MenuBarRenderModel.sideCaptionText(for: item.metric) ?? item.metric.label
             return L10n.tr("Show \"\(label)\" beside the bar", "Hiện \"\(label)\" bên cạnh thanh")
         }
-        if settings.settings.menuBar.usesIconTitles {
+        if settings.settings.menuBar.usesIconTitles || item.metric == .bluetoothBattery {
             return L10n.tr("Show icon above the value", "Hiện icon phía trên giá trị")
         }
         let label = MenuBarRenderModel.captionText(for: item.metric) ?? item.metric.label
@@ -250,11 +368,28 @@ struct MenuBarPane: View {
                 set: { metric in
                     mutate(item) { config in
                         config.metric = metric
+                        if metric != .bluetoothBattery {
+                            config.bluetoothDevice = nil
+                        }
                         // `sanitized()` in the store will clamp an unsupported style,
                         // but doing it here keeps the picker from flashing a value it
                         // is about to lose.
                         if !metric.supportedStyles.contains(config.style) {
                             config.style = metric.supportedStyles.first ?? .text
+                        }
+                    }
+                })
+    }
+
+    func bluetoothDeviceBinding(for item: MenuBarItemConfig) -> Binding<BluetoothDeviceTarget?> {
+        Binding(get: { item.bluetoothDevice },
+                set: { target in
+                    mutate(item) { config in
+                        if let target,
+                           let matched = bluetoothSnapshot?.matchingDevice(for: target) {
+                            config.bluetoothDevice = BluetoothDeviceTarget(device: matched)
+                        } else {
+                            config.bluetoothDevice = target
                         }
                     }
                 })

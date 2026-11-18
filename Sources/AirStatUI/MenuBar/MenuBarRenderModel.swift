@@ -181,26 +181,34 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         self.usesFixedWidth = MenuBarSettings.usesFixedWidth
         self.isStale = isStale
 
-        var rendered: [MenuBarItemRender] = []
-        rendered.reserveCapacity(settings.menuBar.items.count)
+        var candidates: [(item: MenuBarItemRender, autoHide: Bool)] = []
+        candidates.reserveCapacity(settings.menuBar.items.count)
         for config in settings.menuBar.enabledItems {
-            rendered.append(MenuBarRenderModel.render(config: config,
-                                                      snapshot: snapshot,
-                                                      history: history,
-                                                      formatter: formatter,
-                                                      settings: settings))
+            candidates.append(MenuBarRenderModel.render(config: config,
+                                                        snapshot: snapshot,
+                                                        history: history,
+                                                        formatter: formatter,
+                                                        settings: settings))
         }
-        self.items = rendered
+        let visible = candidates.filter { !$0.autoHide }.map(\.item)
+        if !visible.isEmpty {
+            self.items = visible
+        } else if let fallback = candidates.first?.item {
+            // Keep one fallback readout when every enabled item auto-hid, so the menu
+            // bar item never disappears completely or loses its click target.
+            self.items = [fallback]
+        } else {
+            self.items = []
+        }
     }
 
-    /// Builds one readout. Every enabled item produces one: nothing here decides an
-    /// item is not worth drawing, because a readout that comes and goes on its own is
-    /// the thing that makes the whole bar shuffle.
+    /// Builds one readout alongside whether it should auto-hide while disconnected
+    /// (used for Bluetooth battery readouts when their peripheral is offline).
     private static func render(config: MenuBarItemConfig,
                                snapshot: SystemSnapshot,
                                history: MetricHistory,
                                formatter: MetricFormatter,
-                               settings: Settings) -> MenuBarItemRender {
+                               settings: Settings) -> (item: MenuBarItemRender, autoHide: Bool) {
         let metric = config.metric
         let lang = settings.general.language
         let dash = MetricFormatter.unavailable
@@ -209,6 +217,7 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         var valueText = dash
         var seriesKey: SeriesKey?
         var unavailable = true
+        var autoHide = false
         // Named, not a bare "unavailable": VoiceOver reads the whole item as one string,
         // and three anonymous "unavailable"s in a row say nothing about what is missing.
         var accessibilityValue = L10n.tr("\(metric.label) unavailable",
@@ -307,13 +316,14 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             let pair = jointlyNormalized(history, .networkDownload, .networkUpload)
             secondary = MenuBarLine(glyph: "↑", valueText: uploadText,
                                     widestText: rateWidest, series: pair.1)
-            return finish(config: config, caption: nil,
-                          primary: MenuBarLine(glyph: "↓", valueText: valueText,
-                                               widestText: rateWidest, series: pair.0),
-                          secondary: secondary,
-                          unavailable: unavailable, accessibility: accessibilityValue,
-                          settings: settings, networkStatus: networkStatus,
-                          pairOrder: .secondaryOverPrimary)
+            let netItem = finish(config: config, caption: nil,
+                                 primary: MenuBarLine(glyph: "↓", valueText: valueText,
+                                                      widestText: rateWidest, series: pair.0),
+                                 secondary: secondary,
+                                 unavailable: unavailable, accessibility: accessibilityValue,
+                                 settings: settings, networkStatus: networkStatus,
+                                 pairOrder: .secondaryOverPrimary)
+            return (netItem, false)
 
         case .networkUpload:
             if let net = snapshot.network.value {
@@ -344,12 +354,13 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             let pair = jointlyNormalized(history, .diskRead, .diskWrite)
             secondary = MenuBarLine(glyph: "W", valueText: writeText,
                                     widestText: rateWidest, series: pair.1)
-            return finish(config: config, caption: nil,
-                          primary: MenuBarLine(glyph: "R", valueText: valueText,
-                                               widestText: rateWidest, series: pair.0),
-                          secondary: secondary,
-                          unavailable: unavailable, accessibility: accessibilityValue,
-                          settings: settings)
+            let diskItem = finish(config: config, caption: nil,
+                                  primary: MenuBarLine(glyph: "R", valueText: valueText,
+                                                       widestText: rateWidest, series: pair.0),
+                                  secondary: secondary,
+                                  unavailable: unavailable, accessibility: accessibilityValue,
+                                  settings: settings)
+            return (diskItem, false)
 
         case .diskFree:
             if let root = snapshot.disk.value?.rootVolume {
@@ -415,13 +426,45 @@ public struct MenuBarRenderModel: Equatable, Sendable {
             }
 
         case .bluetoothBattery:
-            if let bt = snapshot.bluetooth.value, let lowest = bt.lowestBatteryDevice() {
-                valueText = formatter.percentValue(lowest.percent)
-                unavailable = false
-                customSymbolName = lowest.device.category.symbolName
-                accessibilityValue = L10n.tr("Bluetooth battery \(lowest.device.name) \(valueText)",
-                                             "Pin Bluetooth \(lowest.device.name) \(valueText)",
+            if let target = config.bluetoothDevice {
+                customSymbolName = target.category.symbolName
+                accessibilityValue = L10n.tr("Bluetooth battery \(target.name) unavailable",
+                                             "Pin Bluetooth \(target.name) không khả dụng",
                                              language: lang)
+                if let bt = snapshot.bluetooth.value, bt.isPoweredOn,
+                   let matched = bt.matchingDevice(for: target) {
+                    customSymbolName = matched.category.symbolName
+                    if matched.isConnected {
+                        if let percent = matched.effectiveBatteryPercent(dischargingOnly: false) {
+                            valueText = formatter.percentValue(percent)
+                            unavailable = false
+                            accessibilityValue = L10n.tr("Bluetooth battery \(matched.name) \(valueText)",
+                                                         "Pin Bluetooth \(matched.name) \(valueText)",
+                                                         language: lang)
+                        } else {
+                            unavailable = false
+                            valueText = dash
+                            accessibilityValue = L10n.tr("Bluetooth \(matched.name) connected",
+                                                         "Bluetooth \(matched.name) đang kết nối",
+                                                         language: lang)
+                        }
+                    } else {
+                        autoHide = true
+                    }
+                } else {
+                    autoHide = true
+                }
+            } else {
+                if let bt = snapshot.bluetooth.value, let lowest = bt.lowestBatteryDevice() {
+                    valueText = formatter.percentValue(lowest.percent)
+                    unavailable = false
+                    customSymbolName = lowest.device.category.symbolName
+                    accessibilityValue = L10n.tr("Bluetooth battery \(lowest.device.name) \(valueText)",
+                                                 "Pin Bluetooth \(lowest.device.name) \(valueText)",
+                                                 language: lang)
+                } else {
+                    autoHide = true
+                }
             }
 
         case .fanSpeed:
@@ -441,14 +484,15 @@ public struct MenuBarRenderModel: Equatable, Sendable {
         }
 
         let series = seriesKey.map { normalizedSeries(history, key: $0) } ?? []
-        return finish(config: config, caption: caption(for: config, language: lang),
-                      primary: MenuBarLine(valueText: valueText, widestText: widest,
-                                           series: series),
-                      secondary: nil,
-                      unavailable: unavailable, accessibility: accessibilityValue,
-                      settings: settings, symbolNameOverride: customSymbolName,
-                      battery: battery,
-                      level: level.map { min(max($0, 0), 1) })
+        let renderedItem = finish(config: config, caption: caption(for: config, language: lang),
+                                  primary: MenuBarLine(valueText: valueText, widestText: widest,
+                                                       series: series),
+                                  secondary: nil,
+                                  unavailable: unavailable, accessibility: accessibilityValue,
+                                  settings: settings, symbolNameOverride: customSymbolName,
+                                  battery: battery,
+                                  level: level.map { min(max($0, 0), 1) })
+        return (renderedItem, autoHide)
     }
 
     /// What the battery indicator draws, gathered in one place so the three fields can
@@ -473,7 +517,10 @@ public struct MenuBarRenderModel: Equatable, Sendable {
                                level: Double? = nil,
                                pairOrder: MenuBarItemRender.PairOrder = .inline) -> MenuBarItemRender {
         let resolvedSymbol = symbolNameOverride ?? symbolName(for: config.metric)
-        let usesIconTitle = settings.menuBar.usesIconTitles
+        // Bluetooth battery always uses its peripheral category icon above the percentage
+        // when captions are on, so multiple pinned Bluetooth devices remain distinct even
+        // when CPU/Memory use text captions.
+        let usesIconTitle = (settings.menuBar.usesIconTitles || config.metric == .bluetoothBattery)
             && caption != nil
             && config.style != .bar
             && resolvedSymbol != nil

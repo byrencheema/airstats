@@ -195,11 +195,14 @@ public final class StatusItemController {
         anchorItem?.button?.window?.screen ?? NSScreen.main
     }
 
-    /// The last item clicked, or the first one when the panel is being opened by a hot
-    /// key or a menu rather than by a click.
+    /// The last item clicked, or the first visible one when the panel is being opened by
+    /// a hot key or a menu rather than by a click.
     private var anchorItem: NSStatusItem? {
-        if let activeItem, hosted.contains(where: { $0.item === activeItem }) { return activeItem }
-        return hosted.first?.item
+        if let activeItem,
+           hosted.contains(where: { $0.item === activeItem && $0.item.isVisible }) {
+            return activeItem
+        }
+        return hosted.first(where: { $0.item.isVisible })?.item ?? hosted.first?.item
     }
 
     public func presentMenu(_ menu: NSMenu) {
@@ -252,6 +255,13 @@ public final class StatusItemController {
                                        isStale: engine.isStale)
         for entry in hosted {
             let slice = StatusItemController.slice(model, readout: entry.readout)
+            if entry.readout != nil {
+                let shouldShow = !slice.items.isEmpty
+                if entry.item.isVisible != shouldShow {
+                    entry.item.isVisible = shouldShow
+                }
+                guard shouldShow else { continue }
+            }
             guard entry.content.update(with: slice) else { continue }
             let width = entry.content.intrinsicContentSize.width
             if entry.item.length != width { entry.item.length = width }

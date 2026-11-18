@@ -76,16 +76,26 @@ enum RenderCLI {
                 }
             case "--menu-metrics":
                 index += 1
-                let names = (arguments[safe: index] ?? "").split(separator: ",")
-                let parsed = names.compactMap { MenuBarMetric(rawValue: String($0)) }
-                guard parsed.count == names.count, !parsed.isEmpty else {
+                let tokens = (arguments[safe: index] ?? "").split(separator: ",")
+                var built: [MenuBarItemConfig] = []
+                for token in tokens {
+                    let parts = token.split(separator: ":", maxSplits: 1)
+                    guard let metric = MenuBarMetric(rawValue: String(parts[0])) else {
+                        FileHandle.standardError.write(Data("--menu-metrics wants a comma-separated list of metric names\n".utf8))
+                        exit(2)
+                    }
+                    let target: BluetoothDeviceTarget? = parts.count == 2
+                        ? BluetoothDeviceTarget(id: "", name: String(parts[1]))
+                        : nil
+                    built.append(MenuBarItemConfig(metric: metric, isEnabled: true,
+                                                   showsCaption: true,
+                                                   bluetoothDevice: target).sanitized())
+                }
+                guard !built.isEmpty else {
                     FileHandle.standardError.write(Data("--menu-metrics wants a comma-separated list of metric names\n".utf8))
                     exit(2)
                 }
-                var seen: Set<MenuBarMetric> = []
-                settings.menuBar.items = parsed.filter { seen.insert($0).inserted }.map {
-                    MenuBarItemConfig(metric: $0, isEnabled: true, showsCaption: true).sanitized()
-                }
+                settings.menuBar.items = built
             // A day still being collected is the state every launch starts in.
             case "--collected":
                 index += 1

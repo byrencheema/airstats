@@ -140,6 +140,7 @@ struct BluetoothTests {
         let nominal = MenuBarRenderModel(snapshot: SnapshotFixtures.nominal,
                                          history: MetricHistory(),
                                          settings: settings, isStale: false)
+        #expect(nominal.items.count == 2)
         #expect(nominal.items[0].primary.valueText == "2")
         #expect(!nominal.items[0].isUnavailable)
         #expect(nominal.items[1].primary.valueText == "23%")
@@ -150,9 +151,78 @@ struct BluetoothTests {
         let offModel = MenuBarRenderModel(snapshot: offSnapshot,
                                           history: MetricHistory(),
                                           settings: settings, isStale: false)
+        // Bluetooth Battery auto-hides when no device is connected alongside other visible items
+        #expect(offModel.items.count == 1)
         #expect(offModel.items[0].primary.valueText == "Off")
         #expect(!offModel.items[0].isUnavailable)
-        #expect(offModel.items[1].isUnavailable)
+
+        // When Bluetooth Battery is the sole readout, it falls back to "—" so the bar stays clickable
+        var soleSettings = Settings()
+        soleSettings.menuBar.items = [
+            MenuBarItemConfig(metric: .bluetoothBattery, style: .text, showsCaption: true),
+        ]
+        let soleOffModel = MenuBarRenderModel(snapshot: offSnapshot,
+                                              history: MetricHistory(),
+                                              settings: soleSettings, isStale: false)
+        #expect(soleOffModel.items.count == 1)
+        #expect(soleOffModel.items[0].isUnavailable)
+    }
+
+    @Test("specific Bluetooth device readouts show simultaneous batteries, device icons, and auto-hide offline")
+    func perDeviceMenuBarSelection() throws {
+        let airpodsTarget = BluetoothDeviceTarget(id: "AA:BB:CC:DD:EE:01",
+                                                  name: "AirPods Pro",
+                                                  category: .headphones)
+        let mouseTarget = BluetoothDeviceTarget(id: "AA:BB:CC:DD:EE:02",
+                                                name: "Magic Mouse",
+                                                category: .mouse)
+        let disconnectedKeyboard = BluetoothDeviceTarget(id: "AA:BB:CC:DD:EE:03",
+                                                         name: "Magic Keyboard",
+                                                         category: .keyboard)
+
+        var settings = Settings()
+        settings.menuBar.usesIconTitles = false
+        settings.menuBar.items = [
+            MenuBarItemConfig(metric: .cpuUsage, style: .text, showsCaption: true),
+            MenuBarItemConfig(metric: .bluetoothBattery, style: .text, showsCaption: true,
+                              bluetoothDevice: airpodsTarget),
+            MenuBarItemConfig(metric: .bluetoothBattery, style: .text, showsCaption: true,
+                              bluetoothDevice: mouseTarget),
+            MenuBarItemConfig(metric: .bluetoothBattery, style: .text, showsCaption: true,
+                              bluetoothDevice: disconnectedKeyboard),
+        ]
+
+        let model = MenuBarRenderModel(snapshot: SnapshotFixtures.nominal,
+                                       history: MetricHistory(),
+                                       settings: settings, isStale: false)
+        // Disconnected keyboard auto-hid, leaving CPU + AirPods + Magic Mouse
+        #expect(model.items.count == 3)
+        // CPU keeps text caption when usesIconTitles == false
+        #expect(!model.items[0].usesIconTitle)
+        // AirPods Pro (L 64%, R 71%, Case 90%) reports 64% (lowest L/R bud) with headphone icon
+        #expect(model.items[1].primary.valueText == "64%")
+        #expect(model.items[1].symbolName == BluetoothDeviceCategory.headphones.symbolName)
+        #expect(model.items[1].usesIconTitle)
+        // Magic Mouse reports 23% with mouse icon
+        #expect(model.items[2].primary.valueText == "23%")
+        #expect(model.items[2].symbolName == BluetoothDeviceCategory.mouse.symbolName)
+        #expect(model.items[2].usesIconTitle)
+
+        // BLE multi-slot MAC rotation still matches by case-insensitive device name
+        let rotatedTarget = BluetoothDeviceTarget(id: "11:22:33:44:55:99",
+                                                  name: "magic mouse",
+                                                  category: .mouse)
+        let bt = try #require(SnapshotFixtures.nominal.bluetooth.value)
+        #expect(bt.matchingDevice(for: rotatedTarget)?.name == "Magic Mouse")
+
+        // Round-trip Codable and metric-switch sanitisation
+        let encoded = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(Settings.self, from: encoded)
+        #expect(decoded.menuBar.items[1].bluetoothDevice == airpodsTarget)
+
+        var switched = decoded.menuBar.items[1]
+        switched.metric = .cpuUsage
+        #expect(switched.sanitized().bluetoothDevice == nil)
     }
 
     @Test("low Bluetooth battery alert names the discharging peripheral")
