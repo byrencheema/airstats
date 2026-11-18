@@ -20,7 +20,7 @@ public enum MetricFailure: Sendable, Equatable, Hashable {
         case .unsupported(let s): return s
         case .failed(let s): return s
         case .denied(let s): return s
-        case .pending: return "Collecting…"
+        case .pending: return L10n.tr("Collecting…", "Đang thu thập…")
         }
     }
 
@@ -31,10 +31,10 @@ public enum MetricFailure: Sendable, Equatable, Hashable {
     /// still what the tooltip and VoiceOver read out.
     public var shortLabel: String {
         switch self {
-        case .unsupported: return "Unavailable"
-        case .failed: return "No reading"
-        case .denied: return "No access"
-        case .pending: return "Collecting…"
+        case .unsupported: return L10n.tr("Unavailable", "Không khả dụng")
+        case .failed: return L10n.tr("No reading", "Không có dữ liệu")
+        case .denied: return L10n.tr("No access", "Chưa cấp quyền")
+        case .pending: return L10n.tr("Collecting…", "Đang thu thập…")
         }
     }
 

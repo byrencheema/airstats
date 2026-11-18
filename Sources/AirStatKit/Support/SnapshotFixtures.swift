@@ -18,6 +18,7 @@ public enum SnapshotFixtures {
             network: .value(network(down: 2_400_000, up: 340_000)),
             disk: .value(disk(read: 8_400_000, write: 1_200_000, usedFraction: 0.71)),
             power: .value(power(percent: 76, charging: false)),
+            bluetooth: .value(bluetooth(charging: false)),
             thermal: .value(thermal(cpuTemp: 52, fanRPM: 1_820)),
             processes: .value(processes()),
             system: .value(system()),
@@ -35,6 +36,7 @@ public enum SnapshotFixtures {
             network: .value(network(down: 118_000_000, up: 44_000_000)),
             disk: .value(disk(read: 940_000_000, write: 512_000_000, usedFraction: 0.97)),
             power: .value(power(percent: 8, charging: false)),
+            bluetooth: .value(bluetooth(mousePercent: 9, charging: false)),
             thermal: .value(thermal(cpuTemp: 99, fanRPM: 6_400)),
             processes: .value(processes(topCPU: 412.6)),
             system: .value(system()),
@@ -52,6 +54,7 @@ public enum SnapshotFixtures {
             network: .failure(.failed("No active network interface")),
             disk: .value(disk(read: 0, write: 0, usedFraction: 0.33)),
             power: .value(desktopPower()),
+            bluetooth: .failure(.unsupported("No Bluetooth controller on this Mac")),
             thermal: .failure(.unsupported("Temperature sensors are not readable on this Mac")),
             processes: .failure(.denied("Process information requires additional permission")),
             system: .value(system()),
@@ -73,6 +76,7 @@ public enum SnapshotFixtures {
             network: .value(network(down: 640_000, up: 91_000)),
             disk: .value(disk(read: 2_100_000, write: 480_000, usedFraction: 0.71)),
             power: .value(power(percent: 34, charging: true)),
+            bluetooth: .value(bluetooth(charging: true)),
             thermal: .value(thermal(cpuTemp: 47, fanRPM: 1_460)),
             processes: .value(processes(topCPU: 18.4)),
             system: .value(system()),
@@ -263,6 +267,44 @@ public enum SnapshotFixtures {
     public static func desktopPower() -> PowerSnapshot {
         PowerSnapshot(hasBattery: false, isPluggedIn: true, adapterWatts: 143,
                       adapterName: "143W USB-C Power Adapter")
+    }
+
+    public static func bluetooth(mousePercent: Double = 23, charging: Bool) -> BluetoothSnapshot {
+        BluetoothSnapshot(
+            isPoweredOn: true,
+            devices: [
+                BluetoothDevice(
+                    id: "AA:BB:CC:DD:EE:01",
+                    name: "AirPods Pro",
+                    address: "AA:BB:CC:DD:EE:01",
+                    category: .headphones,
+                    isConnected: true,
+                    batteryPercent: 64,
+                    isCharging: false,
+                    parts: [
+                        .init(name: "Left", percent: 64, isCharging: false),
+                        .init(name: "Right", percent: 71, isCharging: false),
+                        .init(name: "Case", percent: 90, isCharging: charging),
+                    ]
+                ),
+                BluetoothDevice(
+                    id: "AA:BB:CC:DD:EE:02",
+                    name: "Magic Mouse",
+                    address: "AA:BB:CC:DD:EE:02",
+                    category: .mouse,
+                    isConnected: true,
+                    batteryPercent: mousePercent,
+                    isCharging: charging
+                ),
+                BluetoothDevice(
+                    id: "AA:BB:CC:DD:EE:03",
+                    name: "Magic Keyboard",
+                    address: "AA:BB:CC:DD:EE:03",
+                    category: .keyboard,
+                    isConnected: false
+                ),
+            ]
+        )
     }
 
     public static func thermal(cpuTemp: Double, fanRPM: Double) -> ThermalSnapshot {

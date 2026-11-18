@@ -102,6 +102,10 @@ struct ThresholdEvaluator {
                 readings[.batteryLow] = percentage
             }
         }
+        if let bluetooth = snapshot.bluetooth.value,
+           let lowest = bluetooth.lowestBatteryPercent(dischargingOnly: true) {
+            readings[.bluetoothBatteryLow] = lowest
+        }
         if let thermal = snapshot.thermal.value {
             if let cpuCelsius = thermal.cpuCelsius { readings[.cpuTemperature] = cpuCelsius }
             readings[.thermalPressure] = Double(thermal.pressure.rawValue)
@@ -117,7 +121,7 @@ extension ThresholdMetric {
     /// are alarming as they fall, everything else as it climbs.
     var firesWhenBelow: Bool {
         switch self {
-        case .diskFree, .batteryLow: return true
+        case .diskFree, .batteryLow, .bluetoothBatteryLow: return true
         case .cpuUsage, .memoryPressure, .batteryFull, .cpuTemperature, .thermalPressure: return false
         }
     }
@@ -136,32 +140,48 @@ extension ThresholdAlert {
 
     var title: String {
         switch metric {
-        case .cpuUsage: return "CPU usage is high"
-        case .memoryPressure: return "Memory pressure is high"
-        case .diskFree: return "Startup disk is running out of space"
-        case .batteryLow: return "Battery is low"
-        case .batteryFull: return "Battery is charged"
-        case .cpuTemperature: return "CPU is running hot"
-        case .thermalPressure: return "This Mac is under thermal pressure"
+        case .cpuUsage: return L10n.tr("CPU usage is high", "CPU đang sử dụng cao")
+        case .memoryPressure: return L10n.tr("Memory pressure is high", "Áp lực bộ nhớ cao")
+        case .diskFree: return L10n.tr("Startup disk is running out of space", "Ổ đĩa khởi động sắp hết dung lượng")
+        case .batteryLow: return L10n.tr("Battery is low", "Pin yếu")
+        case .batteryFull: return L10n.tr("Battery is charged", "Pin đã sạc đầy")
+        case .bluetoothBatteryLow: return L10n.tr("Bluetooth battery is low", "Pin thiết bị Bluetooth yếu")
+        case .cpuTemperature: return L10n.tr("CPU is running hot", "Nhiệt độ CPU đang cao")
+        case .thermalPressure: return L10n.tr("This Mac is under thermal pressure", "Máy Mac đang nóng")
         }
     }
 
-    var body: String {
+    var body: String { body(in: nil) }
+
+    func body(in snapshot: SystemSnapshot?) -> String {
         switch metric {
         case .cpuUsage:
-            return "CPU is at \(percent(value)), above your \(percent(threshold)) threshold."
+            return L10n.tr("CPU is at \(percent(value)), above your \(percent(threshold)) threshold.",
+                           "CPU đang ở mức \(percent(value)), vượt ngưỡng \(percent(threshold)).")
         case .memoryPressure:
-            return "Memory pressure is at \(percent(value)), above your \(percent(threshold)) threshold."
+            return L10n.tr("Memory pressure is at \(percent(value)), above your \(percent(threshold)) threshold.",
+                           "Áp lực bộ nhớ ở mức \(percent(value)), vượt ngưỡng \(percent(threshold)).")
         case .diskFree:
-            return "\(gigabytes(value)) free on the startup disk, below your \(gigabytes(threshold)) threshold."
+            return L10n.tr("\(gigabytes(value)) free on the startup disk, below your \(gigabytes(threshold)) threshold.",
+                           "Còn trống \(gigabytes(value)) trên ổ đĩa khởi động, dưới ngưỡng \(gigabytes(threshold)).")
         case .batteryLow:
-            return "Battery is at \(percent(value)), below your \(percent(threshold)) threshold."
+            return L10n.tr("Battery is at \(percent(value)), below your \(percent(threshold)) threshold.",
+                           "Pin còn \(percent(value)), dưới ngưỡng \(percent(threshold)).")
         case .batteryFull:
-            return "Battery is at \(percent(value)). You can unplug."
+            return L10n.tr("Battery is at \(percent(value)). You can unplug.",
+                           "Pin đã đạt \(percent(value)). Bạn có thể rút sạc.")
+        case .bluetoothBatteryLow:
+            let deviceName = snapshot?.bluetooth.value?
+                .lowestBatteryDevice(dischargingOnly: true)?.device.name
+                ?? L10n.tr("Bluetooth device", "Thiết bị Bluetooth")
+            return L10n.tr("\(deviceName) is at \(percent(value)), below your \(percent(threshold)) threshold.",
+                           "\(deviceName) còn \(percent(value)), dưới ngưỡng \(percent(threshold)).")
         case .cpuTemperature:
-            return "CPU is at \(degrees(value)), above your \(degrees(threshold)) threshold."
+            return L10n.tr("CPU is at \(degrees(value)), above your \(degrees(threshold)) threshold.",
+                           "Nhiệt độ CPU là \(degrees(value)), vượt ngưỡng \(degrees(threshold)).")
         case .thermalPressure:
-            return "Thermal pressure is \(level(value)), at or past your \(level(threshold)) threshold."
+            return L10n.tr("Thermal pressure is \(level(value)), at or past your \(level(threshold)) threshold.",
+                           "Áp lực nhiệt đang ở mức \(level(value)), đạt ngưỡng \(level(threshold)).")
         }
     }
 

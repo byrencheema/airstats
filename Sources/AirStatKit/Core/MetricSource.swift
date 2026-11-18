@@ -3,19 +3,20 @@ import Foundation
 /// Stable identity for each metric source. Used for scheduling, for the
 /// "which modules are enabled" set, and for diagnostics.
 public enum CollectorID: String, Sendable, Equatable, Hashable, CaseIterable, Codable {
-    case cpu, memory, gpu, network, disk, power, thermal, processes, system
+    case cpu, memory, gpu, network, disk, power, bluetooth, thermal, processes, system
 
     public var label: String {
         switch self {
         case .cpu: return "CPU"
-        case .memory: return "Memory"
+        case .memory: return L10n.tr("Memory", "Bộ nhớ")
         case .gpu: return "GPU"
-        case .network: return "Network"
-        case .disk: return "Disk"
-        case .power: return "Battery"
-        case .thermal: return "Temperature"
-        case .processes: return "Processes"
-        case .system: return "System"
+        case .network: return L10n.tr("Network", "Mạng")
+        case .disk: return L10n.tr("Disk", "Ổ đĩa")
+        case .power: return L10n.tr("Battery", "Pin")
+        case .bluetooth: return "Bluetooth"
+        case .thermal: return L10n.tr("Temperature", "Nhiệt độ")
+        case .processes: return L10n.tr("Processes", "Tiến trình")
+        case .system: return L10n.tr("System", "Hệ thống")
         }
     }
 
@@ -27,6 +28,7 @@ public enum CollectorID: String, Sendable, Equatable, Hashable, CaseIterable, Co
         case .network: return "network"
         case .disk: return "internaldrive"
         case .power: return "battery.100"
+        case .bluetooth: return "dot.radiowaves.left.and.right"
         case .thermal: return "thermometer.medium"
         case .processes: return "list.bullet.rectangle"
         case .system: return "desktopcomputer"

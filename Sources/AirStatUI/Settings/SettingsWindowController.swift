@@ -134,6 +134,7 @@ struct SettingsRootView: View {
     }
 
     var body: some View {
+        let _ = settings.revision
         HStack(spacing: 0) {
             sidebar
                 .frame(width: SettingsRootView.sidebarWidth)
@@ -157,6 +158,9 @@ struct SettingsRootView: View {
         .onAppear { onPaneChange?(tab) }
         .onChange(of: tab) { _, newValue in
             onPaneChange?(newValue)
+        }
+        .onChange(of: settings.settings.general.language) { _, _ in
+            onPaneChange?(tab)
         }
     }
 

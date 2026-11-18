@@ -32,7 +32,7 @@ struct ShortcutsFormSections: View {
                         SettingsCaution(conflict)
                     }
                 } header: {
-                    Text("Conflicts")
+                    Text(L10n.tr("Conflicts", "Xung đột phím tắt"))
                 }
             }
         }

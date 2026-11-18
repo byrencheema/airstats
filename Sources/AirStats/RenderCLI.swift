@@ -58,6 +58,44 @@ enum RenderCLI {
             // module can grow.
             case "--history":
                 settings.desktopWidget.showsHistoryChart = true
+            case "--icon-titles":
+                settings.menuBar.usesIconTitles = true
+            case "--lang":
+                index += 1
+                let raw = (arguments[safe: index] ?? "").lowercased()
+                switch raw {
+                case "en", "english":
+                    settings.general.language = .english
+                case "vi", "vietnamese":
+                    settings.general.language = .vietnamese
+                case "system":
+                    settings.general.language = .system
+                default:
+                    FileHandle.standardError.write(Data("--lang wants one of: system, english, vietnamese\n".utf8))
+                    exit(2)
+                }
+            case "--menu-metrics":
+                index += 1
+                let tokens = (arguments[safe: index] ?? "").split(separator: ",")
+                var built: [MenuBarItemConfig] = []
+                for token in tokens {
+                    let parts = token.split(separator: ":", maxSplits: 1)
+                    guard let metric = MenuBarMetric(rawValue: String(parts[0])) else {
+                        FileHandle.standardError.write(Data("--menu-metrics wants a comma-separated list of metric names\n".utf8))
+                        exit(2)
+                    }
+                    let target: BluetoothDeviceTarget? = parts.count == 2
+                        ? BluetoothDeviceTarget(id: "", name: String(parts[1]))
+                        : nil
+                    built.append(MenuBarItemConfig(metric: metric, isEnabled: true,
+                                                   showsCaption: true,
+                                                   bluetoothDevice: target).sanitized())
+                }
+                guard !built.isEmpty else {
+                    FileHandle.standardError.write(Data("--menu-metrics wants a comma-separated list of metric names\n".utf8))
+                    exit(2)
+                }
+                settings.menuBar.items = built
             // A day still being collected is the state every launch starts in.
             case "--collected":
                 index += 1

@@ -126,7 +126,7 @@ struct PanelModuleView: View {
         }
         .accessibilityLabel(module.label)
         .accessibilityValue(summary.value ?? "")
-        .accessibilityHint(isExpanded ? "Collapse" : "Expand")
+        .accessibilityHint(isExpanded ? L10n.tr("Collapse", "Thu gọn") : L10n.tr("Expand", "Mở rộng"))
     }
 
     @ViewBuilder
@@ -206,7 +206,7 @@ extension PanelSummary {
         case .memory:
             guard let memory = engine.memory.value else { return PanelSummary() }
             return PanelSummary(value: formatter.memory(memory.usedBytes),
-                                caption: "used")
+                                caption: L10n.tr("used", "đã dùng"))
         case .gpu:
             guard let gpu = engine.gpu.value, let device = gpu.primary else { return PanelSummary() }
             guard let utilization = device.utilization else {
@@ -226,16 +226,23 @@ extension PanelSummary {
         case .disk:
             guard let disk = engine.disk.value, let root = disk.rootVolume else { return PanelSummary() }
             return PanelSummary(value: formatter.storage(root.availableBytes),
-                                caption: "free")
+                                caption: L10n.tr("free", "trống"))
         case .battery:
             guard let power = engine.power.value else { return PanelSummary() }
             guard power.hasBattery, let percentage = power.percentage else {
-                return PanelSummary(value: power.isPluggedIn ? "AC" : MetricFormatter.unavailable,
+                return PanelSummary(value: power.isPluggedIn ? L10n.tr("AC", "Nguồn điện") : MetricFormatter.unavailable,
                                     icon: "powerplug",
                                     emphasis: .state)
             }
             return PanelSummary(value: formatter.percentValue(percentage),
-                                caption: power.isCharging ? "charging" : nil)
+                                caption: power.isCharging ? L10n.tr("charging", "đang sạc") : nil)
+        case .bluetooth:
+            guard let bt = engine.bluetooth.value else { return PanelSummary() }
+            guard bt.isPoweredOn else {
+                return PanelSummary(value: L10n.tr("Off", "Tắt"), emphasis: .state)
+            }
+            return PanelSummary(value: formatter.count(bt.connectedCount),
+                                caption: L10n.tr("active", "đang bật"))
         case .thermal:
             guard let thermal = engine.thermal.value else { return PanelSummary() }
             guard let celsius = thermal.cpuCelsius else {
@@ -246,10 +253,11 @@ extension PanelSummary {
         case .processes:
             guard let processes = engine.processes.value else { return PanelSummary() }
             return PanelSummary(value: formatter.count(processes.totalProcessCount),
-                                caption: "running")
+                                caption: L10n.tr("running", "đang chạy"))
         case .system:
             guard let system = engine.system.value else { return PanelSummary() }
-            return PanelSummary(value: formatter.uptime(system.uptime), caption: "uptime")
+            return PanelSummary(value: formatter.uptime(system.uptime),
+                                caption: L10n.tr("uptime", "hoạt động"))
         }
     }
 

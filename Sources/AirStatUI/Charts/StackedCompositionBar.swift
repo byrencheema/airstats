@@ -209,15 +209,16 @@ extension CompositionSegment {
         let tint = Design.Palette.metric(.memory)
         let shades = ChartPalette.composition(tint, count: 4)
         return [
-            CompositionSegment(id: "app", label: "App", value: Double(memory.appBytes),
-                               tint: shades[0]),
-            CompositionSegment(id: "wired", label: "Wired", value: Double(memory.wiredBytes),
-                               tint: shades[1]),
-            CompositionSegment(id: "compressed", label: "Compressed", shortLabel: "Comp",
+            CompositionSegment(id: "app", label: L10n.tr("App", "Ứng dụng"), shortLabel: L10n.tr("App", "App"),
+                               value: Double(memory.appBytes), tint: shades[0]),
+            CompositionSegment(id: "wired", label: L10n.tr("Wired", "Hệ thống"), shortLabel: L10n.tr("Wired", "Hệ thống"),
+                               value: Double(memory.wiredBytes), tint: shades[1]),
+            CompositionSegment(id: "compressed", label: L10n.tr("Compressed", "Đã nén"), shortLabel: L10n.tr("Comp", "Nén"),
                                value: Double(memory.compressedBytes), tint: shades[2]),
-            CompositionSegment(id: "cached", label: "Cached", value: Double(memory.cachedBytes),
-                               tint: shades[3]),
-            CompositionSegment(id: "free", label: "Free", value: Double(memory.freeBytes),
+            CompositionSegment(id: "cached", label: L10n.tr("Cached", "Đệm"), shortLabel: L10n.tr("Cached", "Đệm"),
+                               value: Double(memory.cachedBytes), tint: shades[3]),
+            CompositionSegment(id: "free", label: L10n.tr("Free", "Trống"),
+                               value: Double(memory.freeBytes),
                                tint: Design.Palette.track, isRemainder: true),
         ]
     }

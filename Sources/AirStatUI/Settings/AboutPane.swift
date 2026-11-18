@@ -43,25 +43,25 @@ struct AboutPane: View {
             Section {
                 MetricContent(systemState) { system in
                     Group {
-                        LabeledContent("Computer", value: system.computerName)
-                        LabeledContent("Model", value: system.modelName)
+                        LabeledContent(L10n.tr("Computer", "Tên máy"), value: system.computerName)
+                        LabeledContent(L10n.tr("Model", "Kiểu máy"), value: system.modelName)
                         LabeledContent("Chip", value: system.chipName)
-                        LabeledContent("Cores", value: coreText(system))
-                        LabeledContent("Memory", value: formatter.memory(system.totalMemoryBytes))
-                        LabeledContent("System", value: "\(system.osName) \(system.osVersion) (\(system.osBuild))")
-                        LabeledContent("Uptime", value: formatter.compactUptime(system.uptime))
+                        LabeledContent(L10n.tr("Cores", "Số nhân"), value: coreText(system))
+                        LabeledContent(L10n.tr("Memory", "Bộ nhớ"), value: formatter.memory(system.totalMemoryBytes))
+                        LabeledContent(L10n.tr("System", "Hệ điều hành"), value: "\(system.osName) \(system.osVersion) (\(system.osBuild))")
+                        LabeledContent(L10n.tr("Uptime", "Thời gian bật"), value: formatter.compactUptime(system.uptime))
                     }
                 }
             } header: {
-                Text("This Mac")
+                Text(L10n.tr("This Mac", "Máy Mac này"))
             }
 
             Section {
                 HStack(spacing: Design.Space.l) {
-                    Button("Export…") { export() }
-                        .accessibilityHint("Writes your settings to a JSON file")
-                    Button("Import…") { importSettings() }
-                        .accessibilityHint("Replaces your settings from a JSON file")
+                    Button(L10n.tr("Export…", "Xuất…")) { export() }
+                        .accessibilityHint(L10n.tr("Writes your settings to a JSON file", "Lưu cài đặt ra tệp JSON"))
+                    Button(L10n.tr("Import…", "Nhập…")) { importSettings() }
+                        .accessibilityHint(L10n.tr("Replaces your settings from a JSON file", "Khôi phục cài đặt từ tệp JSON"))
                     Spacer()
                 }
                 if let transferResult {
@@ -71,15 +71,15 @@ struct AboutPane: View {
                         SettingsFootnote(transferResult)
                     }
                 }
-                LabeledContent("Location", value: settings.settingsFileURL.path)
+                LabeledContent(L10n.tr("Location", "Vị trí"), value: settings.settingsFileURL.path)
                     .font(.callout)
                     .foregroundStyle(Design.Palette.secondaryText)
                     .textSelection(.enabled)
-                Button("Show in Finder") {
+                Button(L10n.tr("Show in Finder", "Hiện trong Finder")) {
                     NSWorkspace.shared.activateFileViewerSelecting([settings.settingsFileURL])
                 }
             } header: {
-                Text("Settings File")
+                Text(L10n.tr("Settings File", "Tệp cài đặt"))
             }
 
             // One section's defaults are restored from the bar under that section's
@@ -87,18 +87,20 @@ struct AboutPane: View {
             // only reset that reaches settings you are not looking at, so it is the
             // only one that belongs here.
             Section {
-                Button("Restore All Settings…", role: .destructive) { isConfirmingFullReset = true }
-                    .confirmationDialog("Restore every setting to its defaults?",
+                Button(L10n.tr("Restore All Settings…", "Đặt lại toàn bộ cài đặt…"), role: .destructive) { isConfirmingFullReset = true }
+                    .confirmationDialog(L10n.tr("Restore every setting to its defaults?", "Đặt lại toàn bộ cài đặt về mặc định?"),
                                         isPresented: $isConfirmingFullReset) {
-                        Button("Restore All Settings", role: .destructive) {
+                        Button(L10n.tr("Restore All Settings", "Đặt lại toàn bộ"), role: .destructive) {
                             settings.resetToDefaults()
                         }
-                        Button("Cancel", role: .cancel) {}
+                        Button(L10n.tr("Cancel", "Huỷ"), role: .cancel) {}
                     } message: {
-                        Text("Your menu bar readouts, desktop widget, colours, notification rules and shortcuts all go back to how AirStats shipped.")
+                        Text(L10n.tr(
+                            "Your menu bar readouts, desktop widget, colours, notification rules and shortcuts all go back to how AirStats shipped.",
+                            "Các chỉ số thanh Menu, Widget, màu sắc, quy tắc thông báo và phím tắt sẽ quay về mặc định ban đầu."))
                     }
             } header: {
-                Text("Reset")
+                Text(L10n.tr("Reset", "Đặt lại"))
             } footer: {
                 if let diagnostic = settings.loadDiagnostic {
                     SettingsCaution(diagnostic)
@@ -113,15 +115,16 @@ struct AboutPane: View {
     private var versionText: String {
         guard let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else {
             // Running the bare SwiftPM binary rather than the assembled .app.
-            return "Development build"
+            return L10n.tr("Development build", "Bản dựng phát triển")
         }
-        return "Version \(short)"
+        return L10n.tr("Version \(short)", "Phiên bản \(short)")
     }
 
     private func coreText(_ system: SystemInfoSnapshot) -> String {
         var text = "\(system.logicalCores)"
         if system.performanceCores > 0 || system.efficiencyCores > 0 {
-            text += " (\(system.performanceCores) performance, \(system.efficiencyCores) efficiency)"
+            text += L10n.tr(" (\(system.performanceCores) performance, \(system.efficiencyCores) efficiency)",
+                            " (\(system.performanceCores) hiệu năng cao, \(system.efficiencyCores) tiết kiệm)")
         }
         if let gpu = system.gpuCoreCount {
             text += " · \(gpu) GPU"

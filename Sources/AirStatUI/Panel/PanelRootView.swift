@@ -179,10 +179,14 @@ struct PanelUpdateRow: View {
     /// A staged update wants a relaunch and nothing else, so the row says so instead
     /// of promising an install it has already done.
     private var headline: String {
-        update.isReadyToInstall ? "AirStats \(update.version) is ready" : "AirStats \(update.version) is available"
+        update.isReadyToInstall
+            ? L10n.tr("AirStats \(update.version) is ready", "AirStats \(update.version) đã sẵn sàng")
+            : L10n.tr("AirStats \(update.version) is available", "Đã có bản AirStats \(update.version)")
     }
 
-    private var action: String { update.isReadyToInstall ? "Restart" : "Install" }
+    private var action: String {
+        update.isReadyToInstall ? L10n.tr("Restart", "Khởi động lại") : L10n.tr("Install", "Cài đặt")
+    }
 
     @State private var isHovering = false
 
@@ -222,10 +226,10 @@ struct PanelFooterView: View {
 
     var body: some View {
         HStack(spacing: Design.Space.xs) {
-            PanelFooterButton(title: "Settings…", symbol: "gearshape", action: actions.openSettings)
+            PanelFooterButton(title: L10n.tr("Settings…", "Cài đặt…"), symbol: "gearshape", action: actions.openSettings)
                 .keyboardShortcut(",", modifiers: .command)
             Spacer(minLength: Design.Space.m)
-            PanelFooterButton(title: "Quit", symbol: "power", action: actions.quit)
+            PanelFooterButton(title: L10n.tr("Quit", "Thoát"), symbol: "power", action: actions.quit)
                 .keyboardShortcut("q", modifiers: .command)
         }
         .padding(.horizontal, Design.Space.s)

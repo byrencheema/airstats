@@ -63,7 +63,7 @@ struct DesktopWidgetRootView: View {
         .animation(Design.Motion.respectingAccessibility(Design.Motion.hover),
                    value: layout?.isGrabbable ?? false)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("AirStats desktop widget")
+        .accessibilityLabel(L10n.tr("AirStats desktop widget", "Widget AirStats trên màn hình"))
     }
 
     private var shape: RoundedRectangle {
@@ -214,14 +214,14 @@ private struct DesktopWidgetModuleView: View {
         case .cpu, .memory, .system: return 3
         case .processes: return 4
         case .network, .disk: return 2
-        case .gpu, .battery, .thermal: return 1
+        case .gpu, .battery, .bluetooth, .thermal: return 1
         }
     }
 
     // MARK: Snapshot → readout
 
     /// Every module collapses to the same shape, so the desktop widget has exactly one
-    /// layout to get right instead of nine.
+    /// layout to get right instead of ten.
     private var readout: MetricState<DesktopWidgetReadout> {
         switch module {
         case .cpu: return cpuReadout
@@ -230,6 +230,7 @@ private struct DesktopWidgetModuleView: View {
         case .network: return networkReadout
         case .disk: return diskReadout
         case .battery: return batteryReadout
+        case .bluetooth: return bluetoothReadout
         case .thermal: return thermalReadout
         case .processes: return processReadout
         case .system: return systemReadout
@@ -241,9 +242,9 @@ private struct DesktopWidgetModuleView: View {
             var readout = DesktopWidgetReadout(module: module, value: formatter.percent(cpu.total.busy))
             readout.fraction = cpu.total.busy
             readout.details = [
-                DesktopWidgetDetail("user", "User", formatter.percent(cpu.total.user)),
-                DesktopWidgetDetail("system", "System", formatter.percent(cpu.total.system)),
-                DesktopWidgetDetail("load", "Load", formatter.fixed(cpu.loadAverage.one, decimals: 2)),
+                DesktopWidgetDetail("user", L10n.tr("User", "Người dùng"), formatter.percent(cpu.total.user)),
+                DesktopWidgetDetail("system", L10n.tr("System", "Hệ thống"), formatter.percent(cpu.total.system)),
+                DesktopWidgetDetail("load", L10n.tr("Load", "Tải"), formatter.fixed(cpu.loadAverage.one, decimals: 2)),
             ]
             return readout
         }
@@ -254,9 +255,10 @@ private struct DesktopWidgetModuleView: View {
             var readout = DesktopWidgetReadout(module: module, value: formatter.percent(memory.usedFraction))
             readout.fraction = memory.usedFraction
             readout.details = [
-                DesktopWidgetDetail("used", "Used",
-                              "\(formatter.memory(memory.usedBytes)) of \(formatter.memory(memory.totalBytes))"),
-                DesktopWidgetDetail("pressure", "Pressure", formatter.percent(memory.pressureFraction)),
+                DesktopWidgetDetail("used", L10n.tr("Used", "Đã dùng"),
+                              L10n.tr("\(formatter.memory(memory.usedBytes)) of \(formatter.memory(memory.totalBytes))",
+                                      "\(formatter.memory(memory.usedBytes)) / \(formatter.memory(memory.totalBytes))")),
+                DesktopWidgetDetail("pressure", L10n.tr("Pressure", "Áp lực"), formatter.percent(memory.pressureFraction)),
                 DesktopWidgetDetail("swap", "Swap", formatter.memory(memory.swapUsedBytes)),
             ]
             return readout
@@ -290,11 +292,11 @@ private struct DesktopWidgetModuleView: View {
                 module: module,
                 value: "↓ " + formatter.networkRate(network.downloadBytesPerSecond))
             var details = [
-                DesktopWidgetDetail("up", "Upload", formatter.networkRate(network.uploadBytesPerSecond)),
-                DesktopWidgetDetail("type", "Link", network.connectionType.label),
+                DesktopWidgetDetail("up", L10n.tr("Upload", "Tải lên"), formatter.networkRate(network.uploadBytesPerSecond)),
+                DesktopWidgetDetail("type", L10n.tr("Link", "Kết nối"), network.connectionType.label),
             ]
             if let ssid = network.wifi?.ssid {
-                details.append(DesktopWidgetDetail("ssid", "Network", ssid))
+                details.append(DesktopWidgetDetail("ssid", L10n.tr("Network", "Mạng"), ssid))
             }
             readout.details = details
             return readout
@@ -309,12 +311,12 @@ private struct DesktopWidgetModuleView: View {
                 value: root.map { formatter.percent($0.usedFraction) } ?? MetricFormatter.unavailable)
             readout.fraction = root?.usedFraction
             readout.details = [
-                DesktopWidgetDetail("read", "Read", formatter.diskRate(disk.readBytesPerSecond)),
-                DesktopWidgetDetail("write", "Write", formatter.diskRate(disk.writeBytesPerSecond)),
+                DesktopWidgetDetail("read", L10n.tr("Read", "Đọc"), formatter.diskRate(disk.readBytesPerSecond)),
+                DesktopWidgetDetail("write", L10n.tr("Write", "Ghi"), formatter.diskRate(disk.writeBytesPerSecond)),
             ]
             if let root {
                 readout.details.insert(
-                    DesktopWidgetDetail("free", "Free", formatter.storage(root.freeBytes)), at: 0)
+                    DesktopWidgetDetail("free", L10n.tr("Free", "Trống"), formatter.storage(root.freeBytes)), at: 0)
             }
             return readout
         }
@@ -327,7 +329,8 @@ private struct DesktopWidgetModuleView: View {
                 // substitute, and an em dash when even that is unavailable.
                 var readout = DesktopWidgetReadout(module: module, value: formatter.watts(power.systemWatts))
                 readout.details = [
-                    DesktopWidgetDetail("source", "Source", power.isPluggedIn ? "AC power" : "Unknown"),
+                    DesktopWidgetDetail("source", L10n.tr("Source", "Nguồn"),
+                                        power.isPluggedIn ? L10n.tr("AC power", "Nguồn điện") : L10n.tr("Unknown", "Không rõ")),
                 ]
                 return readout
             }
@@ -335,30 +338,68 @@ private struct DesktopWidgetModuleView: View {
                                          value: formatter.percentValue(percentage))
             readout.fraction = percentage / 100
             readout.details = [
-                DesktopWidgetDetail("state", "Status", batteryCaption(power)),
-                DesktopWidgetDetail("power", "Draw", formatter.watts(power.batteryWatts)),
+                DesktopWidgetDetail("state", L10n.tr("Status", "Trạng thái"), batteryCaption(power)),
+                DesktopWidgetDetail("power", L10n.tr("Draw", "Công suất"), formatter.watts(power.batteryWatts)),
             ]
             return readout
         }
     }
 
     private func batteryCaption(_ power: PowerSnapshot) -> String {
-        if power.isFullyCharged { return "Fully charged" }
+        if power.isFullyCharged { return L10n.tr("Fully charged", "Đã sạc đầy") }
         if power.isCharging {
-            guard let full = power.timeToFull else { return "Charging" }
-            return "\(formatter.duration(full)) to full"
+            guard let full = power.timeToFull else { return L10n.tr("Charging", "Đang sạc") }
+            return L10n.tr("\(formatter.duration(full)) to full", "Còn \(formatter.duration(full)) đầy")
         }
         guard let empty = power.timeToEmpty else {
-            return power.isPluggedIn ? "Plugged in" : "On battery"
+            return power.isPluggedIn ? L10n.tr("Plugged in", "Đang cắm sạc") : L10n.tr("On battery", "Dùng pin")
         }
-        return "\(formatter.duration(empty)) left"
+        return L10n.tr("\(formatter.duration(empty)) left", "Còn \(formatter.duration(empty))")
+    }
+
+    private var bluetoothReadout: MetricState<DesktopWidgetReadout> {
+        engine.bluetooth.map { bt in
+            guard bt.isPoweredOn else {
+                var readout = DesktopWidgetReadout(module: module, value: L10n.tr("Off", "Tắt"))
+                readout.details = [DesktopWidgetDetail("state", L10n.tr("Radio", "Trạng thái"), L10n.tr("Turned off", "Đã tắt"))]
+                return readout
+            }
+            var readout = DesktopWidgetReadout(module: module,
+                                               value: formatter.count(bt.connectedCount))
+
+            var details: [DesktopWidgetDetail] = bt.connectedDevices.prefix(4).map { device in
+                let value: String
+                if let percent = device.batteryPercent {
+                    let charge = formatter.percentValue(percent)
+                    value = device.isCharging ? "\(charge) ⚡︎" : charge
+                } else {
+                    value = L10n.tr("Connected", "Đã kết nối")
+                }
+                return DesktopWidgetDetail("bt-\(device.id)", device.name, value,
+                                           symbolName: device.category.filledSymbolName,
+                                           isDimmed: false)
+            }
+            let remainingSlots = max(0, 6 - details.count)
+            for device in bt.disconnectedDevices.prefix(remainingSlots) {
+                details.append(DesktopWidgetDetail("bt-\(device.id)", device.name,
+                                                   L10n.tr("Offline", "Chưa kết nối"),
+                                                   symbolName: device.category.symbolName,
+                                                   isDimmed: true))
+            }
+            if details.isEmpty {
+                details = [DesktopWidgetDetail("none", L10n.tr("Devices", "Thiết bị"),
+                                               L10n.tr("None paired", "Chưa ghép đôi"))]
+            }
+            readout.details = details
+            return readout
+        }
     }
 
     private var thermalReadout: MetricState<DesktopWidgetReadout> {
         engine.thermal.map { thermal in
             var readout = DesktopWidgetReadout(module: module,
                                          value: formatter.temperature(thermal.cpuCelsius))
-            readout.details = [DesktopWidgetDetail("pressure", "Pressure", thermal.pressure.label)]
+            readout.details = [DesktopWidgetDetail("pressure", L10n.tr("Pressure", "Áp lực"), thermal.pressure.label)]
             if let fan = thermal.fans.first {
                 readout.details.append(DesktopWidgetDetail("fan", fan.name, formatter.rpm(fan.currentRPM)))
             }
@@ -387,7 +428,7 @@ private struct DesktopWidgetModuleView: View {
             readout.details = [
                 DesktopWidgetDetail("chip", "Chip", system.chipName),
                 DesktopWidgetDetail("os", system.osName, system.osVersion),
-                DesktopWidgetDetail("host", "Host", system.computerName),
+                DesktopWidgetDetail("host", L10n.tr("Host", "Máy chủ"), system.computerName),
             ]
             return readout
         }
@@ -470,15 +511,23 @@ private struct DesktopWidgetDetailRow: View {
 
     var body: some View {
         HStack(spacing: Design.Space.rowGap) {
-            SwiftUI.Text(detail.label)
-                .font(Design.Text.caption)
-                .foregroundStyle(Design.Palette.tertiaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            HStack(spacing: Design.Space.xs) {
+                if let symbol = detail.symbolName {
+                    Image(systemName: symbol)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(detail.isDimmed ? Design.Palette.tertiaryText : Design.Palette.secondaryText)
+                        .frame(width: 11, alignment: .center)
+                }
+                SwiftUI.Text(detail.label)
+                    .font(Design.Text.caption)
+                    .foregroundStyle(Design.Palette.tertiaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer(minLength: Design.Space.s)
             SwiftUI.Text(detail.value)
                 .font(Design.Text.desktopWidgetDetailValue)
-                .foregroundStyle(Design.Palette.secondaryText)
+                .foregroundStyle(detail.isDimmed ? Design.Palette.tertiaryText : Design.Palette.secondaryText)
                 .lineLimit(1)
                 .contentTransition(.numericText())
         }
@@ -508,11 +557,16 @@ private struct DesktopWidgetDetail: Identifiable, Equatable, Sendable {
     let id: String
     let label: String
     let value: String
+    let symbolName: String?
+    let isDimmed: Bool
 
-    init(_ id: String, _ label: String, _ value: String) {
+    init(_ id: String, _ label: String, _ value: String,
+         symbolName: String? = nil, isDimmed: Bool = false) {
         self.id = id
         self.label = label
         self.value = value
+        self.symbolName = symbolName
+        self.isDimmed = isDimmed
     }
 }
 

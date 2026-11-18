@@ -256,7 +256,9 @@ public struct HistoryChart: View {
         .overlay(alignment: .bottomLeading) { floorLabel(window) }
         .overlay {
             if window.isEmpty {
-                SwiftUI.Text(window.range == .day ? "Collecting the day…" : "Collecting samples…")
+                SwiftUI.Text(window.range == .day
+                             ? L10n.tr("Collecting the day…", "Đang thu thập dữ liệu ngày…")
+                             : L10n.tr("Collecting samples…", "Đang thu thập dữ liệu…"))
                     .font(Design.Text.micro)
                     .foregroundStyle(Design.Palette.tertiaryText)
                     .accessibilityHidden(true)
@@ -438,32 +440,40 @@ public struct HistoryChart: View {
         if let scrub {
             lead.append(scrubReadout(scrub, in: window))
         } else if window.range == .day, window.collectedSpan < window.span - 3_600 {
-            lead.append("since \(HistoryAxis.clock(window.end.addingTimeInterval(-window.collectedSpan)))")
+            lead.append(L10n.tr("since \(HistoryAxis.clock(window.end.addingTimeInterval(-window.collectedSpan)))",
+                                "từ \(HistoryAxis.clock(window.end.addingTimeInterval(-window.collectedSpan)))"))
         }
         let prefix = lead.isEmpty ? "" : lead.joined() + separator
         guard window.supportsTrend else {
             // Too few points for a trend: the peak alone on a derived scale, since it
             // is what says how tall the plot is, and otherwise just the lead.
             guard window.scale.isDerived else { return [lead.joined()] }
-            let peak = "peak \(window.string(window.scale.peak, using: formatter))"
+            let peak = L10n.tr("peak \(window.string(window.scale.peak, using: formatter))",
+                               "đỉnh \(window.string(window.scale.peak, using: formatter))")
             return [prefix + peak, lead.joined()]
         }
         let primary = window.primary
-        let average = "avg \(window.string(primary.average, using: formatter))"
-        let maximum = "max \(window.string(primary.maximum, using: formatter))"
+        let average = L10n.tr("avg \(window.string(primary.average, using: formatter))",
+                              "tb \(window.string(primary.average, using: formatter))")
+        let maximum = L10n.tr("max \(window.string(primary.maximum, using: formatter))",
+                              "cao \(window.string(primary.maximum, using: formatter))")
         let explained = primary.peakNote.map { "\(maximum) \($0)" } ?? maximum
         var tiers: [String]
         if let secondary = window.secondary {
-            let other = "\(module.secondaryGlyph) avg \(window.string(secondary.average, using: formatter))"
-                + "  max \(window.string(secondary.maximum, using: formatter))"
-            let otherMax = "\(module.secondaryGlyph) max \(window.string(secondary.maximum, using: formatter))"
+            let other = "\(module.secondaryGlyph) "
+                + L10n.tr("avg \(window.string(secondary.average, using: formatter))  max \(window.string(secondary.maximum, using: formatter))",
+                          "tb \(window.string(secondary.average, using: formatter))  cao \(window.string(secondary.maximum, using: formatter))")
+            let otherMax = "\(module.secondaryGlyph) "
+                + L10n.tr("max \(window.string(secondary.maximum, using: formatter))",
+                          "cao \(window.string(secondary.maximum, using: formatter))")
             tiers = [
                 "\(prefix)\(module.glyph) \(average)  \(maximum)   \(other)",
                 "\(prefix)\(module.glyph) \(maximum)   \(otherMax)",
                 "\(prefix)\(maximum)",
             ]
         } else {
-            let minimum = "min \(window.string(primary.minimum, using: formatter))"
+            let minimum = L10n.tr("min \(window.string(primary.minimum, using: formatter))",
+                                  "thấp \(window.string(primary.minimum, using: formatter))")
             tiers = [
                 "\(prefix)\(minimum)  \(average)  \(explained)",
                 "\(prefix)\(average)  \(explained)",
@@ -491,7 +501,9 @@ public struct HistoryChart: View {
             parts.append(window.string(column.mean, using: formatter))
         }
         if window.shade != nil, let shade = scrub.shade {
-            parts.append(shade.mean >= Self.shadeThreshold ? "on power" : "on battery")
+            parts.append(shade.mean >= Self.shadeThreshold
+                         ? L10n.tr("on power", "đang cắm sạc")
+                         : L10n.tr("on battery", "dùng pin"))
         }
         if let note = column.note { parts.append(note) }
         return parts.joined(separator: "  ")
@@ -746,7 +758,7 @@ extension PanelModule {
         case .disk: return ModuleHistory(.diskRead, secondary: .diskWrite, glyphs: ("R", "W"))
         case .battery: return ModuleHistory(.batteryPercent, shading: .batteryPlugged)
         case .thermal: return ModuleHistory(.cpuTemperature, domain: 30...100)
-        case .processes, .system: return nil
+        case .bluetooth, .processes, .system: return nil
         }
     }
 }

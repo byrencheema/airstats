@@ -83,9 +83,9 @@ public enum MemoryPressureLevel: Int, Sendable, Equatable, Hashable, Codable, Co
 
     public var label: String {
         switch self {
-        case .normal: return "Normal"
-        case .warning: return "Warning"
-        case .critical: return "Critical"
+        case .normal: return L10n.tr("Normal", "Bình thường")
+        case .warning: return L10n.tr("Warning", "Cảnh báo")
+        case .critical: return L10n.tr("Critical", "Nghiêm trọng")
         }
     }
 }
@@ -213,11 +213,11 @@ public enum ConnectionType: String, Sendable, Equatable, Hashable, Codable {
         switch self {
         case .wifi: return "Wi-Fi"
         case .ethernet: return "Ethernet"
-        case .cellular: return "Cellular"
+        case .cellular: return L10n.tr("Cellular", "Di động")
         case .vpn: return "VPN"
         case .loopback: return "Loopback"
-        case .other: return "Other"
-        case .none: return "Offline"
+        case .other: return L10n.tr("Other", "Khác")
+        case .none: return L10n.tr("Offline", "Ngoại tuyến")
         }
     }
 }
@@ -486,20 +486,236 @@ public struct AccessoryBattery: Sendable, Equatable, Identifiable {
     public var name: String
     /// The reported category, "Headphones" or "Mouse", when there is one.
     public var category: String?
+    /// The reported transport, such as "Bluetooth LE" or "USB", when published.
+    public var transport: String?
     /// The headline charge: the combined figure when one is reported, otherwise the
     /// lowest part, since the accessory stops working when its emptiest part does.
     public var percent: Double
     public var isCharging: Bool
     public var parts: [Part]
 
-    public init(id: String, name: String, category: String? = nil, percent: Double,
-                isCharging: Bool = false, parts: [Part] = []) {
+    public init(id: String, name: String, category: String? = nil, transport: String? = nil,
+                percent: Double, isCharging: Bool = false, parts: [Part] = []) {
         self.id = id
         self.name = name
         self.category = category
+        self.transport = transport
         self.percent = percent
         self.isCharging = isCharging
         self.parts = parts
+    }
+}
+
+// MARK: - Bluetooth
+
+public enum BluetoothDeviceCategory: String, Sendable, Equatable, Hashable, Codable {
+    case headphones, speaker, keyboard, mouse, trackpad, gamepad
+    case phone, computer, watch, microphone, other
+
+    public var label: String {
+        switch self {
+        case .headphones: return L10n.tr("Headphones", "Tai nghe")
+        case .speaker: return L10n.tr("Speaker", "Loa")
+        case .keyboard: return L10n.tr("Keyboard", "Bàn phím")
+        case .mouse: return L10n.tr("Mouse", "Chuột")
+        case .trackpad: return L10n.tr("Trackpad", "Bàn di chuột")
+        case .gamepad: return L10n.tr("Controller", "Tay cầm")
+        case .phone: return L10n.tr("Phone", "Điện thoại")
+        case .computer: return L10n.tr("Computer", "Máy tính")
+        case .watch: return L10n.tr("Watch", "Đồng hồ")
+        case .microphone: return L10n.tr("Microphone", "Micrô")
+        case .other: return L10n.tr("Bluetooth Device", "Thiết bị Bluetooth")
+        }
+    }
+
+    public var symbolName: String {
+        switch self {
+        case .headphones: return "headphones"
+        case .speaker: return "hifispeaker"
+        case .keyboard: return "keyboard"
+        case .mouse: return "computermouse"
+        case .trackpad: return "rectangle.and.hand.point.up.left"
+        case .gamepad: return "gamecontroller"
+        case .phone: return "iphone"
+        case .computer: return "laptopcomputer"
+        case .watch: return "applewatch"
+        case .microphone: return "mic"
+        case .other: return "dot.radiowaves.left.and.right"
+        }
+    }
+
+    /// Filled variant for connected Bluetooth badge circles, matching macOS Control Center.
+    public var filledSymbolName: String {
+        switch self {
+        case .headphones: return "headphones"
+        case .speaker: return "hifispeaker.fill"
+        case .keyboard: return "keyboard.fill"
+        case .mouse: return "computermouse.fill"
+        case .trackpad: return "rectangle.and.hand.point.up.left.fill"
+        case .gamepad: return "gamecontroller.fill"
+        case .phone: return "iphone"
+        case .computer: return "laptopcomputer"
+        case .watch: return "applewatch"
+        case .microphone: return "mic.fill"
+        case .other: return "dot.radiowaves.left.and.right"
+        }
+    }
+}
+
+/// One paired or connected Bluetooth peripheral.
+///
+/// Connection state comes from `IOBluetooth` and battery charge from `IOPowerSources`
+/// (with `IOBluetooth` battery properties as a fallback), so a device that reports no
+/// charge still appears with its real link state and `batteryPercent == nil` rather
+/// than vanishing or showing zero.
+public struct BluetoothDevice: Sendable, Equatable, Identifiable {
+    public var id: String
+    public var name: String
+    public var address: String?
+    public var category: BluetoothDeviceCategory
+    public var isConnected: Bool
+    /// 0...100 when reported; nil when disconnected or when the device does not publish a charge.
+    public var batteryPercent: Double?
+    public var isCharging: Bool
+    public var parts: [AccessoryBattery.Part]
+    /// Link RSSI in dBm when connected and reported by the controller; nil otherwise.
+    public var rssi: Int?
+
+    public init(id: String, name: String, address: String? = nil,
+                category: BluetoothDeviceCategory = .other,
+                isConnected: Bool, batteryPercent: Double? = nil,
+                isCharging: Bool = false, parts: [AccessoryBattery.Part] = [],
+                rssi: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.address = address
+        self.category = category
+        self.isConnected = isConnected
+        self.batteryPercent = batteryPercent
+        self.isCharging = isCharging
+        self.parts = parts
+        self.rssi = rssi
+    }
+
+    /// The charge to watch for low-battery alerts: for multi-part earbuds, the lowest
+    /// discharging bud (ignoring the case); for a single-battery device, its own charge
+    /// while not on power.
+    public func effectiveBatteryPercent(dischargingOnly: Bool) -> Double? {
+        guard isConnected else { return nil }
+        if !parts.isEmpty {
+            let buds = parts.filter { $0.name.caseInsensitiveCompare("Case") != .orderedSame }
+            let candidates = (buds.isEmpty ? parts : buds)
+                .filter { !dischargingOnly || !$0.isCharging }
+            if let lowest = candidates.map(\.percent).min() { return lowest }
+            return dischargingOnly ? nil : batteryPercent
+        }
+        if dischargingOnly && isCharging { return nil }
+        return batteryPercent
+    }
+}
+
+/// Identifies a specific Bluetooth peripheral chosen for a `.bluetoothBattery` readout.
+///
+/// Matches by `id` / `address` first and falls back to a case-insensitive `name` match
+/// so multi-slot BLE keyboards and mice that rotate one address byte across host slots
+/// continue matching without manual re-selection.
+public struct BluetoothDeviceTarget: Sendable, Codable, Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var category: BluetoothDeviceCategory
+
+    public init(id: String, name: String, category: BluetoothDeviceCategory = .other) {
+        self.id = id
+        self.name = name
+        self.category = category
+    }
+
+    public init(device: BluetoothDevice) {
+        self.id = device.id
+        self.name = device.name
+        self.category = device.category
+    }
+
+    public func matches(_ device: BluetoothDevice) -> Bool {
+        let targetID = id.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !targetID.isEmpty {
+            if device.id.caseInsensitiveCompare(targetID) == .orderedSame { return true }
+            if let address = device.address,
+               address.caseInsensitiveCompare(targetID) == .orderedSame { return true }
+        }
+        let targetName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let deviceName = device.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !targetName.isEmpty && deviceName.caseInsensitiveCompare(targetName) == .orderedSame
+    }
+}
+
+public struct BluetoothSnapshot: Sendable, Equatable {
+    /// True when the Mac's Bluetooth controller is turned on.
+    public var isPoweredOn: Bool
+    /// Connected devices first, followed by paired devices that are not connected.
+    public var devices: [BluetoothDevice]
+
+    public init(isPoweredOn: Bool = true, devices: [BluetoothDevice] = []) {
+        self.isPoweredOn = isPoweredOn
+        self.devices = devices
+    }
+
+    public var connectedDevices: [BluetoothDevice] { devices.filter(\.isConnected) }
+    public var disconnectedDevices: [BluetoothDevice] { devices.filter { !$0.isConnected } }
+    public var connectedCount: Int { connectedDevices.count }
+
+    /// Resolves a configured `BluetoothDeviceTarget` against the current snapshot,
+    /// preferring an exact `id`/`address` match among connected devices, then a
+    /// case-insensitive `name` match among connected devices, before checking
+    /// disconnected pairings.
+    public func matchingDevice(for target: BluetoothDeviceTarget) -> BluetoothDevice? {
+        let targetID = target.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let targetName = target.name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !targetID.isEmpty,
+           let byID = connectedDevices.first(where: {
+               $0.id.caseInsensitiveCompare(targetID) == .orderedSame
+               || ($0.address?.caseInsensitiveCompare(targetID) == .orderedSame)
+           }) {
+            return byID
+        }
+        if !targetName.isEmpty,
+           let byName = connectedDevices.first(where: {
+               $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                   .caseInsensitiveCompare(targetName) == .orderedSame
+           }) {
+            return byName
+        }
+        if !targetID.isEmpty,
+           let disconnectedByID = disconnectedDevices.first(where: {
+               $0.id.caseInsensitiveCompare(targetID) == .orderedSame
+               || ($0.address?.caseInsensitiveCompare(targetID) == .orderedSame)
+           }) {
+            return disconnectedByID
+        }
+        if !targetName.isEmpty,
+           let disconnectedByName = disconnectedDevices.first(where: {
+               $0.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                   .caseInsensitiveCompare(targetName) == .orderedSame
+           }) {
+            return disconnectedByName
+        }
+        return nil
+    }
+
+    /// Connected device carrying the lowest battery reading, if any reports one.
+    public func lowestBatteryDevice(dischargingOnly: Bool = false) -> (device: BluetoothDevice, percent: Double)? {
+        guard isPoweredOn else { return nil }
+        return connectedDevices
+            .compactMap { device in
+                device.effectiveBatteryPercent(dischargingOnly: dischargingOnly)
+                    .map { (device, $0) }
+            }
+            .min { $0.percent < $1.percent }
+    }
+
+    public func lowestBatteryPercent(dischargingOnly: Bool = false) -> Double? {
+        lowestBatteryDevice(dischargingOnly: dischargingOnly)?.percent
     }
 }
 
@@ -512,10 +728,10 @@ public enum ThermalPressure: Int, Sendable, Equatable, Hashable, Codable, Compar
 
     public var label: String {
         switch self {
-        case .nominal: return "Nominal"
-        case .fair: return "Fair"
-        case .serious: return "Serious"
-        case .critical: return "Critical"
+        case .nominal: return L10n.tr("Nominal", "Bình thường")
+        case .fair: return L10n.tr("Fair", "Trung bình")
+        case .serious: return L10n.tr("Serious", "Cao")
+        case .critical: return L10n.tr("Critical", "Nguy cấp")
         }
     }
 }
@@ -712,6 +928,7 @@ public struct SystemSnapshot: Sendable, Equatable {
     public var network: MetricState<NetworkSnapshot>
     public var disk: MetricState<DiskSnapshot>
     public var power: MetricState<PowerSnapshot>
+    public var bluetooth: MetricState<BluetoothSnapshot>
     public var thermal: MetricState<ThermalSnapshot>
     public var processes: MetricState<ProcessSnapshot>
     /// Whether `processes` was collected in this very sample. The process slot keeps
@@ -730,6 +947,7 @@ public struct SystemSnapshot: Sendable, Equatable {
                 network: MetricState<NetworkSnapshot> = .pending,
                 disk: MetricState<DiskSnapshot> = .pending,
                 power: MetricState<PowerSnapshot> = .pending,
+                bluetooth: MetricState<BluetoothSnapshot> = .pending,
                 thermal: MetricState<ThermalSnapshot> = .pending,
                 processes: MetricState<ProcessSnapshot> = .pending,
                 processesSampled: Bool = false,
@@ -742,6 +960,7 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.network = network
         self.disk = disk
         self.power = power
+        self.bluetooth = bluetooth
         self.thermal = thermal
         self.processes = processes
         self.processesSampled = processesSampled

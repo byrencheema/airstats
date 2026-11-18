@@ -289,8 +289,10 @@ public struct MetricFormatter: Sendable {
     /// menu bar width so items never shift as values change.
     public func widestSample(for metric: MenuBarMetric) -> String {
         switch metric {
-        case .cpuUsage, .memoryUsage, .gpuUsage, .memoryPressure, .battery:
+        case .cpuUsage, .memoryUsage, .gpuUsage, .memoryPressure, .battery, .bluetoothBattery:
             return showsPercentSign ? "100%" : "100"
+        case .bluetoothDevices:
+            return "Off"
         case .cpuTemperature:
             return temperatureUnit == .fahrenheit ? "212°F" : "100°C"
         case .cpuFrequency:

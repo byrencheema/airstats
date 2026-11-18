@@ -143,6 +143,7 @@ struct ThresholdReadingCoverageTests {
         #expect(readings[.memoryPressure] == snapshot.memory.value!.pressureFraction * 100)
         #expect(readings[.diskFree] == Double(root.availableBytes) / 1_000_000_000)
         #expect(readings[.batteryLow] == snapshot.power.value!.percentage)
+        #expect(readings[.bluetoothBatteryLow] == snapshot.bluetooth.value!.lowestBatteryPercent(dischargingOnly: true))
         #expect(readings[.cpuTemperature] == snapshot.thermal.value!.cpuCelsius)
         #expect(readings[.thermalPressure] == Double(snapshot.thermal.value!.pressure.rawValue))
     }

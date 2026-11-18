@@ -471,6 +471,7 @@ public final class MetricsEngine {
     public var network: MetricState<NetworkSnapshot> { snapshot.network }
     public var disk: MetricState<DiskSnapshot> { snapshot.disk }
     public var power: MetricState<PowerSnapshot> { snapshot.power }
+    public var bluetooth: MetricState<BluetoothSnapshot> { snapshot.bluetooth }
     public var thermal: MetricState<ThermalSnapshot> { snapshot.thermal }
     public var processes: MetricState<ProcessSnapshot> { snapshot.processes }
     public var system: MetricState<SystemInfoSnapshot> { snapshot.system }

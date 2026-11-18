@@ -111,14 +111,14 @@ struct ShortcutRecorderField: View {
     }
 
     private var fieldTitle: String {
-        if isRecording { return "Recording…" }
-        guard let shortcut else { return "Record Shortcut" }
+        if isRecording { return L10n.tr("Recording…", "Đang ghi…") }
+        guard let shortcut else { return L10n.tr("Record Shortcut", "Đặt phím tắt") }
         return ShortcutDisplay.string(for: shortcut)
     }
 
     private var accessibleValue: String {
-        if isRecording { return "Recording" }
-        guard let shortcut else { return "None" }
+        if isRecording { return L10n.tr("Recording", "Đang ghi") }
+        guard let shortcut else { return L10n.tr("None", "Không có") }
         return ShortcutDisplay.accessibleString(for: shortcut)
     }
 
