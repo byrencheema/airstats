@@ -389,10 +389,13 @@ public final class MenuBarContentView: NSView {
         guard let model, let context = NSGraphicsContext.current?.cgContext else { return }
         guard !placements.isEmpty else { return }
 
-        // The context transform is the only reliable source of backing scale here:
+        // The context is the only reliable source of backing scale here:
         // `window?.backingScaleFactor` is nil during an offscreen render, and a
-        // hardcoded 2 blurs every hairline on a 1x display.
-        let scale = max(abs(context.ctm.a), 1)
+        // hardcoded 2 blurs every hairline on a 1x display. It has to be the device
+        // transform, not the CTM: the status bar also draws this view into a recording
+        // context whose CTM is identity on a Retina screen, and a symbol rasterised at
+        // that 1x was what the menu bar showed, blurred.
+        let scale = max(abs(context.userSpaceToDeviceSpaceTransform.a), 1)
         // Resolved once for the pass. Every item shares this palette unless it is
         // unavailable or threshold-coloured, so the common draw allocates no colours at
         // all — and this runs for the life of the session.
