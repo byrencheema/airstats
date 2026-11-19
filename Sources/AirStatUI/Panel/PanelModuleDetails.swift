@@ -468,14 +468,27 @@ extension PanelModuleView {
     private var processesDetail: some View {
         section(engine.processes) { processes in
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(topProcesses(processes)) { process in
-                    processRow(process, value: processValue(process))
+                QuietSegmentedControl(
+                    selection: Binding(get: { sortKey },
+                                       set: { key in settings.update { $0.panel.processSort = key } }),
+                    options: PanelSettings.processSortOptions.map { ($0, $0.label) },
+                    accessibilityLabel: "Sort by")
+                    .padding(.bottom, Design.Space.xs)
+                let ranked = topProcesses(processes)
+                if ranked.isEmpty {
+                    Text(sortKey == .diskIO ? "No disk activity" : "No power readings yet")
+                        .font(Design.Text.body)
+                        .foregroundStyle(Design.Palette.secondaryText)
+                } else {
+                    ForEach(ranked) { process in
+                        processRow(process, value: processValue(process))
+                    }
                 }
             }
         }
     }
 
-    private var sortKey: ProcessSortKey { PanelSettings.processSortKey }
+    private var sortKey: ProcessSortKey { settings.settings.panel.processSort }
 
     private func topProcesses(_ processes: ProcessSnapshot) -> [ProcessRow] {
         let count = PanelSettings.processRowCount
@@ -483,13 +496,22 @@ extension PanelModuleView {
             switch sortKey {
             case .cpu: return a.cpuPercent > b.cpuPercent
             case .memory: return a.memoryBytes > b.memoryBytes
-            case .energy: return (a.energyImpact ?? 0) > (b.energyImpact ?? 0)
+            case .energy: return (a.powerWatts ?? 0) > (b.powerWatts ?? 0)
             case .diskIO: return diskTotal(a) > diskTotal(b)
             case .networkIO, .name: return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             case .pid: return a.pid < b.pid
             }
         }
-        return Array(sorted.prefix(count))
+        // Disk and power are mostly zero on a quiet Mac, and five rows of "0 B/s" rank
+        // nothing. Only the processes actually doing it are listed.
+        let doing = sorted.filter { process in
+            switch sortKey {
+            case .diskIO: return diskTotal(process) > 0
+            case .energy: return (process.powerWatts ?? 0) >= 0.0005
+            default: return true
+            }
+        }
+        return Array(doing.prefix(count))
     }
 
     private func diskTotal(_ process: ProcessRow) -> Double {
@@ -542,8 +564,7 @@ extension PanelModuleView {
         switch sortKey {
         case .cpu, .name, .pid: return formatter.unclampedPercent(process.cpuPercent)
         case .memory: return formatter.memory(process.memoryBytes)
-        case .energy: return process.energyImpact.map { formatter.fixed($0, decimals: 1) }
-                             ?? MetricFormatter.unavailable
+        case .energy: return formatter.processPower(process.powerWatts)
         case .diskIO: return formatter.diskRate(diskTotal(process))
         case .networkIO: return MetricFormatter.unavailable
         }

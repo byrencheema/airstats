@@ -43,6 +43,7 @@ enum DiagnosticsCLI {
       --repeat N      number of samples (default 2; rate metrics need at least 2)
       --interval S    seconds between samples (default 1)
       --verbose       print every sample, not just the last
+      --menubar       sample as the menu bar does with the panel closed
 
     Render surfaces:  menuBar, panel, desktopWidget, settings   (omit for all)
     Render flags:
@@ -51,6 +52,9 @@ enum DiagnosticsCLI {
       --light / --dark   appearance (omit for both)
       --scale N       backing scale, repeatable (omit for 1 and 2)
       --tint C        metric colour as #RRGGBB or r,g,b; the panel stays monochrome
+      --menubar M[:S][,M…]  menu bar readouts to draw, as MenuBarMetric names with an optional :style
+      --open M[,M…]   panel modules to draw expanded
+      --sort K        what Top Processes ranks by: cpu, diskIO or energy
 
     Examples:
       AirStats --probe cpu --repeat 5 --interval 1 --verbose
@@ -63,6 +67,7 @@ enum DiagnosticsCLI {
         var repeatCount = 2
         var interval: TimeInterval = 1
         var verbose = false
+        var activity = SamplingActivity.panel
 
         var index = 0
         while index < arguments.count {
@@ -76,6 +81,8 @@ enum DiagnosticsCLI {
                 interval = Double(arguments[safe: index] ?? "") ?? interval
             case "--verbose":
                 verbose = true
+            case "--menubar":
+                activity = .menuBar
             default:
                 if let id = CollectorID(rawValue: argument) {
                     collectors.insert(id)
@@ -92,7 +99,8 @@ enum DiagnosticsCLI {
             collectors: collectors.isEmpty ? Set(CollectorID.allCases) : collectors,
             repeatCount: repeatCount,
             interval: interval,
-            verbose: verbose
+            verbose: verbose,
+            activity: activity
         )
         print(MetricProbe.run(options))
     }

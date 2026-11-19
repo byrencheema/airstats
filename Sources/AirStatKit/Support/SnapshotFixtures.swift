@@ -184,9 +184,8 @@ public enum SnapshotFixtures {
             ],
             primaryInterfaceName: "en0",
             connectionType: .wifi,
-            wifi: WiFiInfo(ssid: "Sunnyvale", bssid: nil, rssi: -46, noise: -92,
-                           channel: 6, band: "2.4 GHz", transmitRateMbps: 229,
-                           security: "WPA3 Personal"),
+            wifi: WiFiInfo(ssid: "Sunnyvale", rssi: -46, channel: 6, band: "2.4 GHz",
+                           transmitRateMbps: 229),
             localIPv4: "10.0.0.69",
             // A documentation-range address (RFC 5737), so the fixture shows the row the
             // opt-in lookup fills in without any machine's real address in the source.
@@ -286,14 +285,17 @@ public enum SnapshotFixtures {
     }
 
     public static func processes(topCPU: Double = 46.2) -> ProcessSnapshot {
-        let names: [(String, Double, UInt64, Int)] = [
-            ("Xcode", topCPU, 4_284_432_384, 41),
-            ("kernel_task", topCPU * 0.42, 1_842_216_960, 612),
-            ("WindowServer", topCPU * 0.31, 968_884_224, 28),
-            ("Google Chrome Helper (Renderer)", topCPU * 0.24, 742_391_808, 22),
-            ("swift-frontend", topCPU * 0.19, 1_284_046_848, 9),
-            ("Music", topCPU * 0.08, 412_663_808, 17),
-            ("mds_stores", topCPU * 0.05, 186_646_528, 11),
+        // Disk and power do not follow CPU, so each sort puts a different process on
+        // top: mds_stores indexing leads Disk, WindowServer driving the display leads
+        // Energy.
+        let names: [(String, Double, UInt64, Int, Double, Double)] = [
+            ("Xcode", topCPU, 4_284_432_384, 41, 2_400_000, topCPU * 0.021),
+            ("kernel_task", topCPU * 0.42, 1_842_216_960, 612, 1_100_000, topCPU * 0.012),
+            ("WindowServer", topCPU * 0.31, 968_884_224, 28, 40_000, topCPU * 0.034),
+            ("Google Chrome Helper (Renderer)", topCPU * 0.24, 742_391_808, 22, 320_000, topCPU * 0.009),
+            ("swift-frontend", topCPU * 0.19, 1_284_046_848, 9, 8_600_000, topCPU * 0.007),
+            ("Music", topCPU * 0.08, 412_663_808, 17, 180_000, topCPU * 0.002),
+            ("mds_stores", topCPU * 0.05, 186_646_528, 11, 31_000_000, topCPU * 0.001),
         ]
         return ProcessSnapshot(
             processes: names.enumerated().map { index, entry in
@@ -301,7 +303,10 @@ public enum SnapshotFixtures {
                            executablePath: "/Applications/\(entry.0).app",
                            cpuPercent: entry.1, memoryBytes: entry.2,
                            threadCount: entry.3, userName: "byren",
-                           startTime: referenceDate.addingTimeInterval(-3_600))
+                           startTime: referenceDate.addingTimeInterval(-3_600),
+                           diskReadBytesPerSecond: entry.4 * 0.7,
+                           diskWriteBytesPerSecond: entry.4 * 0.3,
+                           powerWatts: entry.5)
             },
             totalProcessCount: 648,
             totalThreadCount: 2_314

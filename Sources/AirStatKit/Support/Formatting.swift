@@ -242,6 +242,14 @@ public struct MetricFormatter: Sendable {
         return fixed(abs(value), decimals: decimals) + " W"
     }
 
+    /// A process's power draw. Milliwatts below one watt, because most processes on a
+    /// quiet Mac draw a few dozen and "0.0 W" would rank them all as equal.
+    public func processPower(_ value: Double?) -> String {
+        guard let value, value.isFinite, value >= 0 else { return Self.unavailable }
+        if value < 0.9995 { return fixed(value * 1000, decimals: 0) + " mW" }
+        return fixed(value, decimals: 1) + " W"
+    }
+
     public func frequency(_ megahertz: Double?) -> String {
         guard let megahertz, megahertz.isFinite, megahertz > 0 else { return Self.unavailable }
         if megahertz >= 1000 { return fixed(megahertz / 1000, decimals: 2) + " GHz" }
@@ -289,7 +297,7 @@ public struct MetricFormatter: Sendable {
     /// menu bar width so items never shift as values change.
     public func widestSample(for metric: MenuBarMetric) -> String {
         switch metric {
-        case .cpuUsage, .memoryUsage, .gpuUsage, .memoryPressure, .battery:
+        case .cpuUsage, .memoryUsage, .gpuUsage, .memoryPressure, .battery, .diskUsage:
             return showsPercentSign ? "100%" : "100"
         case .cpuTemperature:
             return temperatureUnit == .fahrenheit ? "212°F" : "100°C"

@@ -12,15 +12,20 @@ public enum MetricProbe {
         public var repeatCount: Int
         public var interval: TimeInterval
         public var verbose: Bool
+        /// What the collectors are told is on screen, since several read less when
+        /// only the menu bar is showing.
+        public var activity: SamplingActivity
 
         public init(collectors: Set<CollectorID> = Set(CollectorID.allCases),
                     repeatCount: Int = 2,
                     interval: TimeInterval = 1,
-                    verbose: Bool = false) {
+                    verbose: Bool = false,
+                    activity: SamplingActivity = .panel) {
             self.collectors = collectors
             self.repeatCount = max(1, repeatCount)
             self.interval = max(0.05, interval)
             self.verbose = verbose
+            self.activity = activity
         }
     }
 
@@ -73,7 +78,7 @@ public enum MetricProbe {
                 lastInstant[source.identifier] = now
                 let context = SampleContext(elapsed: elapsed,
                                             isFirstSample: elapsed == 0,
-                                            activity: .panel)
+                                            activity: options.activity)
                 let clock = Monotonic.now
                 let state = source.collect(context: context)
                 let cost = Monotonic.seconds(since: clock) * 1000

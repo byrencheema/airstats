@@ -7,7 +7,7 @@ import Foundation
 struct BarStyleAvailabilityTests {
 
     private static let fractionMetrics: Set<MenuBarMetric> = [
-        .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure,
+        .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure, .diskUsage,
     ]
 
     @Test("only the readouts with a known ceiling offer it")

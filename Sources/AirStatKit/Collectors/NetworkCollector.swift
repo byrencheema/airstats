@@ -633,30 +633,28 @@ public final class NetworkCollector: MetricSource {
         wifi = readWiFi()
     }
 
+    /// Every CWInterface getter is a synchronous round trip to the Wi-Fi daemon, so this
+    /// asks only for what something shows. Security, noise and BSSID were read here once
+    /// and displayed nowhere, and security alone cost 2.7 ms of a 9 ms read.
     private func readWiFi() -> WiFiInfo? {
-        guard let interface = CWWiFiClient.shared().interface(), interface.powerOn() else {
-            return nil
-        }
-        // `wlanChannel()` is nil unless the radio is associated with a network. Without
-        // an association rssiValue()/transmitRate() return 0, and reporting that would be
-        // inventing a -0 dBm signal rather than measuring one.
-        guard let channel = interface.wlanChannel() else { return nil }
+        // `wlanChannel()` is nil unless the radio is associated with a network, which
+        // also covers a radio that is powered off. Without an association
+        // rssiValue()/transmitRate() return 0, and reporting that would be inventing a
+        // -0 dBm signal rather than measuring one.
+        guard let interface = CWWiFiClient.shared().interface(),
+              let channel = interface.wlanChannel() else { return nil }
 
         let rssi = interface.rssiValue()
-        let noise = interface.noiseMeasurement()
         let rate = interface.transmitRate()
         return WiFiInfo(
-            // ssid/bssid come back nil unless the app holds Location Services
-            // authorisation, which a menu bar sampler has no business prompting for.
-            // Everything else on the link is readable without it.
+            // ssid comes back nil unless the app holds Location Services authorisation,
+            // which a menu bar sampler has no business prompting for. Everything else
+            // on the link is readable without it.
             ssid: interface.ssid().flatMap { $0.isEmpty ? nil : $0 },
-            bssid: interface.bssid().flatMap { $0.isEmpty ? nil : $0 },
             rssi: rssi == 0 ? nil : rssi,
-            noise: noise == 0 ? nil : noise,
             channel: channel.channelNumber,
             band: Self.bandLabel(channel.channelBand),
-            transmitRateMbps: rate > 0 ? rate : nil,
-            security: Self.securityLabel(interface.security()))
+            transmitRateMbps: rate > 0 ? rate : nil)
     }
 
     private static func bandLabel(_ band: CWChannelBand) -> String? {
@@ -665,29 +663,6 @@ public final class NetworkCollector: MetricSource {
         case .band5GHz: return "5 GHz"
         case .band6GHz: return "6 GHz"
         case .bandUnknown: return nil
-        @unknown default: return nil
-        }
-    }
-
-    private static func securityLabel(_ security: CWSecurity) -> String? {
-        switch security {
-        case .none: return "Open"
-        case .WEP: return "WEP"
-        case .wpaPersonal: return "WPA Personal"
-        case .wpaPersonalMixed: return "WPA/WPA2 Personal"
-        case .wpa2Personal: return "WPA2 Personal"
-        case .personal: return "Personal"
-        case .dynamicWEP: return "Dynamic WEP"
-        case .wpaEnterprise: return "WPA Enterprise"
-        case .wpaEnterpriseMixed: return "WPA/WPA2 Enterprise"
-        case .wpa2Enterprise: return "WPA2 Enterprise"
-        case .enterprise: return "Enterprise"
-        case .wpa3Personal: return "WPA3 Personal"
-        case .wpa3Enterprise: return "WPA3 Enterprise"
-        case .wpa3Transition: return "WPA2/WPA3 Transition"
-        case .OWE: return "Enhanced Open"
-        case .oweTransition: return "Enhanced Open Transition"
-        case .unknown: return nil
         @unknown default: return nil
         }
     }

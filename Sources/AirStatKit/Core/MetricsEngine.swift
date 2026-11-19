@@ -366,34 +366,34 @@ public final class MetricsEngine {
             saveDayHistory()
         }
 
-        if let cpu = s.cpu.value {
+        if s.liveSources.contains(.cpu), let cpu = s.cpu.value {
             fold(.cpuTotal, cpu.total.busy)
             fold(.cpuUser, cpu.total.user)
             fold(.cpuSystem, cpu.total.system)
             if let p = cpu.performanceBusy { fold(.cpuPerformance, p) }
             if let e = cpu.efficiencyBusy { fold(.cpuEfficiency, e) }
         }
-        if let mem = s.memory.value {
+        if s.liveSources.contains(.memory), let mem = s.memory.value {
             fold(.memoryUsed, mem.usedFraction)
             fold(.memoryPressure, mem.pressureFraction)
             fold(.memorySwap, Double(mem.swapUsedBytes))
         }
-        if let gpu = s.gpu.value, let primary = gpu.primary {
+        if s.liveSources.contains(.gpu), let gpu = s.gpu.value, let primary = gpu.primary {
             if let util = primary.utilization { fold(.gpuUtilization, util) }
             if let used = primary.vramUsedBytes, let total = primary.vramTotalBytes, total > 0 {
                 fold(.gpuVRAM, Double(used) / Double(total))
             }
         }
-        if let net = s.network.value {
+        if s.liveSources.contains(.network), let net = s.network.value {
             fold(.networkUpload, net.uploadBytesPerSecond)
             fold(.networkDownload, net.downloadBytesPerSecond)
         }
-        if let disk = s.disk.value {
+        if s.liveSources.contains(.disk), let disk = s.disk.value {
             fold(.diskRead, disk.readBytesPerSecond)
             fold(.diskWrite, disk.writeBytesPerSecond)
             if let root = disk.rootVolume { fold(.diskUsed, root.usedFraction) }
         }
-        if let power = s.power.value {
+        if s.liveSources.contains(.power), let power = s.power.value {
             if let pct = power.percentage { fold(.batteryPercent, pct) }
             if let w = power.batteryWatts { fold(.batteryWatts, w) }
             if let w = power.systemWatts { fold(.systemWatts, w) }
@@ -402,7 +402,7 @@ public final class MetricsEngine {
         if s.processesSampled, let processes = s.processes.value {
             noteProcesses(processes, in: s)
         }
-        if let thermal = s.thermal.value {
+        if s.liveSources.contains(.thermal), let thermal = s.thermal.value {
             if let c = thermal.cpuCelsius { fold(.cpuTemperature, c) }
             if let g = thermal.gpuCelsius { fold(.gpuTemperature, g) }
             if let fan = thermal.fans.first { fold(.fanRPM, fan.currentRPM) }

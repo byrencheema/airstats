@@ -256,25 +256,18 @@ public struct NetworkInterfaceStats: Sendable, Equatable, Hashable, Identifiable
 
 public struct WiFiInfo: Sendable, Equatable, Hashable {
     public var ssid: String?
-    public var bssid: String?
     public var rssi: Int?
-    public var noise: Int?
     public var channel: Int?
     public var band: String?
     public var transmitRateMbps: Double?
-    public var security: String?
 
-    public init(ssid: String? = nil, bssid: String? = nil, rssi: Int? = nil, noise: Int? = nil,
-                channel: Int? = nil, band: String? = nil, transmitRateMbps: Double? = nil,
-                security: String? = nil) {
+    public init(ssid: String? = nil, rssi: Int? = nil, channel: Int? = nil,
+                band: String? = nil, transmitRateMbps: Double? = nil) {
         self.ssid = ssid
-        self.bssid = bssid
         self.rssi = rssi
-        self.noise = noise
         self.channel = channel
         self.band = band
         self.transmitRateMbps = transmitRateMbps
-        self.security = security
     }
 
     /// Signal quality 0...1 derived from RSSI, using the same -100…-50 dBm ramp
@@ -615,16 +608,18 @@ public struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
     public var threadCount: Int
     public var userName: String?
     public var startTime: Date?
-    public var energyImpact: Double?
     public var diskReadBytesPerSecond: Double?
     public var diskWriteBytesPerSecond: Double?
+    /// Average power over the last interval, from the kernel's per-process energy
+    /// counter. Watts rather than Activity Monitor's unitless Energy Impact.
+    public var powerWatts: Double?
     public var isAppleSignedSystem: Bool
 
     public init(pid: Int32, parentPID: Int32 = 0, name: String, executablePath: String? = nil,
                 bundleIdentifier: String? = nil, cpuPercent: Double = 0, memoryBytes: UInt64 = 0,
                 threadCount: Int = 0, userName: String? = nil, startTime: Date? = nil,
-                energyImpact: Double? = nil, diskReadBytesPerSecond: Double? = nil,
-                diskWriteBytesPerSecond: Double? = nil, isAppleSignedSystem: Bool = false) {
+                diskReadBytesPerSecond: Double? = nil, diskWriteBytesPerSecond: Double? = nil,
+                powerWatts: Double? = nil, isAppleSignedSystem: Bool = false) {
         self.pid = pid
         self.parentPID = parentPID
         self.name = name
@@ -635,9 +630,9 @@ public struct ProcessRow: Sendable, Equatable, Hashable, Identifiable {
         self.threadCount = threadCount
         self.userName = userName
         self.startTime = startTime
-        self.energyImpact = energyImpact
         self.diskReadBytesPerSecond = diskReadBytesPerSecond
         self.diskWriteBytesPerSecond = diskWriteBytesPerSecond
+        self.powerWatts = powerWatts
         self.isAppleSignedSystem = isAppleSignedSystem
     }
 }
@@ -720,6 +715,10 @@ public struct SystemSnapshot: Sendable, Equatable {
     /// "what is running now" has to check this first.
     public var processesSampled: Bool
     public var system: MetricState<SystemInfoSnapshot>
+    /// Sources running when this was taken. A source suspended when the panel closed
+    /// keeps its last state, which is a reading of the past and must not be written
+    /// into history as though it were measured again on every tick since.
+    public var liveSources: Set<CollectorID>
     public var capturedAt: Date
     /// Monotonic capture instant, used for staleness checks across sleep.
     public var capturedInstant: ContinuousClock.Instant
@@ -734,6 +733,7 @@ public struct SystemSnapshot: Sendable, Equatable {
                 processes: MetricState<ProcessSnapshot> = .pending,
                 processesSampled: Bool = false,
                 system: MetricState<SystemInfoSnapshot> = .pending,
+                liveSources: Set<CollectorID> = Set(CollectorID.allCases),
                 capturedAt: Date = Date(),
                 capturedInstant: ContinuousClock.Instant = Monotonic.now) {
         self.cpu = cpu
@@ -746,6 +746,7 @@ public struct SystemSnapshot: Sendable, Equatable {
         self.processes = processes
         self.processesSampled = processesSampled
         self.system = system
+        self.liveSources = liveSources
         self.capturedAt = capturedAt
         self.capturedInstant = capturedInstant
     }

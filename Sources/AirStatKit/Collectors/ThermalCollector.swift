@@ -184,7 +184,12 @@ public final class ThermalCollector: MetricSource {
         var gpuSum = 0.0, gpuCount = 0
         var readFailures = 0
 
-        for sensor in sensors {
+        // With only the menu bar showing, the CPU average is the one temperature
+        // anything reads: the readout, the CPU temperature alert and its history.
+        // The other sensors are for the panel and widget, and each costs an SMC round
+        // trip, so skipping them takes this collector from about 4.4 ms to under half.
+        let cpuOnly = context.activity < .desktopWidget
+        for sensor in sensors where !cpuOnly || sensor.category == .cpu {
             guard let raw = read(key: sensor.key, dataSize: sensor.dataSize, dataType: sensor.dataType) else {
                 readFailures += 1
                 continue

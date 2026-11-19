@@ -167,6 +167,11 @@ spctl --assess --type open --context context:primary-signature -v "$DMG"
 # overwritten by the next run and a dmg is minutes of notarization to reproduce.
 cp "$DMG" "$DIST/AirStats-$VERSION.dmg"
 
+# The shipped binary is stripped, so its symbols are kept beside the dmg under the same
+# version. Without them a crash report from this release cannot be symbolicated, and
+# the next build would overwrite the dSYM build.sh left beside the app.
+ditto -c -k --keepParent "$APP.dSYM" "$DIST/AirStats-$VERSION.dSYM.zip"
+
 # Sparkle installs a dmg only if its EdDSA signature matches the SUPublicEDKey in the
 # copy already running, so this is what makes the file installable rather than merely
 # downloadable.
