@@ -276,20 +276,30 @@ public final class PowerCollector: MetricSource {
             if celsius > -40, celsius < 100 { snapshot.temperatureCelsius = celsius }
         }
 
-        // systemWatts stays nil. AppleSmartBattery's PowerTelemetryData block does carry
-        // a SystemLoad key in milliwatts that looks like the answer — it tracks load
-        // (3.2 W idle against 21 W under an all-core spin) and its siblings balance,
-        // BatteryPower == -SystemLoad while SystemPowerIn is 0 on battery — but it does
-        // not survive checking. On battery the pack is the only supply, so true system
-        // power must equal battery output power, and SystemLoad was seen disagreeing
-        // with |Voltage x Amperage| by up to 45% at the same instant (6.7 W against
-        // 11.7 W); over a seven-minute steady-load run it averaged 21.4 W where the
-        // energy actually drained out of the pack was 18.2 W. So it is a smoothed
-        // estimate that would contradict the batteryWatts sitting beside it in the same
-        // snapshot. Publishing it would be inventing a number, and on battery
-        // batteryWatts already is the system draw. Revisit only with a machine on AC,
-        // where SystemPowerIn and AdapterEfficiencyLoss become non-zero and the
-        // adapter-in minus charge-out identity can actually be tested.
+        snapshot.systemWatts = Self.systemWatts(
+            pluggedIn: snapshot.isPluggedIn,
+            batteryWatts: snapshot.batteryWatts,
+            telemetry: snapshot.isPluggedIn ? dictionary("PowerTelemetryData") : nil)
+    }
+
+    /// On battery the pack is the only supply, so the system draw is the measured
+    /// battery output. PowerTelemetryData's SystemLoad is not used there: it is a
+    /// smoothed estimate that disagreed with |Voltage x Amperage| by up to 45%.
+    /// On the charger SystemLoad is SystemPowerIn minus BatteryPower, both measured:
+    /// SystemPowerIn matches SystemVoltageIn x SystemCurrentIn and BatteryPower matches
+    /// Voltage x Amperage, so the identity is computed here from one telemetry frame.
+    static func systemWatts(pluggedIn: Bool, batteryWatts: Double?, telemetry: [String: Any]?) -> Double? {
+        guard pluggedIn else {
+            guard let batteryWatts, batteryWatts < 0 else { return nil }
+            return -batteryWatts
+        }
+        guard let telemetry,
+              let input = (telemetry["SystemPowerIn"] as? NSNumber)?.doubleValue, input > 0
+        else { return nil }
+        let intoBattery = (telemetry["BatteryPower"] as? NSNumber).map { Double($0.int64Value) } ?? 0
+        let load = input - intoBattery
+        guard load > 0 else { return nil }
+        return load / 1000
     }
 
     private func applyHealth(to snapshot: inout PowerSnapshot, source: [String: Any]?) {
