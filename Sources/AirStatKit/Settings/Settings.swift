@@ -395,7 +395,7 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     public static let processSortOptions: [ProcessSortKey] = [.cpu, .diskIO, .energy]
 
     public init(collapsedModules: Set<PanelModule> = PanelSettings.defaultCollapsed,
-                showsHistoryChart: Bool = true,
+                showsHistoryChart: Bool = false,
                 processSort: ProcessSortKey = .cpu) {
         self.collapsedModules = Self.accordion(collapsedModules)
         self.showsHistoryChart = showsHistoryChart
@@ -457,7 +457,7 @@ public struct PanelSettings: Sendable, Codable, Equatable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         collapsedModules = Self.accordion(c.value(.collapsedModules, or: PanelSettings.defaultCollapsed))
-        showsHistoryChart = c.value(.showsHistoryChart, or: true)
+        showsHistoryChart = c.value(.showsHistoryChart, or: false)
         let sort = c.value(.processSort, or: ProcessSortKey.cpu)
         processSort = Self.processSortOptions.contains(sort) ? sort : .cpu
     }
