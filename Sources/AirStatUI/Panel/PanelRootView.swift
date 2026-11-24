@@ -13,12 +13,20 @@ final class PanelLayoutState {
     /// The collapsed set a disclosure started from, held until it has finished.
     var disclosureOrigin: Set<PanelModule>?
     var isDisclosureTransitionActive = false
-    /// False once the panel has faded out. The window is kept for a quick reopen, but
-    /// a hidden tree still observes the engine and re-renders every module and chart
-    /// on every tick, which measured as doubling the app's CPU for the two minutes the
-    /// window was kept. Hidden, the panel draws nothing and observes nothing.
+    /// A disclosure changes both the document height and the viewport height. AppKit
+    /// otherwise preserves the old clip-view origin, which can leave the shortened
+    /// module stack entirely above the viewport with only the footer visible.
+    var scrollResetRequest: UInt64 = 0
+    /// Kept true while the retained window is ordered out. Replacing the content with
+    /// a 1-point placeholder made a rapid status-item close/reopen measure that
+    /// placeholder and reopen as a one-line panel. The delayed window release reclaims
+    /// the tree after the burst window, so correctness wins for normal toggles.
     var isPresented = true
     @ObservationIgnored var toggleModule: ((PanelModule) -> Void)?
+
+    func requestScrollReset() {
+        scrollResetRequest &+= 1
+    }
 }
 
 /// Root of the click-down panel.
@@ -91,8 +99,16 @@ public struct PanelRootView: View {
                     }
                 }
                 .padding(.vertical, Design.Space.xs)
+                // When the window is still carrying the previous disclosure height,
+                // AppKit can propose more room than this document needs. Explicitly
+                // top-align the document so the rows cannot float down into that
+                // stale viewport and leave a blank band above the CPU row.
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .background(PanelScrollResetter(request: layout?.scrollResetRequest))
             }
             .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: .infinity, alignment: .top)
             // No indicator, ever.
             //
             // The window is sized to this list, so in the ordinary case there is
@@ -174,6 +190,45 @@ public struct PanelRootView: View {
         !collapsed.contains(modules[index - 1]) || !collapsed.contains(modules[index])
     }
 
+}
+
+/// A zero-size marker inside SwiftUI's scroll document that lets AppKit restore its
+/// clip view to the top without wrapping the list in `ScrollViewReader`. That wrapper
+/// changes the list's ideal height to the current viewport height, which defeats the
+/// content-sized window and leaves empty space above short documents.
+struct PanelScrollResetter: NSViewRepresentable {
+    let request: UInt64?
+
+    final class Coordinator {
+        var fulfilledRequest: UInt64?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ marker: NSView, context: Context) {
+        guard let request, context.coordinator.fulfilledRequest != request else { return }
+        context.coordinator.fulfilledRequest = request
+        guard !Self.reset(marker) else { return }
+        // The first update can precede attachment to SwiftUI's document view. Retrying
+        // on the next turn still runs before a disclosure animation is displayed.
+        DispatchQueue.main.async { [weak marker] in
+            if let marker { _ = Self.reset(marker) }
+        }
+    }
+
+    static func reset(_ marker: NSView) -> Bool {
+        guard let scrollView = marker.enclosingScrollView,
+              let document = scrollView.documentView else { return false }
+        let clip = scrollView.contentView
+        let top = document.isFlipped
+            ? document.bounds.minY
+            : max(document.bounds.minY, document.bounds.maxY - clip.bounds.height)
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: top))
+        scrollView.reflectScrolledClipView(clip)
+        return true
+    }
 }
 
 /// Inset rule between modules. macOS insets its separators to the content margin so
