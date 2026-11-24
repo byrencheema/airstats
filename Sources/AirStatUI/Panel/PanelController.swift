@@ -83,11 +83,19 @@ public final class PanelController: NSObject, NSWindowDelegate {
         releaseTask = nil
         let window = existingOrNewWindow()
         layout?.isPresented = true
+        layout?.requestScrollReset()
+        // A retained hidden panel renders a 1-point placeholder. Re-presenting it
+        // invalidates that tree asynchronously; measuring before this layout pass
+        // shrinks the window to the placeholder and leaves only a line on screen.
+        window.layoutIfNeeded()
         lastAnchor = anchor
         lastScreen = screen ?? anchor.flatMap(Self.screen(containing:))
         presentation &+= 1
 
         position(window, anchoredTo: anchor, on: lastScreen)
+        if let layout {
+            resetScroll(in: window, layout: layout)
+        }
         window.alphaValue = 0
         // Ordering front "regardless" is what lets a menu bar app show a window while
         // another app stays active; `makeKeyAndOrderFront` would activate AirStat.
@@ -126,7 +134,6 @@ public final class PanelController: NSObject, NSWindowDelegate {
                 // here would hide a window the user just asked for.
                 guard let self, self.presentation == generation else { return }
                 window.orderOut(nil)
-                self.layout?.isPresented = false
             }
         }
         scheduleWindowRelease()
@@ -226,6 +233,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
         withTransaction(transaction) {
             layout.isDisclosureTransitionActive = true
             layout.disclosureOrigin = current
+            layout.requestScrollReset()
         }
         window.layoutIfNeeded()
 
@@ -261,6 +269,7 @@ public final class PanelController: NSObject, NSWindowDelegate {
             CATransaction.commit()
             isDisclosureTransitionActive = false
             position(window, anchoredTo: lastAnchor, on: lastScreen)
+            resetScroll(in: window, layout: layout)
             return
         }
 
@@ -320,8 +329,11 @@ public final class PanelController: NSObject, NSWindowDelegate {
     }
 
     private var disclosureDuration: TimeInterval {
-        Design.Motion.respectingAccessibility(Design.Motion.disclosure) == nil
-            ? 0 : Design.Motion.disclosureDuration
+        // AppKit proposes the old viewport height for one pass on both Sonoma and
+        // Tahoe. Animating SwiftUI's document through that stale proposal leaves a
+        // blank edge and clips rows. The atomic path lays out the final document and
+        // window together; restore animation only after the sizing race is eliminated.
+        0
     }
 
     private func finishDisclosure(window: NSWindow, layout: PanelLayoutState) {
@@ -336,6 +348,12 @@ public final class PanelController: NSObject, NSWindowDelegate {
         // Resolve any sub-point discrepancy between the measured destination and the
         // final intrinsic size without producing a second visible move.
         position(window, anchoredTo: lastAnchor, on: lastScreen)
+        resetScroll(in: window, layout: layout)
+    }
+
+    private func resetScroll(in window: NSWindow, layout: PanelLayoutState) {
+        layout.requestScrollReset()
+        window.layoutIfNeeded()
     }
 
     /// Anchor under the status item, nudged so the panel never hangs off the screen,
@@ -525,7 +543,10 @@ final class PanelWindow: NSPanel {
         level = .statusBar
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        // The content surface has rounded corners, but NSPanel's native shadow is
+        // rectangular and remains visible behind those corners as a second outline.
+        // The backdrop supplies its own rim, so leave the window shadow off.
+        hasShadow = false
         hidesOnDeactivate = false
         animationBehavior = .none
         isRestorable = false

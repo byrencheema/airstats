@@ -483,6 +483,16 @@ public func glassWindowBackdrop(around content: NSView, cornerRadius: CGFloat) -
 #if compiler(>=6.2)
 @available(macOS 26.0, *)
 private final class WindowGlassView: NSGlassEffectView {
+    override func layout() {
+        super.layout()
+        // NSGlassEffectView manages the embedded content's placement and can leave
+        // its default inset after a window resize. The panel is itself the glass
+        // surface, so an inset here becomes a visible blank band and clips the list
+        // when disclosure changes the window height. Keep the hosted SwiftUI tree
+        // edge-to-edge like the pre-Liquid-Glass backdrop below.
+        contentView?.frame = bounds
+    }
+
     override var fittingSize: NSSize { contentView?.fittingSize ?? super.fittingSize }
 }
 #endif
